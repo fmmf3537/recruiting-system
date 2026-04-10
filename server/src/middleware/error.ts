@@ -29,9 +29,11 @@ export const errorHandler = (
   });
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AsyncRequestHandler = (req: Request, res: Response, next: NextFunction) => Promise<any>;
+
 export const asyncHandler =
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-  (fn: Function) =>
+  (fn: AsyncRequestHandler) =>
   (req: Request, res: Response, next: NextFunction): void => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };

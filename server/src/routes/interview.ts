@@ -1,35 +1,33 @@
-import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import type { Request, Response } from 'express';
+import { Router, type Router as RouterType } from 'express';
+import { PrismaClient, type InterviewStatus, type InterviewType } from '@prisma/client';
 import { body } from 'express-validator';
 import { asyncHandler, createError } from '@middleware/error';
 import { authenticate, authorize } from '@middleware/auth';
 
-const router = Router();
+const router: RouterType = Router();
 const prisma = new PrismaClient();
 
 // 获取面试列表
 router.get(
   '/',
   authenticate,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { status, candidateId, interviewerId } = req.query;
 
-    const where: {
-      status?: { equals: string };
-      candidateId?: { equals: number };
-      interviewerId?: { equals: number };
-    } = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = {};
 
     if (status) {
-      where.status = { equals: status as string };
+      where.status = status as InterviewStatus;
     }
 
     if (candidateId) {
-      where.candidateId = { equals: parseInt(candidateId as string, 10) };
+      where.candidateId = parseInt(candidateId as string, 10);
     }
 
     if (interviewerId) {
-      where.interviewerId = { equals: parseInt(interviewerId as string, 10) };
+      where.interviewerId = parseInt(interviewerId as string, 10);
     }
 
     const interviews = await prisma.interview.findMany({
@@ -70,7 +68,7 @@ router.get(
 router.get(
   '/:id',
   authenticate,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const interviewId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(interviewId)) {
@@ -133,7 +131,7 @@ router.post(
     body('jobId').isInt().withMessage('请选择职位'),
     body('scheduledAt').isISO8601().withMessage('请选择有效的时间'),
   ],
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { candidateId, interviewerId, jobId, scheduledAt, duration, type, location, meetingLink } =
       req.body;
 
@@ -210,7 +208,7 @@ router.post(
 router.put(
   '/:id',
   authenticate,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const interviewId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(interviewId)) {
@@ -241,10 +239,10 @@ router.put(
       data: {
         ...(scheduledAt && { scheduledAt: new Date(scheduledAt) }),
         ...(duration && { duration }),
-        ...(type && { type }),
+        ...(type && { type: type as InterviewType }),
         ...(location !== undefined && { location }),
         ...(meetingLink !== undefined && { meetingLink }),
-        ...(status && { status }),
+        ...(status && { status: status as InterviewStatus }),
         ...(feedback !== undefined && { feedback }),
         ...(score !== undefined && { score }),
       },
@@ -284,7 +282,7 @@ router.delete(
   '/:id',
   authenticate,
   authorize('ADMIN', 'HR'),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const interviewId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(interviewId)) {

@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import type { Request, Response } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
@@ -6,7 +7,7 @@ import { body, validationResult } from 'express-validator';
 import { asyncHandler, createError } from '@middleware/error';
 import { authenticate } from '@middleware/auth';
 
-const router = Router();
+const router: RouterType = Router();
 const prisma = new PrismaClient();
 
 // 注册验证规则
@@ -26,7 +27,7 @@ const loginValidation = [
 router.post(
   '/register',
   registerValidation,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       throw createError(errors.array()[0].msg, 422);
@@ -94,7 +95,7 @@ router.post(
 router.post(
   '/login',
   loginValidation,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       throw createError(errors.array()[0].msg, 422);
@@ -146,7 +147,7 @@ router.post(
 router.get(
   '/me',
   authenticate,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
       select: {
@@ -175,7 +176,7 @@ router.get(
 router.post(
   '/logout',
   authenticate,
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: Request, res: Response) => {
     // 这里可以实现令牌黑名单等逻辑
     res.json({
       success: true,

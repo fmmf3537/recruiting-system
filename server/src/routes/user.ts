@@ -1,10 +1,11 @@
-import { Router } from 'express';
+import type { Request, Response } from 'express';
+import { Router, type Router as RouterType } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { body } from 'express-validator';
 import { asyncHandler, createError } from '@middleware/error';
 import { authenticate, authorize } from '@middleware/auth';
 
-const router = Router();
+const router: RouterType = Router();
 const prisma = new PrismaClient();
 
 // 获取用户列表（仅管理员）
@@ -12,7 +13,7 @@ router.get(
   '/',
   authenticate,
   authorize('ADMIN', 'HR'),
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (_req: Request, res: Response) => {
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -37,7 +38,7 @@ router.get(
 router.get(
   '/:id',
   authenticate,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const userId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(userId)) {
@@ -77,7 +78,7 @@ router.put(
     body('phone').optional().trim(),
     body('avatar').optional().trim(),
   ],
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const userId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(userId)) {

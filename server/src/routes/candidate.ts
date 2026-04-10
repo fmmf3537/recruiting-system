@@ -1,28 +1,25 @@
-import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import type { Request, Response } from 'express';
+import { Router, type Router as RouterType } from 'express';
+import { PrismaClient, type CandidateStatus } from '@prisma/client';
 import { body } from 'express-validator';
 import { asyncHandler, createError } from '@middleware/error';
 import { authenticate, authorize } from '@middleware/auth';
 
-const router = Router();
+const router: RouterType = Router();
 const prisma = new PrismaClient();
 
 // 获取候选人列表
 router.get(
   '/',
   authenticate,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { status, keyword } = req.query;
 
-    const where: {
-      status?: { equals: string };
-      user?: {
-        OR?: Array<{ name?: { contains: string; mode: 'insensitive' }; email?: { contains: string; mode: 'insensitive' } }>;
-      };
-    } = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = {};
 
     if (status) {
-      where.status = { equals: status as string };
+      where.status = status as CandidateStatus;
     }
 
     if (keyword) {
@@ -61,7 +58,7 @@ router.get(
 router.get(
   '/:id',
   authenticate,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const candidateId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(candidateId)) {
@@ -119,7 +116,7 @@ router.put(
     body('education').optional().trim(),
     body('status').optional().isIn(['ACTIVE', 'INTERVIEWING', 'HIRED', 'REJECTED', 'ARCHIVED']),
   ],
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const candidateId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(candidateId)) {
@@ -179,7 +176,7 @@ router.delete(
   '/:id',
   authenticate,
   authorize('ADMIN'),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const candidateId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(candidateId)) {

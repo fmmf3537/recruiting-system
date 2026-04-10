@@ -3,23 +3,19 @@
   "version": "1.0.0",
   "description": "招聘管理系统 - 全栈项目",
   "private": true,
-  "workspaces": [
-    "client",
-    "server"
-  ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:client": "cd client && npm run dev",
-    "dev:server": "cd server && npm run dev",
-    "build": "npm run build:server && npm run build:client",
-    "build:client": "cd client && npm run build",
-    "build:server": "cd server && npm run build",
-    "lint": "npm run lint:client && npm run lint:server",
-    "lint:client": "cd client && npm run lint",
-    "lint:server": "cd server && npm run lint",
-    "format": "npm run format:client && npm run format:server",
-    "format:client": "cd client && npm run format",
-    "format:server": "cd server && npm run format"
+    "dev": "concurrently \"pnpm dev:server\" \"pnpm dev:client\"",
+    "dev:client": "cd client && pnpm dev",
+    "dev:server": "cd server && pnpm dev",
+    "build": "pnpm build:server && pnpm build:client",
+    "build:client": "cd client && pnpm build",
+    "build:server": "cd server && pnpm build",
+    "lint": "pnpm lint:client && pnpm lint:server",
+    "lint:client": "cd client && pnpm lint",
+    "lint:server": "cd server && pnpm lint",
+    "format": "pnpm format:client && pnpm format:server",
+    "format:client": "cd client && pnpm format",
+    "format:server": "cd server && pnpm format"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

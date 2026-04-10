@@ -1,26 +1,25 @@
-import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import type { Request, Response } from 'express';
+import { Router, type Router as RouterType } from 'express';
+import { PrismaClient, type JobStatus } from '@prisma/client';
 import { body } from 'express-validator';
 import { asyncHandler, createError } from '@middleware/error';
 import { authenticate, authorize } from '@middleware/auth';
 
-const router = Router();
+const router: RouterType = Router();
 const prisma = new PrismaClient();
 
 // 获取职位列表
 router.get(
   '/',
   authenticate,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { status, department } = req.query;
 
-    const where: {
-      status?: { equals: string };
-      department?: { contains: string; mode: 'insensitive' };
-    } = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: any = {};
 
     if (status) {
-      where.status = { equals: status as string };
+      where.status = status as JobStatus;
     }
 
     if (department) {
@@ -43,7 +42,7 @@ router.get(
 router.get(
   '/:id',
   authenticate,
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const jobId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(jobId)) {
@@ -75,7 +74,7 @@ router.post(
     body('description').trim().notEmpty().withMessage('请输入职位描述'),
     body('department').trim().notEmpty().withMessage('请输入部门'),
   ],
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { title, description, department, location, salaryMin, salaryMax, requirements } =
       req.body;
 
@@ -105,7 +104,7 @@ router.put(
   '/:id',
   authenticate,
   authorize('ADMIN', 'HR'),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const jobId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(jobId)) {
@@ -150,7 +149,7 @@ router.delete(
   '/:id',
   authenticate,
   authorize('ADMIN', 'HR'),
-  asyncHandler(async (req, res) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const jobId = parseInt(req.params.id, 10);
 
     if (Number.isNaN(jobId)) {
