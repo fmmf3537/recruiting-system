@@ -1,0 +1,8 @@
+dist
+node_modules
+*.log
+*.min.js
+*.min.css
+public
+auto-imports.d.ts
+components.d.ts

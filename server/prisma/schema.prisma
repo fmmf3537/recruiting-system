@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 用户表
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  password  String
+  name      String
+  role      Role      @default(CANDIDATE)
+  avatar    String?
+  phone     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Relations
+  candidate   Candidate?
+  interviewer Interviewer?
+  sessions    Session[]
+
+  @@map("user")
+}
+
+// 会话表（用于JWT刷新）
+model Session {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+// 候选人表
+model Candidate {
+  id        Int     @id @default(autoincrement())
+  userId    Int     @unique
+  resume    String?
+  skills    String[] // 技能标签
+  experience Int?   // 工作年限
+  education String? // 最高学历
+  status    CandidateStatus @default(ACTIVE)
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interviews Interview[]
+  comments   Comment[]
+
+  @@map("candidate")
+}
+
+// 面试官表
+model Interviewer {
+  id       Int    @id @default(autoincrement())
+  userId   Int    @unique
+  department String?
+  position   String?
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interviews Interview[]
+  comments   Comment[]
+
+  @@map("interviewer")
+}
+
+// 职位表
+model Job {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String
+  department  String
+  location    String?
+  salaryMin   Int?
+  salaryMax   Int?
+  requirements String[]
+  status      JobStatus @default(OPEN)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdBy   Int
+
+  interviews Interview[]
+
+  @@map("job")
+}
+
+// 面试表
+model Interview {
+  id            Int             @id @default(autoincrement())
+  candidateId   Int
+  interviewerId Int
+  jobId         Int
+  scheduledAt   DateTime
+  duration      Int             @default(60) // 分钟
+  type          InterviewType   @default(FACE_TO_FACE)
+  status        InterviewStatus @default(SCHEDULED)
+  location      String?
+  meetingLink   String?
+  feedback      String?
+  score         Int?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  candidate   Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  interviewer Interviewer @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
+  job         Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  comments    Comment[]
+
+  @@map("interview")
+}
+
+// 评论表（面试反馈）
+model Comment {
+  id            Int      @id @default(autoincrement())
+  interviewId   Int
+  authorId      Int
+  authorType    AuthorType
+  content       String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  interview   Interview   @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  candidate   Candidate?  @relation(fields: [authorId], references: [id], map: "comment_candidate_fkey")
+  interviewer Interviewer? @relation(fields: [authorId], references: [id], map: "comment_interviewer_fkey")
+
+  @@map("comment")
+}
+
+// 枚举定义
+enum Role {
+  ADMIN
+  HR
+  INTERVIEWER
+  CANDIDATE
+}
+
+enum CandidateStatus {
+  ACTIVE
+  INTERVIEWING
+  HIRED
+  REJECTED
+  ARCHIVED
+}
+
+enum JobStatus {
+  OPEN
+  CLOSED
+  PAUSED
+  FILLED
+}
+
+enum InterviewType {
+  PHONE
+  VIDEO
+  FACE_TO_FACE
+  TECHNICAL
+  HR
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AuthorType {
+  CANDIDATE
+  INTERVIEWER
+  SYSTEM
+}
