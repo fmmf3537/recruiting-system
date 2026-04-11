@@ -2,12 +2,20 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { routes } from '@router/index';
+import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
+const authStore = useAuthStore();
 
 const menuItems = computed(() => {
   const layoutRoute = routes.find((r) => r.name === 'Layout');
-  return layoutRoute?.children?.filter((item) => !item.meta?.hidden) || [];
+  return layoutRoute?.children?.filter((item) => {
+    // 隐藏的路由不显示
+    if (item.meta?.hidden) return false;
+    // 需要管理员权限的路由，只有管理员显示
+    if (item.meta?.requireAdmin && !authStore.isAdmin) return false;
+    return true;
+  }) || [];
 });
 
 const activeMenu = computed(() => route.path);

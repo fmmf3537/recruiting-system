@@ -1,6 +1,8 @@
-import { useUserStore } from './user';
+import { createPinia } from 'pinia';
 
-export { useUserStore };
+// 创建 pinia 实例
+export const pinia = createPinia();
 
-// 导出所有 store 的类型
-export type UserStore = ReturnType<typeof useUserStore>;
+// 导出所有 store
+export * from './auth';
+export * from './app';

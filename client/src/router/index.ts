@@ -1,57 +1,163 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import { useUserStore } from '@stores/user';
-import type { RouteRecordRaw } from 'vue-router';
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { useAuthStore } from '@/stores/auth';
+import { ElMessage } from 'element-plus';
 
+// 路由配置
 const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'Login',
-    component: () => import('@views/login/index.vue'),
-    meta: { public: true, title: '登录' },
+    component: () => import('@/views/login/index.vue'),
+    meta: {
+      public: true,
+      title: '登录',
+    },
   },
   {
     path: '/',
     name: 'Layout',
-    component: () => import('@components/layout/index.vue'),
+    component: () => import('@/layouts/DefaultLayout.vue'),
     redirect: '/dashboard',
     children: [
       {
-        path: 'dashboard',
+        path: '/dashboard',
         name: 'Dashboard',
-        component: () => import('@views/dashboard/index.vue'),
-        meta: { title: '仪表盘', icon: 'Odometer' },
+        component: () => import('@/views/dashboard/index.vue'),
+        meta: {
+          title: '仪表盘',
+          icon: 'Dashboard',
+        },
       },
       {
-        path: 'jobs',
+        path: '/jobs',
         name: 'Jobs',
-        component: () => import('@views/jobs/index.vue'),
-        meta: { title: '职位管理', icon: 'Briefcase' },
+        component: () => import('@/views/jobs/index.vue'),
+        meta: {
+          title: '职位管理',
+          icon: 'Briefcase',
+        },
       },
       {
-        path: 'candidates',
+        path: '/jobs/create',
+        name: 'JobCreate',
+        component: () => import('@/views/jobs/JobForm.vue'),
+        meta: {
+          title: '发布职位',
+          hidden: true,
+          public: true,
+        },
+      },
+      {
+        path: '/jobs/:id',
+        name: 'JobDetail',
+        component: () => import('@/views/jobs/JobDetail.vue'),
+        meta: {
+          title: '职位详情',
+          hidden: true,
+          public: true,
+        },
+      },
+      {
+        path: '/jobs/:id/edit',
+        name: 'JobEdit',
+        component: () => import('@/views/jobs/JobForm.vue'),
+        meta: {
+          title: '编辑职位',
+          hidden: true,
+          public: true,
+        },
+      },
+      {
+        path: '/candidates',
         name: 'Candidates',
-        component: () => import('@views/candidates/index.vue'),
-        meta: { title: '候选人', icon: 'User' },
+        component: () => import('@/views/candidates/index.vue'),
+        meta: {
+          title: '候选人管理',
+          icon: 'UserFilled',
+        },
       },
       {
-        path: 'interviews',
-        name: 'Interviews',
-        component: () => import('@views/interviews/index.vue'),
-        meta: { title: '面试安排', icon: 'Calendar' },
+        path: '/candidates/create',
+        name: 'CandidateCreate',
+        component: () => import('@/views/candidates/CandidateForm.vue'),
+        meta: {
+          title: '新增候选人',
+          hidden: true,
+          public: true,
+        },
       },
       {
-        path: 'profile',
+        path: '/candidates/:id',
+        name: 'CandidateDetail',
+        component: () => import('@/views/candidates/CandidateDetail.vue'),
+        meta: {
+          title: '候选人详情',
+          hidden: true,
+          public: true,
+        },
+      },
+      {
+        path: '/candidates/:id/edit',
+        name: 'CandidateEdit',
+        component: () => import('@/views/candidates/CandidateForm.vue'),
+        meta: {
+          title: '编辑候选人',
+          hidden: true,
+          public: true,
+        },
+      },
+      {
+        path: '/offers',
+        name: 'Offers',
+        component: () => import('@/views/offers/index.vue'),
+        meta: {
+          title: 'Offer管理',
+          icon: 'DocumentChecked',
+        },
+      },
+      {
+        path: '/stats',
+        name: 'Stats',
+        component: () => import('@/views/stats/index.vue'),
+        meta: {
+          title: '数据统计',
+          icon: 'TrendCharts',
+        },
+      },
+      {
+        path: '/users',
+        name: 'Users',
+        component: () => import('@/views/users/index.vue'),
+        meta: {
+          title: '成员管理',
+          icon: 'User',
+          requireAdmin: true,
+        },
+      },
+      {
+        path: '/profile',
         name: 'Profile',
-        component: () => import('@views/profile/index.vue'),
-        meta: { title: '个人中心', icon: 'UserFilled', hidden: true },
+        component: () => import('@/views/profile/index.vue'),
+        meta: {
+          title: '个人中心',
+          hidden: true,
+          public: true,
+        },
       },
     ],
   },
   {
-    path: '/:pathMatch(.*)*',
+    path: '/404',
     name: 'NotFound',
-    component: () => import('@views/error/404.vue'),
-    meta: { public: true, title: '页面不存在' },
+    component: () => import('@/views/error/404.vue'),
+    meta: {
+      public: true,
+      title: '页面未找到',
+    },
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/404',
   },
 ];
 
@@ -64,23 +170,51 @@ const router = createRouter({
 });
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
-  const userStore = useUserStore();
-  const token = userStore.token;
-
+router.beforeEach(async (to, from, next) => {
+  const authStore = useAuthStore();
+  
   // 设置页面标题
-  document.title = to.meta.title ? `${to.meta.title} - 招聘系统` : '招聘系统';
-
-  if (to.meta.public) {
-    // 公开页面直接访问
-    next();
-  } else if (!token) {
-    // 需要登录但未登录，跳转到登录页
-    next('/login');
-  } else {
-    // 已登录，正常访问
-    next();
+  if (to.meta.title) {
+    document.title = `${to.meta.title} - 招聘管理系统`;
   }
+
+  // 公开路由直接放行
+  if (to.meta.public) {
+    // 已登录用户访问登录页，重定向到首页
+    if (to.path === '/login' && authStore.isLoggedIn) {
+      next('/dashboard');
+      return;
+    }
+    next();
+    return;
+  }
+
+  // 检查是否已登录
+  if (!authStore.isLoggedIn) {
+    ElMessage.warning('请先登录');
+    next('/login');
+    return;
+  }
+
+  // 获取用户信息（如果还没有）
+  if (!authStore.userInfo) {
+    const success = await authStore.fetchUserInfo();
+    if (!success) {
+      ElMessage.error('获取用户信息失败，请重新登录');
+      authStore.logout();
+      next('/login');
+      return;
+    }
+  }
+
+  // 检查管理员权限
+  if (to.meta.requireAdmin && !authStore.isAdmin) {
+    ElMessage.error('没有权限访问该页面');
+    next('/dashboard');
+    return;
+  }
+
+  next();
 });
 
 export default router;

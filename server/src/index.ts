@@ -1,49 +1,55 @@
-import express, { type Express } from 'express';
-import cors from 'cors';
-import morgan from 'morgan';
-import dotenv from 'dotenv';
+import app from './app';
+import { env } from './lib/env';
 
-import { errorHandler } from '@middleware/error';
-import authRoutes from '@routes/auth';
-import userRoutes from '@routes/user';
-import jobRoutes from '@routes/job';
-import candidateRoutes from '@routes/candidate';
-import interviewRoutes from '@routes/interview';
+const PORT = env.PORT;
 
-dotenv.config();
+// 启动服务器
+const server = app.listen(PORT, () => {
+  console.log(`
+🚀 Server is running!
 
-const app: Express = express();
-const PORT = process.env.PORT || 3001;
+📡 Environment: ${env.NODE_ENV}
+🔗 API URL: http://localhost:${PORT}
+📁 Upload Dir: ${env.UPLOAD_DIR}
 
-// 中间件
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(morgan('dev'));
-
-// 健康检查
-app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+Available endpoints:
+- GET  /api/health           Health check
+- POST /api/auth/login       User login
+- POST /api/auth/register    User register
+- GET  /api/auth/me          Get current user
+- GET  /api/users            List users (admin only)
+- GET  /api/jobs             List jobs
+- GET  /api/candidates       List candidates
+- GET  /api/offers           List offers
+- GET  /api/stats/dashboard  Dashboard stats
+- POST /api/upload           Upload file
+  `);
 });
 
-// API 路由
-app.use('/auth', authRoutes);
-app.use('/users', userRoutes);
-app.use('/jobs', jobRoutes);
-app.use('/candidates', candidateRoutes);
-app.use('/interviews', interviewRoutes);
-
-// 404 处理
-app.use((_req, res) => {
-  res.status(404).json({ message: '路由不存在' });
+// 优雅关闭
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, closing server...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
 
-// 错误处理
-app.use(errorHandler);
-
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+process.on('SIGINT', () => {
+  console.log('SIGINT received, closing server...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
 
-export default app;
+// 未捕获的错误处理
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+  process.exit(1);
+});

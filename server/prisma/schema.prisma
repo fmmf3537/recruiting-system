@@ -7,174 +7,226 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 用户表
+// ==================== 成员表 ====================
 model User {
-  id        Int       @id @default(autoincrement())
-  email     String    @unique
+  id        String   @id @default(cuid())
+  email     String   @unique
   password  String
   name      String
-  role      Role      @default(CANDIDATE)
-  avatar    String?
-  phone     String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  role      String   // admin, member
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Relations
-  candidate   Candidate?
-  interviewer Interviewer?
-  sessions    Session[]
+  // 关系：一个 User 创建多个 Candidate
+  createdCandidates Candidate[] @relation("CreatedCandidates")
+  
+  // 关系：一个 User 创建多个 Job
+  createdJobs       Job[]       @relation("CreatedJobs")
+  
+  // 关系：一个 User 被分配多个 StageRecord
+  assignedStages    StageRecord[] @relation("AssignedStages")
+  
+  // 关系：一个 User 创建多个 InterviewFeedback
+  createdFeedbacks  InterviewFeedback[] @relation("CreatedFeedbacks")
+  
+  // 关系：一个 User 产生多个操作日志
+  operationLogs     OperationLog[] @relation("UserOperationLogs")
 
+  @@index([email])
+  @@index([role])
+  @@index([createdAt])
   @@map("user")
 }
 
-// 会话表（用于JWT刷新）
-model Session {
-  id        Int      @id @default(autoincrement())
-  token     String   @unique
-  userId    Int
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("session")
-}
-
-// 候选人表
-model Candidate {
-  id        Int     @id @default(autoincrement())
-  userId    Int     @unique
-  resume    String?
-  skills    String[] // 技能标签
-  experience Int?   // 工作年限
-  education String? // 最高学历
-  status    CandidateStatus @default(ACTIVE)
-
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  interviews Interview[]
-  comments   Comment[]
-
-  @@map("candidate")
-}
-
-// 面试官表
-model Interviewer {
-  id       Int    @id @default(autoincrement())
-  userId   Int    @unique
-  department String?
-  position   String?
-
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  interviews Interview[]
-  comments   Comment[]
-
-  @@map("interviewer")
-}
-
-// 职位表
+// ==================== 职位表 ====================
 model Job {
-  id          Int       @id @default(autoincrement())
-  title       String
-  description String
-  department  String
-  location    String?
-  salaryMin   Int?
-  salaryMax   Int?
-  requirements String[]
-  status      JobStatus @default(OPEN)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  createdBy   Int
+  id           String   @id @default(cuid())
+  title        String
+  departments  Json     // JSON 数组，多选部门
+  level        String   // 职级
+  skills       Json     // JSON 数组，技能要求
+  location     String   // 地域
+  type         String   // 社招/校招/实习生
+  status       String   // open, paused, closed
+  description  String   @db.Text  // 富文本
+  requirements String   @db.Text  // 富文本
+  
+  createdById  String
+  createdBy    User     @relation("CreatedJobs", fields: [createdById], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  interviews Interview[]
+  // 关系：一个 Job 有多个 Candidate（通过关联表）
+  candidateJobs CandidateJob[]
 
+  @@index([status])
+  @@index([type])
+  @@index([location])
+  @@index([createdById])
+  @@index([createdAt])
   @@map("job")
 }
 
-// 面试表
-model Interview {
-  id            Int             @id @default(autoincrement())
-  candidateId   Int
-  interviewerId Int
-  jobId         Int
-  scheduledAt   DateTime
-  duration      Int             @default(60) // 分钟
-  type          InterviewType   @default(FACE_TO_FACE)
-  status        InterviewStatus @default(SCHEDULED)
-  location      String?
-  meetingLink   String?
-  feedback      String?
-  score         Int?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+// ==================== 候选人表 ====================
+model Candidate {
+  id              String   @id @default(cuid())
+  name            String
+  phone           String
+  email           String
+  gender          String
+  age             Int?
+  education       String
+  school          String?
+  workYears       Int?     // 工作年限
+  currentCompany  String?
+  currentPosition String?
+  expectedSalary  String?
+  resumeUrl       String?
+  source          String   // 渠道
+  sourceNote      String?
+  intro           String?  @db.Text  // 候选人说明
+  
+  createdById     String
+  createdBy       User     @relation("CreatedCandidates", fields: [createdById], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  candidate   Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  interviewer Interviewer @relation(fields: [interviewerId], references: [id], onDelete: Cascade)
-  job         Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  comments    Comment[]
+  // 关系：一个 Candidate 关联多个 Job（通过关联表）
+  candidateJobs CandidateJob[]
+  
+  // 关系：一个 Candidate 有多个 StageRecord
+  stageRecords  StageRecord[]
+  
+  // 关系：一个 Candidate 有多个 InterviewFeedback
+  interviewFeedbacks InterviewFeedback[]
+  
+  // 关系：一个 Candidate 有一个 Offer
+  offer Offer?
 
-  @@map("interview")
+  @@index([email])
+  @@index([phone])
+  @@index([source])
+  @@index([createdById])
+  @@index([createdAt])
+  @@map("candidate")
 }
 
-// 评论表（面试反馈）
-model Comment {
-  id            Int      @id @default(autoincrement())
-  interviewId   Int
-  authorId      Int
-  authorType    AuthorType
-  content       String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+// ==================== 候选人与职位关联表（多对多） ====================
+model CandidateJob {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobId       String
+  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
 
-  interview   Interview   @relation(fields: [interviewId], references: [id], onDelete: Cascade)
-  candidate   Candidate?  @relation(fields: [authorId], references: [id], map: "comment_candidate_fkey")
-  interviewer Interviewer? @relation(fields: [authorId], references: [id], map: "comment_interviewer_fkey")
-
-  @@map("comment")
+  @@unique([candidateId, jobId])
+  @@index([candidateId])
+  @@index([jobId])
+  @@map("candidate_job")
 }
 
-// 枚举定义
-enum Role {
-  ADMIN
-  HR
-  INTERVIEWER
-  CANDIDATE
+// ==================== 流程阶段记录表 ====================
+model StageRecord {
+  id           String    @id @default(cuid())
+  candidateId  String
+  candidate    Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  
+  stage        String    // 入库, 初筛, 复试, 终面, 拟录用, Offer, 入职
+  status       String    // in_progress, passed, rejected
+  rejectReason String?
+  
+  assigneeId   String?
+  assignee     User?     @relation("AssignedStages", fields: [assigneeId], references: [id])
+  
+  enteredAt    DateTime  @default(now())  // 进入时间
+  completedAt  DateTime? // 完成时间
+  note         String?   @db.Text  // 阶段备注
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([stage])
+  @@index([status])
+  @@index([assigneeId])
+  @@index([enteredAt])
+  @@index([createdAt])
+  @@map("stage_record")
 }
 
-enum CandidateStatus {
-  ACTIVE
-  INTERVIEWING
-  HIRED
-  REJECTED
-  ARCHIVED
+// ==================== 面试反馈记录表 ====================
+model InterviewFeedback {
+  id               String    @id @default(cuid())
+  candidateId      String
+  candidate        Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  
+  round            String    // 初试, 复试, 终面
+  interviewerName  String
+  interviewTime    DateTime
+  conclusion       String    // pass, reject, pending
+  feedbackContent  String    @db.Text  // 富文本
+  rejectReason     String?
+  
+  createdById      String
+  createdBy        User      @relation("CreatedFeedbacks", fields: [createdById], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([round])
+  @@index([conclusion])
+  @@index([interviewTime])
+  @@index([createdById])
+  @@index([createdAt])
+  @@map("interview_feedback")
 }
 
-enum JobStatus {
-  OPEN
-  CLOSED
-  PAUSED
-  FILLED
+// ==================== Offer记录表 ====================
+model Offer {
+  id               String    @id @default(cuid())
+  candidateId      String    @unique  // 一个 Candidate 只有一个 Offer
+  candidate        Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  
+  salary           String
+  offerDate        DateTime
+  expectedJoinDate DateTime?
+  result           String    // pending, accepted, rejected
+  joined           Boolean   @default(false)  // 是/否
+  actualJoinDate   DateTime?
+  note             String?   @db.Text
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([result])
+  @@index([joined])
+  @@index([offerDate])
+  @@index([createdAt])
+  @@map("offer")
 }
 
-enum InterviewType {
-  PHONE
-  VIDEO
-  FACE_TO_FACE
-  TECHNICAL
-  HR
-}
+// ==================== 操作日志表 ====================
+model OperationLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation("UserOperationLogs", fields: [userId], references: [id])
+  
+  targetType String   // Job, Candidate, StageRecord, Offer 等
+  targetId   String
+  action     String   // created, updated, deleted, status_changed 等
+  detail     Json     // 操作详情
+  
+  createdAt DateTime @default(now())
 
-enum InterviewStatus {
-  SCHEDULED
-  CONFIRMED
-  COMPLETED
-  CANCELLED
-  NO_SHOW
-}
-
-enum AuthorType {
-  CANDIDATE
-  INTERVIEWER
-  SYSTEM
+  @@index([userId])
+  @@index([targetType])
+  @@index([targetId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("operation_log")
 }

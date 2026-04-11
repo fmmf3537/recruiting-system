@@ -5,6 +5,9 @@ import { useUserStore } from '@stores/user';
 const router = useRouter();
 const userStore = useUserStore();
 
+// 简单的面包屑组件
+const Breadcrumb = () => null;
+
 const handleLogout = () => {
   userStore.logout();
   router.push('/login');

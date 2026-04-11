@@ -1,5 +1,7 @@
-// API 导出
+// API 模块统一导出
 export * from './auth';
-
-// 默认导出 request 实例
-export { default } from './request';
+export * from './user';
+export * from './job';
+export * from './candidate';
+export * from './offer';
+export * from './stats';

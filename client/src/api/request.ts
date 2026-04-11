@@ -14,10 +14,15 @@ const request: AxiosInstance = axios.create({
 // 请求拦截器
 request.interceptors.request.use(
   (config: AxiosRequestConfig) => {
-    const userStore = useUserStore();
-    if (userStore.token) {
-      config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${userStore.token}`;
+    // 只在有 token 时添加
+    try {
+      const userStore = useUserStore();
+      if (userStore.token) {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${userStore.token}`;
+      }
+    } catch (e) {
+      // store 可能未初始化，忽略错误
     }
     return config;
   },
@@ -29,7 +34,7 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   (response: AxiosResponse) => {
-    // 直接返回数据
+    // 直接返回 response.data
     return response.data;
   },
   (error: AxiosError) => {
@@ -43,8 +48,12 @@ request.interceptors.response.use(
         case 401:
           ElMessage.error('登录已过期，请重新登录');
           {
-            const userStore = useUserStore();
-            userStore.logout();
+            try {
+              const userStore = useUserStore();
+              userStore.logout();
+            } catch (e) {
+              // 忽略错误
+            }
             window.location.href = '/login';
           }
           break;

@@ -15,8 +15,17 @@ export interface LoginForm {
   password: string;
 }
 
+// 后端返回的登录响应
 export interface LoginResponse {
+  success: boolean;
+  message: string;
   token: string;
+  user: UserInfo;
+}
+
+// 后端返回的用户信息响应
+export interface UserInfoResponse {
+  success: boolean;
   user: UserInfo;
 }
 
