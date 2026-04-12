@@ -220,4 +220,98 @@ describe('StatsService - 统计服务单元测试', () => {
       expect(result.filename).toContain('工作量统计');
     });
   });
+
+  describe('exportChannelStats - 导出渠道效果数据', () => {
+    it('应返回正确的导出数据结构', async () => {
+      vi.mocked(prisma.candidate.groupBy)
+        .mockResolvedValueOnce([
+          { source: '招聘网站', _count: { id: 50 } },
+        ] as any)
+        .mockResolvedValueOnce([
+          { source: '招聘网站', _count: { id: 10 } },
+        ] as any);
+
+      const result = await service.exportChannelStats({
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-01-31'),
+      });
+
+      expect(result.headers).toEqual(['渠道', '候选人数量', '入职数量', '转化率(%)']);
+      expect(result.filename).toContain('渠道效果分析');
+    });
+  });
+
+  describe('exportJobStats - 导出职位维度数据', () => {
+    it('应返回正确的导出数据结构', async () => {
+      vi.mocked(prisma.job.findMany).mockResolvedValue([
+        {
+          id: 'job-1',
+          title: '前端工程师',
+          departments: ['技术部'],
+        },
+      ] as any);
+      vi.mocked(prisma.candidateJob.findMany).mockResolvedValue([
+        { candidateId: 'c1' },
+      ] as any);
+      vi.mocked(prisma.interviewFeedback.count).mockResolvedValue(5);
+      vi.mocked(prisma.offer.count).mockResolvedValue(2);
+
+      const result = await service.exportJobStats({
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-01-31'),
+      });
+
+      expect(result.headers).toEqual(['职位', '部门', '候选人', '面试', 'Offer', '入职']);
+      expect(result.filename).toContain('职位维度统计');
+    });
+  });
+
+  describe('getChannelStats - 渠道效果分析（更多验证）', () => {
+    it('应按候选人数量降序排序', async () => {
+      vi.mocked(prisma.candidate.groupBy)
+        .mockResolvedValueOnce([
+          { source: '渠道A', _count: { id: 10 } },
+          { source: '渠道B', _count: { id: 50 } },
+        ] as any)
+        .mockResolvedValueOnce([] as any);
+
+      const result = await service.getChannelStats({
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-01-31'),
+      });
+
+      expect(result[0].source).toBe('渠道B');
+      expect(result[1].source).toBe('渠道A');
+    });
+
+    it('应正确计算转化率', async () => {
+      vi.mocked(prisma.candidate.groupBy)
+        .mockResolvedValueOnce([
+          { source: '招聘网站', _count: { id: 100 } },
+        ] as any)
+        .mockResolvedValueOnce([
+          { source: '招聘网站', _count: { id: 25 } },
+        ] as any);
+
+      const result = await service.getChannelStats({
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-01-31'),
+      });
+
+      expect(result[0].conversionRate).toBe(25);
+    });
+
+    it('候选人为0时转化率应为0', async () => {
+      vi.mocked(prisma.candidate.groupBy)
+        .mockResolvedValueOnce([] as any)
+        .mockResolvedValueOnce([] as any);
+
+      const result = await service.getChannelStats({
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-01-31'),
+      });
+
+      expect(result).toHaveLength(0);
+    });
+  });
 });

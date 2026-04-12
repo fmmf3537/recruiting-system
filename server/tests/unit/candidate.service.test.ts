@@ -234,5 +234,243 @@ describe('CandidateService - 候选人服务单元测试', () => {
 
       expect(prisma.interviewFeedback.create).toHaveBeenCalled();
     });
+
+    it('淘汰时必须填写原因', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+
+      await expect(service.addInterviewFeedback('candidate-1', {
+        round: '初试',
+        interviewerName: '李四',
+        interviewTime: '2024-01-15T10:00:00Z',
+        conclusion: 'reject',
+        feedbackContent: '技术能力不足',
+      }, 'user-1')).rejects.toThrow('淘汰时必须填写原因');
+    });
+
+    it('候选人不存在时应抛出错误', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue(null);
+
+      await expect(service.addInterviewFeedback('non-existent', {
+        round: '初试',
+        interviewerName: '李四',
+        interviewTime: '2024-01-15T10:00:00Z',
+        conclusion: 'pass',
+        feedbackContent: '技术能力不错',
+      }, 'user-1')).rejects.toThrow('候选人不存在');
+    });
+  });
+
+  describe('getInterviewFeedbacks - 获取面试反馈列表', () => {
+    it('应返回面试反馈列表', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.interviewFeedback.findMany).mockResolvedValue([
+        {
+          id: 'feedback-1',
+          round: '初试',
+          interviewerName: '李四',
+          conclusion: 'pass',
+          createdBy: { id: 'user-1', name: '管理员' },
+        },
+      ] as any);
+
+      const result = await service.getInterviewFeedbacks('candidate-1');
+
+      expect(result).toHaveLength(1);
+      expect(prisma.interviewFeedback.findMany).toHaveBeenCalled();
+    });
+
+    it('候选人不存在时应抛出错误', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue(null);
+
+      await expect(service.getInterviewFeedbacks('non-existent')).rejects.toThrow('候选人不存在');
+    });
+  });
+
+  describe('updateCandidate - 更新候选人', () => {
+    it('应成功更新候选人', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        phone: '13800138000',
+        email: 'old@test.com',
+      } as any);
+      vi.mocked(prisma.candidate.update).mockResolvedValue({
+        id: 'candidate-1',
+        name: '李四',
+      } as any);
+
+      const result = await service.updateCandidate('candidate-1', { name: '李四' });
+
+      expect(prisma.candidate.update).toHaveBeenCalled();
+    });
+
+    it('候选人不存在时应抛出错误', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue(null);
+
+      await expect(service.updateCandidate('non-existent', { name: '李四' })).rejects.toThrow('候选人不存在');
+    });
+
+    it('修改手机号时检查重复', async () => {
+      vi.mocked(prisma.candidate.findUnique)
+        .mockResolvedValueOnce({
+          id: 'candidate-1',
+          phone: '13800138000',
+          email: 'old@test.com',
+        } as any);
+      vi.mocked(prisma.candidate.findFirst).mockResolvedValueOnce({
+        id: 'candidate-2',
+        phone: '13999999999',
+      } as any);
+
+      await expect(service.updateCandidate('candidate-1', { phone: '13999999999' })).rejects.toThrow('该手机号已被其他候选人使用');
+    });
+
+    it('修改邮箱时检查重复', async () => {
+      vi.mocked(prisma.candidate.findUnique)
+        .mockResolvedValueOnce({
+          id: 'candidate-1',
+          phone: '13800138000',
+          email: 'old@test.com',
+        } as any);
+      vi.mocked(prisma.candidate.findFirst).mockResolvedValueOnce({
+        id: 'candidate-2',
+        email: 'new@test.com',
+      } as any);
+
+      await expect(service.updateCandidate('candidate-1', { email: 'new@test.com' })).rejects.toThrow('该邮箱已被其他候选人使用');
+    });
+  });
+
+  describe('deleteCandidate - 删除候选人', () => {
+    it('应成功删除候选人', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.candidate.delete).mockResolvedValue({} as any);
+
+      await service.deleteCandidate('candidate-1');
+
+      expect(prisma.candidate.delete).toHaveBeenCalledWith({ where: { id: 'candidate-1' } });
+    });
+
+    it('候选人不存在时应抛出错误', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue(null);
+
+      await expect(service.deleteCandidate('non-existent')).rejects.toThrow('候选人不存在');
+    });
+  });
+
+  describe('getCandidates - 候选人列表查询（更多筛选条件）', () => {
+    it('应支持来源筛选', async () => {
+      vi.mocked(prisma.candidate.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.candidate.count).mockResolvedValue(0);
+
+      await service.getCandidates({ source: '招聘网站' });
+
+      expect(prisma.candidate.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            source: '招聘网站',
+          }),
+        })
+      );
+    });
+
+    it('应支持学历筛选', async () => {
+      vi.mocked(prisma.candidate.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.candidate.count).mockResolvedValue(0);
+
+      await service.getCandidates({ education: '本科' });
+
+      expect(prisma.candidate.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            education: '本科',
+          }),
+        })
+      );
+    });
+
+    it('应支持工作年限范围筛选', async () => {
+      vi.mocked(prisma.candidate.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.candidate.count).mockResolvedValue(0);
+
+      await service.getCandidates({ workYearsMin: 3, workYearsMax: 5 });
+
+      expect(prisma.candidate.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            workYears: expect.objectContaining({
+              gte: 3,
+              lte: 5,
+            }),
+          }),
+        })
+      );
+    });
+  });
+
+  describe('advanceStage - 流程推进（更多验证）', () => {
+    it('应自动创建Offer记录当推进到Offer阶段', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        stageRecords: [{ stage: '拟录用', status: 'passed', enteredAt: new Date() }],
+      } as any);
+      vi.mocked(prisma.stageRecord.create).mockResolvedValue({} as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.offer.create).mockResolvedValue({} as any);
+
+      await service.advanceStage('candidate-1', {
+        stage: 'Offer',
+        status: 'passed',
+      }, 'user-1');
+
+      expect(prisma.offer.create).toHaveBeenCalled();
+    });
+
+    it('应自动更新Offer记录当推进到入职阶段', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        stageRecords: [{ stage: 'Offer', status: 'passed', enteredAt: new Date() }],
+      } as any);
+      vi.mocked(prisma.stageRecord.create).mockResolvedValue({} as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({
+        id: 'offer-1',
+        result: 'accepted',
+      } as any);
+      vi.mocked(prisma.offer.update).mockResolvedValue({} as any);
+
+      await service.advanceStage('candidate-1', {
+        stage: '入职',
+        status: 'passed',
+      }, 'user-1');
+
+      expect(prisma.offer.update).toHaveBeenCalled();
+    });
+
+    it('淘汰时必须填写原因', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        stageRecords: [{ stage: '初筛', status: 'in_progress', enteredAt: new Date() }],
+      } as any);
+
+      await expect(service.advanceStage('candidate-1', {
+        stage: '复试',
+        status: 'rejected',
+      }, 'user-1')).rejects.toThrow('淘汰时必须填写原因');
+    });
+
+    it('应拒绝无效的阶段', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        stageRecords: [{ stage: '初筛', status: 'in_progress', enteredAt: new Date() }],
+      } as any);
+
+      await expect(service.advanceStage('candidate-1', {
+        stage: '无效阶段',
+        status: 'in_progress',
+      }, 'user-1')).rejects.toThrow('无效的阶段');
+    });
   });
 });
