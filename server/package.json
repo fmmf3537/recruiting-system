@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "tsx src/index.ts",
     "lint": "eslint src --ext .ts --fix",
     "lint:check": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
@@ -59,6 +59,9 @@
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
     "vitest": "^1.6.1"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "engines": {
     "node": ">=18.0.0"
