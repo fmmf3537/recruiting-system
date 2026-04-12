@@ -189,6 +189,10 @@
       </div>
     </div>
 
+    <el-empty v-else-if="notFound" description="候选人不存在或已被删除">
+      <el-button type="primary" @click="goToList">返回列表</el-button>
+    </el-empty>
+
     <!-- 推进流程对话框 -->
     <el-dialog v-model="advanceDialogVisible" title="推进候选人流程" width="500px">
       <el-form ref="advanceFormRef" :model="advanceForm" :rules="advanceRules" label-width="100px">
@@ -278,6 +282,7 @@ const candidateId = route.params.id as string;
 
 const candidate = ref<CandidateDetail | null>(null);
 const loading = ref(false);
+const notFound = ref(false);
 
 // 计算是否可推进
 const canAdvance = computed(() => {
@@ -338,13 +343,19 @@ const feedbackRules: FormRules = {
 // 获取候选人详情
 async function fetchCandidateDetail() {
   loading.value = true;
+  notFound.value = false;
   try {
     const res = await getCandidateById(candidateId);
     if (res.success) {
       candidate.value = res.data;
     }
-  } catch (error) {
-    ElMessage.error('获取候选人详情失败');
+  } catch (error: any) {
+    const errorMsg = error.response?.data?.error || error.message;
+    if (errorMsg.includes('不存在') || errorMsg.includes('not exist')) {
+      notFound.value = true;
+    } else {
+      ElMessage.error('获取候选人详情失败');
+    }
   } finally {
     loading.value = false;
   }
@@ -389,6 +400,10 @@ function getFeedbackConclusionText(conclusion: string): string {
 
 function handleEdit() {
   router.push(`/candidates/${candidateId}/edit`);
+}
+
+function goToList() {
+  router.push('/candidates');
 }
 
 function handleAdvance() {

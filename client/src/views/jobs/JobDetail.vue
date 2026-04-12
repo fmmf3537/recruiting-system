@@ -129,6 +129,10 @@
       </div>
     </el-card>
 
+    <el-empty v-if="notFound" description="职位不存在或已被删除">
+      <el-button type="primary" @click="goToList">返回列表</el-button>
+    </el-empty>
+
     <!-- 关联候选人列表 -->
     <el-card class="candidates-card" v-loading="candidatesLoading">
       <template #header>
@@ -233,6 +237,7 @@ const candidatesLoading = ref(false);
 
 // 职位信息
 const jobInfo = ref<JobDetail | null>(null);
+const notFound = ref(false);
 
 // 候选人列表
 const candidateList = ref<CandidateItem[]>([]);
@@ -249,14 +254,20 @@ const candidateStats = reactive({
 // 获取职位详情
 async function fetchJobDetail() {
   loading.value = true;
+  notFound.value = false;
   try {
     const res = await getJobById(jobId);
     if (res.success) {
       jobInfo.value = res.data;
     }
-  } catch (error) {
-    console.error('获取职位详情失败:', error);
-    ElMessage.error('获取职位详情失败');
+  } catch (error: any) {
+    const errorMsg = error.response?.data?.error || error.message;
+    if (errorMsg.includes('不存在') || errorMsg.includes('not exist')) {
+      notFound.value = true;
+    } else {
+      console.error('获取职位详情失败:', error);
+      ElMessage.error('获取职位详情失败');
+    }
   } finally {
     loading.value = false;
   }
@@ -354,6 +365,10 @@ function getStageType(stage: string): string {
 // 编辑职位
 function handleEdit() {
   router.push(`/jobs/${jobId}/edit`);
+}
+
+function goToList() {
+  router.push('/jobs');
 }
 
 // 复制职位

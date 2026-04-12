@@ -119,6 +119,9 @@
       </div>
     </el-card>
 
+    <el-empty v-else-if="noOffer" description="该候选人暂无 Offer">
+      <el-button type="primary" @click="handleCreateOffer">创建 Offer</el-button>
+    </el-empty>
     <el-empty v-else description="Offer 不存在或已被删除" />
 
     <!-- 编辑对话框 -->
@@ -179,6 +182,7 @@ const candidateId = route.params.id as string;
 
 const loading = ref(false);
 const offer = ref<OfferDetail | null>(null);
+const noOffer = ref(false);
 
 // 编辑对话框
 const editDialogVisible = ref(false);
@@ -207,14 +211,20 @@ const joinRules: FormRules = {
 // 获取 Offer 详情
 async function fetchOfferDetail() {
   loading.value = true;
+  noOffer.value = false;
   try {
     const res = await getOfferByCandidateId(candidateId);
     if (res.success) {
       offer.value = res.data;
     }
-  } catch (error) {
-    console.error('获取Offer详情失败:', error);
-    ElMessage.error('获取Offer详情失败');
+  } catch (error: any) {
+    const errorMsg = error.response?.data?.error || error.message;
+    if (errorMsg.includes('暂无 Offer') || errorMsg.includes('暂无offer')) {
+      noOffer.value = true;
+    } else {
+      console.error('获取Offer详情失败:', error);
+      ElMessage.error('获取Offer详情失败');
+    }
   } finally {
     loading.value = false;
   }
@@ -236,6 +246,10 @@ function getResultType(result: OfferResult): string {
 
 function getResultText(result: OfferResult): string {
   return { 'pending': '待确认', 'accepted': '已接受', 'rejected': '已拒绝' }[result] || result;
+}
+
+function handleCreateOffer() {
+  router.push(`/offers/create?candidateId=${candidateId}`);
 }
 
 function handleEdit() {
