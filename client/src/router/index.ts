@@ -116,6 +116,26 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: '/offers/create',
+        name: 'OfferCreate',
+        component: () => import('@/views/offers/OfferForm.vue'),
+        meta: {
+          title: '创建 Offer',
+          hidden: true,
+          public: true,
+        },
+      },
+      {
+        path: '/offers/:id',
+        name: 'OfferDetail',
+        component: () => import('@/views/offers/OfferDetail.vue'),
+        meta: {
+          title: 'Offer 详情',
+          hidden: true,
+          public: true,
+        },
+      },
+      {
         path: '/stats',
         name: 'Stats',
         component: () => import('@/views/stats/index.vue'),
