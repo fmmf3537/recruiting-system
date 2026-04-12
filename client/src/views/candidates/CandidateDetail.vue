@@ -466,7 +466,7 @@ function handleCreateOffer() {
 
 function handleViewOffer() {
   if (candidate.value?.offer) {
-    router.push(`/offers/${candidate.value.offer.id}`);
+    router.push(`/offers/${candidateId}`);
   }
 }
 
