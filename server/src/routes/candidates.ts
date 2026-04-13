@@ -1,10 +1,19 @@
 import { Router, type Router as RouterType } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import { candidateController } from '../controllers/candidate.controller';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 
 const router: RouterType = Router();
+
+// 配置 multer（内存存储）
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+});
 
 // ============ 验证 Schema 定义 ============
 
@@ -26,6 +35,13 @@ const createCandidateSchema = z.object({
   sourceNote: z.string().optional(),
   intro: z.string().optional(),
   jobIds: z.array(z.string()).optional(),
+  workHistory: z.array(z.object({
+    company: z.string(),
+    position: z.string(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+    description: z.string().optional(),
+  })).optional(),
 });
 
 // 更新候选人验证 Schema
@@ -180,6 +196,18 @@ router.get(
   authenticate,
   validate(candidateIdParamSchema, 'params'),
   candidateController.getInterviewFeedbacks
+);
+
+/**
+ * POST /api/candidates/parse-resume
+ * 解析简历
+ * 权限：登录用户
+ */
+router.post(
+  '/parse-resume',
+  authenticate,
+  upload.single('file'),
+  candidateController.parseResume
 );
 
 /**

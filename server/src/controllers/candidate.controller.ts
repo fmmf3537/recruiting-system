@@ -197,6 +197,57 @@ export class CandidateController {
   }
 
   /**
+   * POST /api/candidates/parse-resume
+   * 解析简历
+   */
+  async parseResume(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const file = req.file;
+      if (!file) {
+        res.status(400).json({
+          success: false,
+          message: '请上传简历文件',
+        });
+        return;
+      }
+
+      const allowedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ];
+      if (!allowedTypes.includes(file.mimetype)) {
+        res.status(400).json({
+          success: false,
+          message: '只支持 PDF 和 DOCX 格式的简历',
+        });
+        return;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        res.status(400).json({
+          success: false,
+          message: '简历文件大小不能超过 10MB',
+        });
+        return;
+      }
+
+      const { parseResume } = await import('../services/resume-parser.service');
+      const result = await parseResume(file.buffer, file.mimetype);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * DELETE /api/candidates/:id
    * 删除候选人（仅管理员）
    */

@@ -360,7 +360,17 @@ async function handleSubmit() {
         router.back();
       }
     } else {
-      const res = await createCandidate(formData);
+      // 合并表单数据和工作经历
+      const submitData = { ...formData };
+      const workHistoryStr = sessionStorage.getItem('parsedWorkHistory');
+      if (workHistoryStr) {
+        try {
+          submitData.workHistory = JSON.parse(workHistoryStr);
+        } catch (e) {
+          console.error('解析工作经历数据失败:', e);
+        }
+      }
+      const res = await createCandidate(submitData);
       if (res.success) {
         // 有查重警告时显示确认弹窗
         if (res.warning && res.duplicates && res.duplicates.length > 0) {
@@ -387,10 +397,11 @@ async function handleSubmit() {
             submitting.value = false;
             return;
           }
-        } else {
-          ElMessage.success('创建成功');
-          router.back();
         }
+        // 清理工作经历数据
+        sessionStorage.removeItem('parsedWorkHistory');
+        ElMessage.success('创建成功');
+        router.back();
       }
     }
   } catch (error: any) {
@@ -403,6 +414,36 @@ async function handleSubmit() {
 onMounted(() => {
   fetchJobList();
   fetchCandidateDetail();
+
+  // 检查是否有预填充数据（从简历解析跳转）
+  const parsedData = sessionStorage.getItem('parsedResume');
+  if (parsedData) {
+    try {
+      const data = JSON.parse(parsedData);
+      Object.assign(formData, {
+        name: data.name || '',
+        phone: data.phone || '',
+        email: data.email || '',
+        gender: data.gender === '男' || data.gender === '女' ? data.gender : '男',
+        age: data.age || undefined,
+        education: data.education || '',
+        school: data.school || '',
+        workYears: data.workYears || undefined,
+        currentCompany: data.currentCompany || '',
+        currentPosition: data.currentPosition || '',
+        expectedSalary: data.expectedSalary || '',
+        intro: data.skills?.length ? `技能：${data.skills.join(', ')}` : '',
+      });
+      // 将工作经历也存储到 sessionStorage，供后续保存时使用
+      if (data.workHistory?.length) {
+        sessionStorage.setItem('parsedWorkHistory', JSON.stringify(data.workHistory));
+      }
+      sessionStorage.removeItem('parsedResume');
+      ElMessage.success('简历信息已填充，请确认并补充其他信息');
+    } catch (e) {
+      console.error('解析预填充数据失败:', e);
+    }
+  }
 });
 </script>
 

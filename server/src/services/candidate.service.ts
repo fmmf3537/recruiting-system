@@ -1,4 +1,4 @@
-import type { Candidate, Prisma } from '@prisma/client';
+import type { Candidate, Prisma, WorkHistory } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 
@@ -38,6 +38,13 @@ export interface CreateCandidateInput {
   sourceNote?: string;
   intro?: string;
   jobIds?: string[];
+  workHistory?: Array<{
+    company: string;
+    position: string;
+    startDate?: string;
+    endDate?: string;
+    description?: string;
+  }>;
 }
 
 // 更新候选人参数类型
@@ -211,6 +218,20 @@ export class CandidateService {
         completedAt: new Date(),
       },
     });
+
+    // 如果有工作经历，创建工作经历记录
+    if (data.workHistory && data.workHistory.length > 0) {
+      await prisma.workHistory.createMany({
+        data: data.workHistory.map((w) => ({
+          candidateId: candidate.id,
+          company: w.company,
+          position: w.position,
+          startDate: w.startDate ? new Date(w.startDate) : null,
+          endDate: w.endDate ? new Date(w.endDate) : null,
+          description: w.description,
+        })),
+      });
+    }
 
     // 如果有重复，返回警告
     if (duplicates.length > 0) {
@@ -415,6 +436,9 @@ export class CandidateService {
         createdBy: {
           select: { id: true, name: true, email: true },
         },
+        workHistories: {
+          orderBy: { startDate: 'desc' },
+        },
       },
     });
 
@@ -457,6 +481,14 @@ export class CandidateService {
         note: string | null;
       } | null;
       jobs: Array<{ id: string; title: string }>;
+      workHistories: Array<{
+        id: string;
+        company: string;
+        position: string;
+        startDate: Date | null;
+        endDate: Date | null;
+        description: string | null;
+      }>;
     };
   }
 
@@ -730,7 +762,143 @@ export class CandidateService {
       where: { id },
     });
   }
+
+  /**
+   * 创建工作经历
+   */
+  async createWorkHistory(data: CreateWorkHistoryInput): Promise<WorkHistory> {
+    const { candidateId, ...historyData } = data;
+
+    const candidate = await prisma.candidate.findUnique({
+      where: { id: candidateId },
+    });
+
+    if (!candidate) {
+      throw new AppError('候选人不存在', 404);
+    }
+
+    return prisma.workHistory.create({
+      data: {
+        candidateId,
+        company: historyData.company,
+        position: historyData.position,
+        startDate: historyData.startDate ? new Date(historyData.startDate) : null,
+        endDate: historyData.endDate ? new Date(historyData.endDate) : null,
+        description: historyData.description,
+      },
+    });
+  }
+
+  /**
+   * 批量创建工作经历
+   */
+  async createWorkHistories(
+    candidateId: string,
+    histories: Array<{
+      company: string;
+      position: string;
+      startDate?: string;
+      endDate?: string;
+      description?: string;
+    }>
+  ): Promise<WorkHistory[]> {
+    if (histories.length === 0) {
+      return [];
+    }
+
+    const candidate = await prisma.candidate.findUnique({
+      where: { id: candidateId },
+    });
+
+    if (!candidate) {
+      throw new AppError('候选人不存在', 404);
+    }
+
+    const result = await prisma.workHistory.createMany({
+      data: histories.map((h) => ({
+        candidateId,
+        company: h.company,
+        position: h.position,
+        startDate: h.startDate ? new Date(h.startDate) : null,
+        endDate: h.endDate ? new Date(h.endDate) : null,
+        description: h.description,
+      })),
+    });
+
+    return prisma.workHistory.findMany({
+      where: { candidateId },
+      orderBy: { startDate: 'desc' },
+    });
+  }
+
+  /**
+   * 获取候选人的工作经历列表
+   */
+  async getWorkHistories(candidateId: string): Promise<WorkHistory[]> {
+    return prisma.workHistory.findMany({
+      where: { candidateId },
+      orderBy: { startDate: 'desc' },
+    });
+  }
+
+  /**
+   * 更新工作经历
+   */
+  async updateWorkHistory(
+    id: string,
+    data: Partial<{
+      company: string;
+      position: string;
+      startDate: string;
+      endDate: string;
+      description: string;
+    }>
+  ): Promise<WorkHistory> {
+    const history = await prisma.workHistory.findUnique({
+      where: { id },
+    });
+
+    if (!history) {
+      throw new AppError('工作经历不存在', 404);
+    }
+
+    return prisma.workHistory.update({
+      where: { id },
+      data: {
+        ...data,
+        startDate: data.startDate ? new Date(data.startDate) : undefined,
+        endDate: data.endDate ? new Date(data.endDate) : undefined,
+      },
+    });
+  }
+
+  /**
+   * 删除工作经历
+   */
+  async deleteWorkHistory(id: string): Promise<void> {
+    const history = await prisma.workHistory.findUnique({
+      where: { id },
+    });
+
+    if (!history) {
+      throw new AppError('工作经历不存在', 404);
+    }
+
+    await prisma.workHistory.delete({
+      where: { id },
+    });
+  }
 }
 
 // 导出单例实例
 export const candidateService = new CandidateService();
+
+// WorkHistory 相关类型
+export interface CreateWorkHistoryInput {
+  candidateId: string;
+  company: string;
+  position: string;
+  startDate?: string;
+  endDate?: string;
+  description?: string;
+}

@@ -6,9 +6,14 @@
         <h2 class="page-title">候选人管理</h2>
         <span class="page-subtitle">共 {{ pagination.total }} 位候选人</span>
       </div>
-      <el-button type="primary" @click="handleAdd">
-        <el-icon><Plus /></el-icon>新增候选人
-      </el-button>
+      <div class="action-buttons">
+        <el-button @click="showResumeUpload = true">
+          <el-icon><Upload /></el-icon>上传简历
+        </el-button>
+        <el-button type="primary" @click="handleAdd">
+          <el-icon><Plus /></el-icon>新增候选人
+        </el-button>
+      </div>
     </div>
 
     <!-- 筛选栏 -->
@@ -231,6 +236,9 @@
         <el-button type="danger" @click="handleRejectSubmit" :loading="rejectSubmitting">确认淘汰</el-button>
       </template>
     </el-dialog>
+
+    <!-- 简历上传对话框 -->
+    <ResumeUpload v-model="showResumeUpload" @confirm="handleResumeParsed" />
   </div>
 </template>
 
@@ -238,13 +246,15 @@
 import { ref, reactive, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { Plus, Search, UserFilled } from '@element-plus/icons-vue';
+import { Plus, Search, UserFilled, Upload } from '@element-plus/icons-vue';
 import {
   getCandidateList,
   advanceStage,
   type CandidateItem,
   type AdvanceStageParams,
+  type ResumeParseResult,
 } from '@/api/candidate';
+import ResumeUpload from './ResumeUpload.vue';
 
 const router = useRouter();
 
@@ -288,6 +298,15 @@ const rejectSubmitting = ref(false);
 const rejectFormRef = ref<FormInstance>();
 const rejectForm = reactive({ rejectReason: '' });
 const rejectRules: FormRules = { rejectReason: [{ required: true, message: '请填写淘汰原因', trigger: 'blur' }] };
+
+// ============ 简历上传 ============
+const showResumeUpload = ref(false);
+
+function handleResumeParsed(data: ResumeParseResult) {
+  // 将解析结果存储到 sessionStorage，跳转到创建页面
+  sessionStorage.setItem('parsedResume', JSON.stringify(data));
+  router.push('/candidates/create');
+}
 
 // ============ 方法 ============
 async function fetchCandidateList() {

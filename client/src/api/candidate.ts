@@ -47,6 +47,7 @@ export interface CreateCandidateParams {
   sourceNote?: string;
   intro?: string;
   jobIds?: string[];
+  workHistory?: WorkHistory[];
 }
 
 // 更新候选人参数
@@ -303,4 +304,55 @@ export function getInterviewFeedbacks(id: string): Promise<InterviewFeedbackList
  */
 export function deleteCandidate(id: string): Promise<OperationResult> {
   return request.delete(`/candidates/${id}`) as Promise<OperationResult>;
+}
+
+// ============ 简历解析 ============
+
+// 工作经历
+export interface WorkHistory {
+  id?: string;
+  company: string;
+  position: string;
+  startDate?: string;
+  endDate?: string;
+  description?: string;
+}
+
+// 简历解析结果
+export interface ResumeParseResult {
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  gender: string | null;
+  age: number | null;
+  workYears: number | null;
+  education: string | null;
+  school: string | null;
+  currentCompany: string | null;
+  currentPosition: string | null;
+  expectedSalary: string | null;
+  workHistory: WorkHistory[];
+  skills: string[];
+  rawText: string;
+}
+
+// 简历解析响应
+export interface ResumeParseResponse {
+  success: boolean;
+  message?: string;
+  data?: ResumeParseResult;
+}
+
+/**
+ * 解析简历
+ * @param file 简历文件
+ */
+export function parseResume(file: File): Promise<ResumeParseResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request.post('/candidates/parse-resume', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }) as Promise<ResumeParseResponse>;
 }

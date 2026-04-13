@@ -105,6 +105,9 @@ model Candidate {
   // 关系：一个 Candidate 有一个 Offer
   offer Offer?
 
+  // 关系：一个 Candidate 有多个工作经历
+  workHistories WorkHistory[]
+
   @@index([email])
   @@index([phone])
   @@index([source])
@@ -126,6 +129,25 @@ model CandidateJob {
   @@index([candidateId])
   @@index([jobId])
   @@map("candidate_job")
+}
+
+// ==================== 工作经历表 ====================
+model WorkHistory {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  company     String    // 公司名称
+  position    String    // 职位名称
+  startDate   DateTime? // 开始时间
+  endDate     DateTime? // 结束时间（null 表示至今）
+  description String?   @db.Text // 工作描述/职责
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([candidateId])
+  @@map("work_history")
 }
 
 // ==================== 流程阶段记录表 ====================
