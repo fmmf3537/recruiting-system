@@ -49,7 +49,7 @@
     </div>
 
     <div class="login-footer">
-      <p>© 2024 西安辰航卓越科技有限公司 - All Rights Reserved</p>
+      <p>© 2026 西安辰航卓越科技有限公司 - All Rights Reserved</p>
     </div>
   </div>
 </template>
