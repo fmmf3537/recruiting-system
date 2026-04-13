@@ -20,8 +20,8 @@ const upload = multer({
 // 创建候选人验证 Schema
 const createCandidateSchema = z.object({
   name: z.string().min(2, '姓名至少2个字符').max(50, '姓名最多50个字符'),
-  phone: z.string().min(11, '手机号格式不正确').max(20),
-  email: z.string().email('请输入有效的邮箱地址'),
+  phone: z.string().min(11, '手机号格式不正确').max(20).optional(),
+  email: z.string().email('请输入有效的邮箱地址').optional().or(z.literal('')),
   gender: z.enum(['男', '女'], { errorMap: () => ({ message: '性别必须是：男或女' }) }),
   age: z.number().int().min(18).max(70).optional(),
   education: z.string().min(1, '学历不能为空'),
@@ -42,13 +42,16 @@ const createCandidateSchema = z.object({
     endDate: z.string().optional(),
     description: z.string().optional(),
   })).optional(),
-});
+}).refine(
+  (data) => data.phone || (data.email && data.email.length > 0),
+  { message: '手机号和邮箱至少填写一项', path: ['phone'] }
+);
 
 // 更新候选人验证 Schema
 const updateCandidateSchema = z.object({
   name: z.string().min(2).max(50).optional(),
   phone: z.string().min(11).max(20).optional(),
-  email: z.string().email().optional(),
+  email: z.string().email().optional().or(z.literal('')),
   gender: z.enum(['男', '女']).optional(),
   age: z.number().int().min(18).max(70).optional(),
   education: z.string().optional(),
@@ -61,6 +64,20 @@ const updateCandidateSchema = z.object({
   source: z.string().optional(),
   sourceNote: z.string().optional(),
   intro: z.string().optional(),
+});
+
+// 列表查询验证 Schema
+const listCandidatesQuerySchema = z.object({
+  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  pageSize: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 10)),
+  keyword: z.string().optional(),
+  source: z.string().optional(),
+  stage: z.string().optional(),
+  status: z.enum(['in_progress', 'passed', 'rejected']).optional(),
+  education: z.string().optional(),
+  workYearsMin: z.string().optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
+  workYearsMax: z.string().optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
+  jobId: z.string().optional(),
 });
 
 // 候选人 ID 参数验证
@@ -95,34 +112,6 @@ const interviewFeedbackSchema = z.object({
   rejectReason: z.string().optional(),
 });
 
-// 列表查询验证 Schema
-const listCandidatesQuerySchema = z.object({
-  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
-  pageSize: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 10)),
-  keyword: z.string().optional(),
-  source: z.string().optional(),
-  stage: z.string().optional(),
-  status: z.enum(['in_progress', 'passed', 'rejected']).optional(),
-  education: z.string().optional(),
-  workYearsMin: z.string().optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
-  workYearsMax: z.string().optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
-  jobId: z.string().optional(),
-});
-
-// ============ 路由定义 ============
-
-/**
- * POST /api/candidates
- * 新增候选人（含查重逻辑）
- * 权限：登录用户
- */
-router.post(
-  '/',
-  authenticate,
-  validate(createCandidateSchema),
-  candidateController.createCandidate
-);
-
 /**
  * GET /api/candidates
  * 候选人列表（支持分页和多条件筛选）
@@ -133,6 +122,17 @@ router.get(
   authenticate,
   validate(listCandidatesQuerySchema, 'query'),
   candidateController.getCandidates
+);
+
+/**
+ * POST /api/candidates
+ * 新增候选人（含查重逻辑）
+ * 权限：登录用户
+ */
+router.post(
+  '/',
+  authenticate,
+  candidateController.createCandidate
 );
 
 /**
@@ -212,13 +212,12 @@ router.post(
 
 /**
  * DELETE /api/candidates/:id
- * 删除候选人（仅管理员，逻辑删除）
- * 权限：仅管理员
+ * 删除候选人（创建者或管理员）
+ * 权限：登录用户
  */
 router.delete(
   '/:id',
   authenticate,
-  authorize('admin'),
   validate(candidateIdParamSchema, 'params'),
   candidateController.deleteCandidate
 );

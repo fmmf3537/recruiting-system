@@ -158,7 +158,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click.stop="handleDetail(row)">
               详情
@@ -168,6 +168,9 @@
             </el-button>
             <el-button v-if="row.stageStatus !== 'rejected'" type="danger" link size="small" @click.stop="handleReject(row)">
               淘汰
+            </el-button>
+            <el-button v-if="canDelete(row)" type="danger" link size="small" @click.stop="handleDelete(row)">
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -250,13 +253,16 @@ import { Plus, Search, UserFilled, Upload } from '@element-plus/icons-vue';
 import {
   getCandidateList,
   advanceStage,
+  deleteCandidate,
   type CandidateItem,
   type AdvanceStageParams,
   type ResumeParseResult,
 } from '@/api/candidate';
+import { useAuthStore } from '@/stores/auth';
 import ResumeUpload from './ResumeUpload.vue';
 
 const router = useRouter();
+const authStore = useAuthStore();
 
 // ============ 数据 ============
 const loading = ref(false);
@@ -274,9 +280,15 @@ const stageOrder = ['入库', '初筛', '复试', '终面', '拟录用', 'Offer'
 const availableStages = computed(() => {
   if (!currentCandidate.value) return [];
   const currentIndex = stageOrder.indexOf(currentCandidate.value.currentStage);
-  // 只返回下一个阶段（不能跳过）
+  // Admin 用户可以跳到任意阶段
+  if (authStore.isAdmin) {
+    return stageOrder;
+  }
+  const stages: string[] = [];
+  stages.push(stageOrder[currentIndex]);
   const nextStage = stageOrder[currentIndex + 1];
-  return nextStage ? [nextStage] : [];
+  if (nextStage) stages.push(nextStage);
+  return stages;
 });
 
 const advanceForm = reactive<AdvanceStageParams>({
@@ -355,6 +367,29 @@ function getStatusText(status: string): string {
 function canAdvance(row: CandidateItem): boolean {
   return row.stageStatus !== 'rejected' && row.currentStage !== '入职';
 }
+function canDelete(row: CandidateItem): boolean {
+  const currentUser = authStore.userInfo;
+  return currentUser?.id === row.createdById || currentUser?.role === 'admin';
+}
+
+async function handleDelete(row: CandidateItem) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除候选人「${row.name}」吗？此操作不可恢复。`,
+      '删除确认',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    );
+    const res = await deleteCandidate(row.id);
+    if (res.success) {
+      ElMessage.success('删除成功');
+      fetchCandidateList();
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '删除失败');
+    }
+  }
+}
 
 function handleAdd() { router.push('/candidates/create'); }
 function handleRowClick(row: CandidateItem) { handleDetail(row); }
@@ -362,7 +397,7 @@ function handleDetail(row: CandidateItem) { router.push(`/candidates/${row.id}`)
 
 function handleAdvance(row: CandidateItem) {
   currentCandidate.value = row;
-  advanceForm.stage = '' as any;
+  advanceForm.stage = row.currentStage as any;
   advanceForm.status = 'passed';
   advanceForm.rejectReason = '';
   advanceForm.note = '';

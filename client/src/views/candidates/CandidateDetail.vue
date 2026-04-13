@@ -14,9 +14,14 @@
           <template #header>
             <div class="card-header">
               <span>基本信息</span>
-              <el-button type="primary" link @click="handleEdit">
-                <el-icon><Edit /></el-icon>编辑
-              </el-button>
+              <div class="header-actions">
+                <el-button v-if="canDelete" type="danger" link @click="handleDelete">
+                  <el-icon><Delete /></el-icon>删除
+                </el-button>
+                <el-button type="primary" link @click="handleEdit">
+                  <el-icon><Edit /></el-icon>编辑
+                </el-button>
+              </div>
             </div>
           </template>
 
@@ -265,20 +270,23 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
-import { ArrowLeft, Edit, UserFilled, Promotion, ChatDotRound, Document, View } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
+import { ArrowLeft, Edit, Delete, UserFilled, Promotion, ChatDotRound, Document, View } from '@element-plus/icons-vue';
 import {
   getCandidateById,
   advanceStage,
   addInterviewFeedback,
+  deleteCandidate,
   type CandidateDetail,
   type AdvanceStageParams,
   type InterviewFeedbackParams,
 } from '@/api/candidate';
+import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
 const router = useRouter();
 const candidateId = route.params.id as string;
+const authStore = useAuthStore();
 
 const candidate = ref<CandidateDetail | null>(null);
 const loading = ref(false);
@@ -290,6 +298,34 @@ const canAdvance = computed(() => {
   return candidate.value.stageStatus !== 'rejected' && candidate.value.currentStage !== '入职';
 });
 
+// 计算是否可删除
+const canDelete = computed(() => {
+  if (!candidate.value) return false;
+  const currentUser = authStore.userInfo;
+  return currentUser?.id === candidate.value.createdById || currentUser?.role === 'admin';
+});
+
+// 删除候选人
+async function handleDelete() {
+  if (!candidate.value) return;
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除候选人「${candidate.value.name}」吗？此操作不可恢复。`,
+      '删除确认',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' }
+    );
+    const res = await deleteCandidate(candidate.value.id);
+    if (res.success) {
+      ElMessage.success('删除成功');
+      router.push('/candidates');
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '删除失败');
+    }
+  }
+}
+
 // 推进流程
 const advanceDialogVisible = ref(false);
 const advanceSubmitting = ref(false);
@@ -299,9 +335,14 @@ const stageOrder = ['入库', '初筛', '复试', '终面', '拟录用', 'Offer'
 const availableStages = computed(() => {
   if (!candidate.value) return [];
   const currentIndex = stageOrder.indexOf(candidate.value.currentStage);
-  // 只返回下一个阶段（不能跳过）
+  if (authStore.isAdmin) {
+    return stageOrder;
+  }
+  const stages: string[] = [];
+  stages.push(stageOrder[currentIndex]);
   const nextStage = stageOrder[currentIndex + 1];
-  return nextStage ? [nextStage] : [];
+  if (nextStage) stages.push(nextStage);
+  return stages;
 });
 
 const advanceForm = reactive<AdvanceStageParams>({
@@ -407,7 +448,8 @@ function goToList() {
 }
 
 function handleAdvance() {
-  advanceForm.stage = '' as any;
+  if (!candidate.value) return;
+  advanceForm.stage = candidate.value.currentStage as any;
   advanceForm.status = 'passed';
   advanceForm.rejectReason = '';
   advanceForm.note = '';
@@ -508,6 +550,11 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     font-weight: 500;
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
   }
 
   .info-card {

@@ -69,3 +69,15 @@ request.interceptors.response.use(
 );
 
 export default request;
+
+// 文件上传方法
+export function uploadFile(file: File): Promise<{ success: boolean; data?: { url: string }; message?: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return request.post('/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }) as Promise<{ success: boolean; data?: { url: string }; message?: string }>;
+}

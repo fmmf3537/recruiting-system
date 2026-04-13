@@ -125,8 +125,7 @@
               <el-form-item label="简历附件" prop="resumeUrl">
                 <el-upload
                   class="resume-uploader"
-                  action="/api/upload/resume"
-                  :on-success="handleUploadSuccess"
+                  :http-request="handleCustomUpload"
                   :before-upload="beforeUpload"
                   accept=".pdf,.doc,.docx"
                   :limit="1"
@@ -226,6 +225,7 @@ import {
   type UpdateCandidateParams,
 } from '@/api/candidate';
 import { getJobList, type JobItem } from '@/api/job';
+import { uploadFile } from '@/utils/request';
 
 const route = useRoute();
 const router = useRouter();
@@ -266,12 +266,26 @@ const resumeFileName = computed(() => {
 const formRules: FormRules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
   phone: [
-    { required: true, message: '请输入手机号', trigger: 'blur' },
-    { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' },
+    { validator: (_rule: any, value: string, callback: any) => {
+      if (!value && !formData.email) {
+        callback(new Error('手机号和邮箱至少填写一项'));
+      } else if (value && !/^1[3-9]\d{9}$/.test(value)) {
+        callback(new Error('手机号格式不正确'));
+      } else {
+        callback();
+      }
+    }, trigger: 'blur' },
   ],
   email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
+    { validator: (_rule: any, value: string, callback: any) => {
+      if (!value && !formData.phone) {
+        callback(new Error('手机号和邮箱至少填写一项'));
+      } else if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        callback(new Error('邮箱格式不正确'));
+      } else {
+        callback();
+      }
+    }, trigger: 'blur' },
   ],
   gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
   education: [{ required: true, message: '请选择学历', trigger: 'change' }],
@@ -323,6 +337,24 @@ async function fetchCandidateDetail() {
 function handleUploadSuccess(response: any) {
   formData.resumeUrl = response.url;
   ElMessage.success('简历上传成功');
+}
+
+async function handleCustomUpload(options: any) {
+  const { file, onSuccess, onError } = options;
+  try {
+    const res = await uploadFile(file as File);
+    if (res.success && res.data) {
+      formData.resumeUrl = res.data.url;
+      ElMessage.success('简历上传成功');
+      onSuccess();
+    } else {
+      ElMessage.error(res.message || '上传失败');
+      onError(new Error(res.message));
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '上传失败');
+    onError(error);
+  }
 }
 
 function beforeUpload(file: File) {

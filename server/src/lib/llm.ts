@@ -60,6 +60,7 @@ async function callLLM(prompt: string, systemPrompt?: string): Promise<LLMRespon
       model: config.model,
       messages,
       temperature: 0.1,
+      max_tokens: 4000,
     }),
   });
 
@@ -105,19 +106,29 @@ ${resumeText}
     }
   ],
   "skills": ["技能1", "技能2"]
-}`;
+}
+注意：只返回最近2段工作经历即可，避免内容过长。`;
 
   const result = await callLLM(userPrompt, systemPrompt);
 
-  const jsonMatch = result.content.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      return JSON.parse(jsonMatch[0]);
-    } catch {
-      throw new Error('Failed to parse LLM response as JSON');
-    }
+  console.log('【LLM原始返回】', result.content);
+
+  let jsonStr = result.content.trim();
+  
+  // 移除 ```json 和 ``` 标记
+  if (jsonStr.startsWith('```json')) {
+    jsonStr = jsonStr.slice(7);
   }
-  throw new Error('No JSON found in LLM response');
+  if (jsonStr.endsWith('```')) {
+    jsonStr = jsonStr.slice(0, -3);
+  }
+  jsonStr = jsonStr.trim();
+
+  try {
+    return JSON.parse(jsonStr);
+  } catch {
+    throw new Error('Failed to parse LLM response as JSON');
+  }
 }
 
 export { callLLM };

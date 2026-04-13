@@ -221,16 +221,26 @@ export class CandidateService {
 
     // 如果有工作经历，创建工作经历记录
     if (data.workHistory && data.workHistory.length > 0) {
-      await prisma.workHistory.createMany({
-        data: data.workHistory.map((w) => ({
-          candidateId: candidate.id,
-          company: w.company,
-          position: w.position,
-          startDate: w.startDate ? new Date(w.startDate) : null,
-          endDate: w.endDate ? new Date(w.endDate) : null,
-          description: w.description,
-        })),
+      // 过滤无效日期
+      const validWorkHistory = data.workHistory.filter((w) => {
+        if (!w.company || !w.position) return false;
+        if (w.startDate && isNaN(Date.parse(w.startDate))) return false;
+        if (w.endDate && isNaN(Date.parse(w.endDate))) return false;
+        return true;
       });
+
+      if (validWorkHistory.length > 0) {
+        await prisma.workHistory.createMany({
+          data: validWorkHistory.map((w) => ({
+            candidateId: candidate.id,
+            company: w.company,
+            position: w.position,
+            startDate: w.startDate ? new Date(w.startDate) : null,
+            endDate: w.endDate ? new Date(w.endDate) : null,
+            description: w.description,
+          })),
+        });
+      }
     }
 
     // 如果有重复，返回警告
@@ -448,6 +458,8 @@ export class CandidateService {
 
     return {
       ...candidate,
+      currentStage: candidate.stageRecords[0]?.stage || '入库',
+      stageStatus: candidate.stageRecords[0]?.status || 'in_progress',
       jobs: candidate.candidateJobs.map((cj) => cj.job),
     } as unknown as Candidate & {
       stageRecords: Array<{
@@ -562,7 +574,7 @@ export class CandidateService {
   async advanceStage(
     id: string,
     data: AdvanceStageInput,
-    _operatedById: string
+    operatedById: string
   ): Promise<void> {
     const { stage, status, rejectReason, assigneeId, note } = data;
 
@@ -591,20 +603,70 @@ export class CandidateService {
     const currentStage =
       candidate.stageRecords[0]?.stage || ('入库' as Stage);
     const currentStageIndex = STAGE_ORDER.indexOf(currentStage as Stage);
+    const currentStatus = candidate.stageRecords[0]?.status || 'in_progress';
 
-    // 验证阶段顺序：只能向前推进，不能回退
-    if (targetStageIndex < currentStageIndex) {
-      throw new AppError('不能回退到之前的阶段', 400);
-    }
+    // 检查是否为 admin
+    const user = await prisma.user.findUnique({ where: { id: operatedById } });
+    const isAdmin = user?.role === 'admin';
 
-    // 如果要推进到新阶段，必须是下一个阶段
-    if (targetStageIndex > currentStageIndex && targetStageIndex !== currentStageIndex + 1) {
-      throw new AppError(`阶段推进必须按顺序：${STAGE_ORDER.join('→')}`, 400);
+    // 非 admin 用户验证阶段顺序：只能向前推进，不能回退
+    if (!isAdmin) {
+      if (targetStageIndex < currentStageIndex) {
+        throw new AppError('不能回退到之前的阶段', 400);
+      }
+
+      // 如果目标阶段与当前阶段相同，只更新状态
+      if (targetStageIndex === currentStageIndex) {
+        if (!candidate.stageRecords[0]) {
+          throw new AppError('当前阶段记录不存在', 400);
+        }
+        // 验证淘汰时必须填写原因
+        if (status === 'rejected' && !rejectReason) {
+          throw new AppError('淘汰时必须填写原因', 400);
+        }
+        // 不能从非进行中状态改成进行中
+        if (currentStatus !== 'in_progress' && status === 'in_progress') {
+          throw new AppError('不能将已完成的阶段改回进行中', 400);
+        }
+        // 更新当前阶段记录的状态
+        await prisma.stageRecord.update({
+          where: { id: candidate.stageRecords[0].id },
+          data: {
+            status,
+            rejectReason: rejectReason || null,
+            note: note || null,
+            completedAt: status !== 'in_progress' ? new Date() : null,
+          },
+        });
+        return;
+      }
+
+      // 如果要推进到新阶段，必须是下一个阶段
+      if (targetStageIndex > currentStageIndex && targetStageIndex !== currentStageIndex + 1) {
+        throw new AppError(`阶段推进必须按顺序：${STAGE_ORDER.join('→')}`, 400);
+      }
     }
 
     // 验证淘汰时必须填写原因
     if (status === 'rejected' && !rejectReason) {
       throw new AppError('淘汰时必须填写原因', 400);
+    }
+
+    // 如果目标阶段与当前阶段相同（admin bypass 场景），只更新状态
+    if (targetStageIndex === currentStageIndex) {
+      if (!candidate.stageRecords[0]) {
+        throw new AppError('当前阶段记录不存在', 400);
+      }
+      await prisma.stageRecord.update({
+        where: { id: candidate.stageRecords[0].id },
+        data: {
+          status,
+          rejectReason: rejectReason || null,
+          note: note || null,
+          completedAt: status !== 'in_progress' ? new Date() : null,
+        },
+      });
+      return;
     }
 
     // 创建新的阶段记录
@@ -745,9 +807,9 @@ export class CandidateService {
   }
 
   /**
-   * 删除候选人（仅管理员）
+   * 删除候选人（只能删除自己创建的）
    */
-  async deleteCandidate(id: string): Promise<void> {
+  async deleteCandidate(id: string, userId: string, isAdmin: boolean): Promise<void> {
     // 检查候选人是否存在
     const candidate = await prisma.candidate.findUnique({
       where: { id },
@@ -755,6 +817,11 @@ export class CandidateService {
 
     if (!candidate) {
       throw new AppError('候选人不存在', 404);
+    }
+
+    // 检查权限：只有创建者或管理员可以删除
+    if (candidate.createdById !== userId && !isAdmin) {
+      throw new AppError('无权删除此候选人', 403);
     }
 
     // 删除候选人（级联删除关联记录）

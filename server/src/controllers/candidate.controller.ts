@@ -37,13 +37,14 @@ export class CandidateController {
         message: '候选人创建成功',
       });
     } catch (error) {
+      console.error('【创建候选人错误】', error);
       next(error);
     }
   }
 
   /**
-   * GET /api/candidates
-   * 候选人列表（支持分页和多条件筛选）
+   * GET /api/candidates/:id
+   * 候选人详情（含流程记录、面试反馈、Offer 信息）
    */
   async getCandidates(
     req: Request,
@@ -243,13 +244,18 @@ export class CandidateController {
         data: result,
       });
     } catch (error) {
+      const errorMsg = `【简历解析错误】${new Date().toISOString()}\n${error}`;
+      console.error(errorMsg);
+      // 写入文件以便查看
+      const fs = await import('fs');
+      fs.appendFileSync('resume-parse-error.log', errorMsg + '\n\n');
       next(error);
     }
   }
 
   /**
    * DELETE /api/candidates/:id
-   * 删除候选人（仅管理员）
+   * 删除候选人（创建者或管理员）
    */
   async deleteCandidate(
     req: Request,
@@ -258,7 +264,9 @@ export class CandidateController {
   ): Promise<void> {
     try {
       const { id } = req.params;
-      await candidateService.deleteCandidate(id);
+      const userId = req.user!.userId;
+      const isAdmin = req.user!.role === 'admin';
+      await candidateService.deleteCandidate(id, userId, isAdmin);
 
       res.json({
         success: true,
