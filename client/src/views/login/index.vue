@@ -2,7 +2,7 @@
   <div class="login-container">
     <div class="login-box">
       <div class="login-header">
-        <h1 class="title">招聘管理系统</h1>
+        <h1 class="title">辰航卓越 · 招聘管理系统</h1>
         <p class="subtitle">ATS Recruitment Management System</p>
       </div>
 
@@ -49,7 +49,7 @@
     </div>
 
     <div class="login-footer">
-      <p>© 2024 招聘管理系统 - All Rights Reserved</p>
+      <p>© 2024 西安辰航卓越科技有限公司 - All Rights Reserved</p>
     </div>
   </div>
 </template>

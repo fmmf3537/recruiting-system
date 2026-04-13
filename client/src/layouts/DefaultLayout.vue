@@ -7,8 +7,8 @@
       :class="{ collapsed: appStore.sidebarCollapsed }"
     >
       <div class="logo">
-        <span class="logo-text" v-if="!appStore.sidebarCollapsed">招聘管理系统</span>
-        <span v-else class="logo-mini">招</span>
+        <span class="logo-text" v-if="!appStore.sidebarCollapsed">辰航卓越</span>
+        <span v-else class="logo-mini">辰</span>
       </div>
       
       <el-menu
