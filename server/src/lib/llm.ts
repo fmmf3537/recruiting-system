@@ -17,6 +17,11 @@ const LLM_CONFIG = {
     baseUrl: 'https://api.moonshot.cn/v1',
     model: 'moonshot-v1-8k',
   },
+  minimax: {
+    apiKey: process.env.MINIMAX_API_KEY,
+    baseUrl: 'https://api.minimax.chat/v1',
+    model: 'abab6.5s-chat',
+  },
 };
 
 interface LLMResponse {
