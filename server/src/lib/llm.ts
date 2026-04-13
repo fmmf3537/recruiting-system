@@ -12,6 +12,11 @@ const LLM_CONFIG = {
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     model: 'glm-4-flash',
   },
+  kimi: {
+    apiKey: process.env.KIMI_API_KEY,
+    baseUrl: 'https://api.moonshot.cn/v1',
+    model: 'moonshot-v1-8k',
+  },
 };
 
 interface LLMResponse {
