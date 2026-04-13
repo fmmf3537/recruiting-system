@@ -45,12 +45,6 @@
             </el-button>
           </el-form-item>
         </el-form>
-
-        <div class="login-tips">
-          <p>测试账号：</p>
-          <p>管理员：admin@example.com / admin123</p>
-          <p>成员：member@example.com / member123</p>
-        </div>
       </el-card>
     </div>
 
@@ -185,19 +179,6 @@ async function handleLogin() {
   font-size: 16px;
   border-radius: 8px;
   margin-top: 10px;
-}
-
-.login-tips {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px dashed #dcdfe6;
-  font-size: 12px;
-  color: #909399;
-  line-height: 1.8;
-
-  p {
-    margin: 0;
-  }
 }
 
 .login-footer {
