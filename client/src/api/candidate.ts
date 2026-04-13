@@ -334,6 +334,7 @@ export interface ResumeParseResult {
   workHistory: WorkHistory[];
   skills: string[];
   rawText: string;
+  resumeUrl?: string;
 }
 
 // 简历解析响应

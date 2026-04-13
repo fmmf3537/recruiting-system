@@ -48,4 +48,5 @@ export interface ResumeParseResult {
   workHistory: WorkHistoryInput[];
   skills: string[];
   rawText: string;
+  resumeUrl?: string;
 }

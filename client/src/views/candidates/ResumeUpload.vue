@@ -89,6 +89,7 @@ import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { UploadFilled } from '@element-plus/icons-vue';
 import { parseResume, type ResumeParseResult } from '@/api/candidate';
+import { uploadFile } from '@/utils/request';
 
 const visible = defineModel<boolean>({ default: false });
 
@@ -99,6 +100,7 @@ const emit = defineEmits<{
 const selectedFile = ref<File | null>(null);
 const uploading = ref(false);
 const parsedData = ref<ResumeParseResult | null>(null);
+const resumeUrl = ref<string>('');
 const uploadRef = ref();
 
 function handleFileChange(file: any) {
@@ -117,9 +119,21 @@ async function handleParse() {
 
   uploading.value = true;
   try {
+    // 先上传文件获取URL
+    const uploadRes = await uploadFile(selectedFile.value);
+    if (!uploadRes.success || !uploadRes.data) {
+      ElMessage.error(uploadRes.message || '文件上传失败');
+      return;
+    }
+    resumeUrl.value = uploadRes.data.url;
+
+    // 解析简历
     const res = await parseResume(selectedFile.value);
     if (res.success && res.data) {
-      parsedData.value = res.data;
+      parsedData.value = {
+        ...res.data,
+        resumeUrl: resumeUrl.value,
+      };
     } else {
       ElMessage.error(res.message || '简历解析失败');
     }
@@ -133,6 +147,7 @@ async function handleParse() {
 function handleBack() {
   parsedData.value = null;
   selectedFile.value = null;
+  resumeUrl.value = '';
   uploadRef.value?.clearFiles();
 }
 

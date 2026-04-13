@@ -45,6 +45,12 @@
             <el-descriptions-item label="当前职位">{{ candidate.currentPosition || '-' }}</el-descriptions-item>
             <el-descriptions-item label="期望薪资">{{ candidate.expectedSalary || '-' }}</el-descriptions-item>
             <el-descriptions-item label="来源渠道">{{ candidate.source }}</el-descriptions-item>
+            <el-descriptions-item label="简历附件">
+              <el-link v-if="candidate.resumeUrl" :href="candidate.resumeUrl" target="_blank" type="primary">
+                下载简历
+              </el-link>
+              <span v-else>-</span>
+            </el-descriptions-item>
           </el-descriptions>
 
           <div v-if="candidate.intro" class="intro-section">

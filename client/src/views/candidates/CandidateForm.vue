@@ -465,6 +465,7 @@ onMounted(() => {
         currentPosition: data.currentPosition || '',
         expectedSalary: data.expectedSalary || '',
         intro: data.skills?.length ? `技能：${data.skills.join(', ')}` : '',
+        resumeUrl: data.resumeUrl || '',
       });
       // 将工作经历也存储到 sessionStorage，供后续保存时使用
       if (data.workHistory?.length) {
