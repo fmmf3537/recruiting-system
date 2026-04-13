@@ -54,6 +54,10 @@
                       <el-option label="销售部" value="销售部" />
                       <el-option label="人力资源部" value="人力资源部" />
                       <el-option label="财务部" value="财务部" />
+                      <el-option label="新航卓越" value="新航卓越" />
+                      <el-option label="新航-生产部" value="新航-生产部" />
+                      <el-option label="新航-采购部" value="新航-采购部" />
+                      <el-option label="新航-技术研发中心" value="新航-技术研发中心" />
                     </el-select>
                   </el-form-item>
                 </el-col>
@@ -81,6 +85,7 @@
                       <el-option label="杭州" value="杭州" />
                       <el-option label="广州" value="广州" />
                       <el-option label="成都" value="成都" />
+                      <el-option label="眉山" value="眉山" />
                       <el-option label="武汉" value="武汉" />
                       <el-option label="西安" value="西安" />
                       <el-option label="其他" value="其他" />

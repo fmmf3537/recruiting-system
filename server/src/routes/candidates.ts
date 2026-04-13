@@ -2,7 +2,7 @@ import { Router, type Router as RouterType } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { candidateController } from '../controllers/candidate.controller';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 
 const router: RouterType = Router();
@@ -16,36 +16,6 @@ const upload = multer({
 });
 
 // ============ 验证 Schema 定义 ============
-
-// 创建候选人验证 Schema
-const createCandidateSchema = z.object({
-  name: z.string().min(2, '姓名至少2个字符').max(50, '姓名最多50个字符'),
-  phone: z.string().min(11, '手机号格式不正确').max(20).optional(),
-  email: z.string().email('请输入有效的邮箱地址').optional().or(z.literal('')),
-  gender: z.enum(['男', '女'], { errorMap: () => ({ message: '性别必须是：男或女' }) }),
-  age: z.number().int().min(18).max(70).optional(),
-  education: z.string().min(1, '学历不能为空'),
-  school: z.string().optional(),
-  workYears: z.number().int().min(0).optional(),
-  currentCompany: z.string().optional(),
-  currentPosition: z.string().optional(),
-  expectedSalary: z.string().optional(),
-  resumeUrl: z.string().url('简历链接格式不正确').optional(),
-  source: z.string().min(1, '来源不能为空'),
-  sourceNote: z.string().optional(),
-  intro: z.string().optional(),
-  jobIds: z.array(z.string()).optional(),
-  workHistory: z.array(z.object({
-    company: z.string(),
-    position: z.string(),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
-    description: z.string().optional(),
-  })).optional(),
-}).refine(
-  (data) => data.phone || (data.email && data.email.length > 0),
-  { message: '手机号和邮箱至少填写一项', path: ['phone'] }
-);
 
 // 更新候选人验证 Schema
 const updateCandidateSchema = z.object({

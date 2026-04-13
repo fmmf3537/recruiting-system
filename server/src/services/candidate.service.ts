@@ -881,7 +881,7 @@ export class CandidateService {
       throw new AppError('候选人不存在', 404);
     }
 
-    const result = await prisma.workHistory.createMany({
+    await prisma.workHistory.createMany({
       data: histories.map((h) => ({
         candidateId,
         company: h.company,
