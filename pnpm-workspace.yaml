@@ -1,3 +1,10 @@
 packages:
   - 'client'
   - 'server'
+allowBuilds:
+  '@parcel/watcher': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  vue-demi: true
