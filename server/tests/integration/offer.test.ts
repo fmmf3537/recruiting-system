@@ -3,6 +3,7 @@ import request from 'supertest';
 import express from 'express';
 import offerRoutes from '../../src/routes/offers';
 import { offerService } from '../../src/services/offer.service';
+import { errorHandler } from '../../src/middleware/errorHandler';
 
 // Mock offer service
 vi.mock('../../src/services/offer.service', () => ({
@@ -32,6 +33,7 @@ describe('Offer 模块 API 测试', () => {
     app = express();
     app.use(express.json());
     app.use('/api/offers', offerRoutes);
+    app.use(errorHandler);
     vi.clearAllMocks();
   });
 
@@ -102,7 +104,8 @@ describe('Offer 模块 API 测试', () => {
     });
 
     it('应处理候选人不存在', async () => {
-      vi.mocked(offerService.createOffer).mockRejectedValue(new Error('候选人不存在'));
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(offerService.createOffer).mockRejectedValue(new AppError('候选人不存在', 404));
 
       const res = await request(app)
         .post('/api/offers')
@@ -113,7 +116,8 @@ describe('Offer 模块 API 测试', () => {
     });
 
     it('应处理候选人已有 Offer', async () => {
-      vi.mocked(offerService.createOffer).mockRejectedValue(new Error('该候选人已有 Offer'));
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(offerService.createOffer).mockRejectedValue(new AppError('该候选人已有 Offer', 409));
 
       const res = await request(app)
         .post('/api/offers')
@@ -283,8 +287,9 @@ describe('Offer 模块 API 测试', () => {
     });
 
     it('应处理候选人未接受 Offer', async () => {
+      const { AppError } = await import('../../src/middleware/errorHandler');
       vi.mocked(offerService.markAsJoined).mockRejectedValue(
-        new Error('候选人尚未接受 Offer，无法标记入职')
+        new AppError('候选人尚未接受 Offer，无法标记入职', 400)
       );
 
       const res = await request(app)
@@ -391,8 +396,9 @@ describe('Offer 模块 API 测试', () => {
     });
 
     it('应处理 Offer 不存在', async () => {
+      const { AppError } = await import('../../src/middleware/errorHandler');
       vi.mocked(offerService.getOfferByCandidateId).mockRejectedValue(
-        new Error('该候选人暂无 Offer')
+        new AppError('该候选人暂无 Offer', 404)
       );
 
       const res = await request(app)
@@ -423,8 +429,9 @@ describe('Offer 模块 API 测试', () => {
     });
 
     it('应处理 Offer 不存在', async () => {
+      const { AppError } = await import('../../src/middleware/errorHandler');
       vi.mocked(offerService.deleteOffer).mockRejectedValue(
-        new Error('该候选人暂无 Offer')
+        new AppError('该候选人暂无 Offer', 404)
       );
 
       const res = await request(app)

@@ -139,6 +139,7 @@
                   theme="snow"
                   placeholder="请详细描述职位的工作内容、团队介绍等..."
                   :options="editorOptions"
+                  class="job-quill-editor"
                   style="height: 250px"
                 />
               </el-form-item>
@@ -154,6 +155,7 @@
                   theme="snow"
                   placeholder="请描述候选人的学历、经验、技能等要求..."
                   :options="editorOptions"
+                  class="job-quill-editor"
                   style="height: 250px"
                 />
               </el-form-item>
@@ -457,7 +459,13 @@ onMounted(() => {
 }
 
 // 富文本编辑器样式调整
+.job-quill-editor {
+  width: 100%;
+  display: block;
+}
+
 :deep(.ql-container) {
+  width: 100%;
   border-bottom-left-radius: 4px;
   border-bottom-right-radius: 4px;
 }
@@ -465,5 +473,12 @@ onMounted(() => {
 :deep(.ql-toolbar) {
   border-top-left-radius: 4px;
   border-top-right-radius: 4px;
+}
+
+:deep(.ql-editor) {
+  min-height: 200px;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
 }
 </style>

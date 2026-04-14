@@ -4,6 +4,7 @@ import express from 'express';
 import statsRoutes from '../../src/routes/stats';
 import { statsService } from '../../src/services/stats.service';
 import prisma from '../../src/lib/prisma';
+import { errorHandler } from '../../src/middleware/errorHandler';
 
 // Mock stats service
 vi.mock('../../src/services/stats.service', () => ({
@@ -15,8 +16,8 @@ vi.mock('../../src/services/stats.service', () => ({
     exportChannelStats: vi.fn(),
     exportJobStats: vi.fn(),
     parseDateRange: vi.fn((start, end) => ({
-      startDate: new Date(start),
-      endDate: new Date(end),
+      startDate: start ? new Date(start) : new Date('2024-01-01'),
+      endDate: end ? new Date(end) : new Date('2024-01-31'),
     })),
   },
 }));
@@ -49,6 +50,7 @@ describe('统计模块 API 测试', () => {
     app = express();
     app.use(express.json());
     app.use('/api/stats', statsRoutes);
+    app.use(errorHandler);
     vi.clearAllMocks();
   });
 

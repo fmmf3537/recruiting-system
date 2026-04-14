@@ -618,6 +618,8 @@ onMounted(() => {
         margin-top: 8px;
         font-size: 13px;
         color: #606266;
+        word-break: break-all;
+        overflow-wrap: break-word;
       }
 
       .reject-reason {

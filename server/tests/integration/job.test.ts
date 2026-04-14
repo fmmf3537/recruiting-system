@@ -3,6 +3,7 @@ import request from 'supertest';
 import express from 'express';
 import jobRoutes from '../../src/routes/jobs';
 import { jobService } from '../../src/services/job.service';
+import { errorHandler } from '../../src/middleware/errorHandler';
 
 // Mock job service
 vi.mock('../../src/services/job.service', () => ({
@@ -34,6 +35,7 @@ describe('职位模块 API 测试', () => {
     app = express();
     app.use(express.json());
     app.use('/api/jobs', jobRoutes);
+    app.use(errorHandler);
     vi.clearAllMocks();
   });
 
@@ -101,7 +103,7 @@ describe('职位模块 API 测试', () => {
         .expect(200);
 
       expect(res.body.success).toBe(true);
-      expect(res.body.data.jobs).toHaveLength(1);
+      expect(res.body.data).toHaveLength(1);
       expect(res.body.pagination.total).toBe(1);
     });
 
@@ -199,7 +201,7 @@ describe('职位模块 API 测试', () => {
       } as any);
 
       const res = await request(app)
-        .get('/api/jobs/job-1')
+        .get('/api/jobs/clh12345678901234567890123')
         .expect(200);
 
       expect(res.body.success).toBe(true);
@@ -207,10 +209,11 @@ describe('职位模块 API 测试', () => {
     });
 
     it('职位不存在应返回404', async () => {
-      vi.mocked(jobService.getJobById).mockRejectedValue(new Error('职位不存在'));
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(jobService.getJobById).mockRejectedValue(new AppError('职位不存在', 404));
 
       const res = await request(app)
-        .get('/api/jobs/non-existent')
+        .get('/api/jobs/clh12345678901234567890123')
         .expect(404);
 
       expect(res.body.success).toBe(false);
@@ -225,7 +228,7 @@ describe('职位模块 API 测试', () => {
       } as any);
 
       const res = await request(app)
-        .patch('/api/jobs/job-1')
+        .patch('/api/jobs/clh12345678901234567890123')
         .send({ title: '高级前端工程师' })
         .expect(200);
 
@@ -233,10 +236,11 @@ describe('职位模块 API 测试', () => {
     });
 
     it('职位不存在应返回404', async () => {
-      vi.mocked(jobService.updateJob).mockRejectedValue(new Error('职位不存在'));
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(jobService.updateJob).mockRejectedValue(new AppError('职位不存在', 404));
 
       const res = await request(app)
-        .patch('/api/jobs/non-existent')
+        .patch('/api/jobs/clh12345678901234567890123')
         .send({ title: '新标题' })
         .expect(404);
 
@@ -244,10 +248,11 @@ describe('职位模块 API 测试', () => {
     });
 
     it('无权限更新应返回403', async () => {
-      vi.mocked(jobService.updateJob).mockRejectedValue(new Error('没有权限更新此职位'));
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(jobService.updateJob).mockRejectedValue(new AppError('没有权限更新此职位', 403));
 
       const res = await request(app)
-        .patch('/api/jobs/job-1')
+        .patch('/api/jobs/clh12345678901234567890123')
         .send({ title: '新标题' })
         .expect(403);
 
@@ -263,17 +268,18 @@ describe('职位模块 API 测试', () => {
       } as any);
 
       const res = await request(app)
-        .post('/api/jobs/job-1/close')
+        .post('/api/jobs/clh12345678901234567890123/close')
         .expect(200);
 
       expect(res.body.success).toBe(true);
     });
 
     it('职位不存在应返回404', async () => {
-      vi.mocked(jobService.closeJob).mockRejectedValue(new Error('职位不存在'));
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(jobService.closeJob).mockRejectedValue(new AppError('职位不存在', 404));
 
       const res = await request(app)
-        .post('/api/jobs/non-existent/close')
+        .post('/api/jobs/clh12345678901234567890123/close')
         .expect(404);
 
       expect(res.body.success).toBe(false);
@@ -288,7 +294,7 @@ describe('职位模块 API 测试', () => {
       } as any);
 
       const res = await request(app)
-        .post('/api/jobs/job-1/duplicate')
+        .post('/api/jobs/clh12345678901234567890123/duplicate')
         .expect(201);
 
       expect(res.body.success).toBe(true);
@@ -296,10 +302,11 @@ describe('职位模块 API 测试', () => {
     });
 
     it('原职位不存在应返回404', async () => {
-      vi.mocked(jobService.duplicateJob).mockRejectedValue(new Error('职位不存在'));
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(jobService.duplicateJob).mockRejectedValue(new AppError('职位不存在', 404));
 
       const res = await request(app)
-        .post('/api/jobs/non-existent/duplicate')
+        .post('/api/jobs/clh12345678901234567890123/duplicate')
         .expect(404);
 
       expect(res.body.success).toBe(false);
@@ -313,17 +320,18 @@ describe('职位模块 API 测试', () => {
       } as any);
 
       const res = await request(app)
-        .delete('/api/jobs/job-1')
+        .delete('/api/jobs/clh12345678901234567890123')
         .expect(200);
 
       expect(res.body.success).toBe(true);
     });
 
     it('职位不存在应返回404', async () => {
-      vi.mocked(jobService.deleteJob).mockRejectedValue(new Error('职位不存在'));
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(jobService.deleteJob).mockRejectedValue(new AppError('职位不存在', 404));
 
       const res = await request(app)
-        .delete('/api/jobs/non-existent')
+        .delete('/api/jobs/clh12345678901234567890123')
         .expect(404);
 
       expect(res.body.success).toBe(false);

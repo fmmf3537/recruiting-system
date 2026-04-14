@@ -74,7 +74,7 @@ router.get(
       const filename = `工作量统计_${new Date().toISOString().split('T')[0]}.csv`;
       
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
       res.send(csvContent);
     } catch (error) {
       next(error);
@@ -124,7 +124,7 @@ router.get(
       const filename = `渠道效果分析_${new Date().toISOString().split('T')[0]}.csv`;
       
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
       res.send(csvContent);
     } catch (error) {
       next(error);
@@ -176,7 +176,7 @@ router.get(
       const filename = `职位维度统计_${new Date().toISOString().split('T')[0]}.csv`;
       
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
       res.send(csvContent);
     } catch (error) {
       next(error);

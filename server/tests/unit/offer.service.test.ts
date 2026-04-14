@@ -220,5 +220,18 @@ describe('OfferService - Offer 服务单元测试', () => {
 
       expect(prisma.offer.delete).toHaveBeenCalled();
     });
+
+    it('候选人不存在时应抛出错误', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue(null);
+
+      await expect(service.deleteOffer('non-existent')).rejects.toThrow('候选人不存在');
+    });
+
+    it('候选人暂无 Offer 时应抛出错误', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue(null);
+
+      await expect(service.deleteOffer('candidate-1')).rejects.toThrow('该候选人暂无 Offer');
+    });
   });
 });

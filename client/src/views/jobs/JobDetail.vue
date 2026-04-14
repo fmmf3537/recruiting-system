@@ -527,9 +527,18 @@ onMounted(() => {
   .rich-text {
     line-height: 1.8;
     color: #606266;
+    word-break: break-word;
+    overflow-wrap: break-word;
 
     :deep(p) {
       margin: 0 0 12px;
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
+
+    :deep(span) {
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
 
     :deep(ul), :deep(ol) {

@@ -30,6 +30,17 @@ vi.mock('../../src/lib/prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+    },
+    workHistory: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      createMany: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
   },
 }));
 
@@ -182,6 +193,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
         name: '张三',
         stageRecords: [{ stage: '入库', status: 'in_progress', enteredAt: new Date() }],
       } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
       vi.mocked(prisma.stageRecord.create).mockResolvedValue({} as any);
 
       await service.advanceStage('candidate-1', {
@@ -198,6 +210,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
         name: '张三',
         stageRecords: [{ stage: '初筛', status: 'in_progress', enteredAt: new Date() }],
       } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
 
       await expect(service.advanceStage('candidate-1', {
         stage: '终面',
@@ -211,6 +224,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
         name: '张三',
         stageRecords: [{ stage: '复试', status: 'in_progress', enteredAt: new Date() }],
       } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
 
       await expect(service.advanceStage('candidate-1', {
         stage: '初筛',
@@ -414,6 +428,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
         name: '张三',
         stageRecords: [{ stage: '拟录用', status: 'passed', enteredAt: new Date() }],
       } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
       vi.mocked(prisma.stageRecord.create).mockResolvedValue({} as any);
       vi.mocked(prisma.offer.findUnique).mockResolvedValue(null);
       vi.mocked(prisma.offer.create).mockResolvedValue({} as any);
@@ -432,6 +447,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
         name: '张三',
         stageRecords: [{ stage: 'Offer', status: 'passed', enteredAt: new Date() }],
       } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
       vi.mocked(prisma.stageRecord.create).mockResolvedValue({} as any);
       vi.mocked(prisma.offer.findUnique).mockResolvedValue({
         id: 'offer-1',
@@ -453,6 +469,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
         name: '张三',
         stageRecords: [{ stage: '初筛', status: 'in_progress', enteredAt: new Date() }],
       } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
 
       await expect(service.advanceStage('candidate-1', {
         stage: '复试',
@@ -471,6 +488,115 @@ describe('CandidateService - 候选人服务单元测试', () => {
         stage: '无效阶段',
         status: 'in_progress',
       }, 'user-1')).rejects.toThrow('无效的阶段');
+    });
+  });
+
+  describe('createWorkHistory - 创建工作经历', () => {
+    it('应成功创建工作经历', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.workHistory.create).mockResolvedValue({
+        id: 'wh-1',
+        candidateId: 'candidate-1',
+        company: 'ABC公司',
+        position: '工程师',
+      } as any);
+
+      const result = await service.createWorkHistory({
+        candidateId: 'candidate-1',
+        company: 'ABC公司',
+        position: '工程师',
+      });
+
+      expect(result).toBeDefined();
+      expect(prisma.workHistory.create).toHaveBeenCalled();
+    });
+
+    it('候选人不存在时应抛出错误', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue(null);
+
+      await expect(service.createWorkHistory({
+        candidateId: 'non-existent',
+        company: 'ABC公司',
+        position: '工程师',
+      })).rejects.toThrow('候选人不存在');
+    });
+  });
+
+  describe('createWorkHistories - 批量创建工作经历', () => {
+    it('应成功批量创建工作经历', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.workHistory.createMany).mockResolvedValue({ count: 2 } as any);
+
+      await service.createWorkHistories('candidate-1', [
+        { company: 'A公司', position: '工程师' },
+        { company: 'B公司', position: '主管' },
+      ]);
+
+      expect(prisma.workHistory.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.any(Array) })
+      );
+    });
+
+    it('候选人不存在时应抛出错误', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue(null);
+
+      await expect(service.createWorkHistories('non-existent', [{ company: 'A', position: 'B' }])).rejects.toThrow('候选人不存在');
+    });
+  });
+
+  describe('getWorkHistories - 获取工作经历列表', () => {
+    it('应返回工作经历列表', async () => {
+      vi.mocked(prisma.workHistory.findMany).mockResolvedValue([
+        { id: 'wh-1', company: 'A公司', position: '工程师' },
+      ] as any);
+
+      const result = await service.getWorkHistories('candidate-1');
+
+      expect(result).toHaveLength(1);
+      expect(prisma.workHistory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { candidateId: 'candidate-1' } })
+      );
+    });
+  });
+
+  describe('updateWorkHistory - 更新工作经历', () => {
+    it('应成功更新工作经历', async () => {
+      vi.mocked(prisma.workHistory.findUnique).mockResolvedValue({
+        id: 'wh-1',
+        company: 'A公司',
+      } as any);
+      vi.mocked(prisma.workHistory.update).mockResolvedValue({
+        id: 'wh-1',
+        company: 'B公司',
+      } as any);
+
+      const result = await service.updateWorkHistory('wh-1', { company: 'B公司' });
+
+      expect(result.company).toBe('B公司');
+    });
+
+    it('工作经历不存在时应抛出错误', async () => {
+      vi.mocked(prisma.workHistory.findUnique).mockResolvedValue(null);
+
+      await expect(service.updateWorkHistory('non-existent', { company: 'B公司' }))
+        .rejects.toThrow('工作经历不存在');
+    });
+  });
+
+  describe('deleteWorkHistory - 删除工作经历', () => {
+    it('应成功删除工作经历', async () => {
+      vi.mocked(prisma.workHistory.findUnique).mockResolvedValue({ id: 'wh-1' } as any);
+      vi.mocked(prisma.workHistory.delete).mockResolvedValue({} as any);
+
+      await service.deleteWorkHistory('wh-1');
+
+      expect(prisma.workHistory.delete).toHaveBeenCalledWith({ where: { id: 'wh-1' } });
+    });
+
+    it('工作经历不存在时应抛出错误', async () => {
+      vi.mocked(prisma.workHistory.findUnique).mockResolvedValue(null);
+
+      await expect(service.deleteWorkHistory('non-existent')).rejects.toThrow('工作经历不存在');
     });
   });
 });
