@@ -1,6 +1,6 @@
 import type { Offer, Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
-import { clearStatsCache } from '../lib/redis';
+import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
 // Offer 列表查询参数类型
@@ -47,6 +47,12 @@ export class OfferService {
    */
   async getOffers(query: OfferListQuery): Promise<OfferListResult> {
     const { page = 1, pageSize = 10, result } = query;
+    const cacheKey = `offers:list:${JSON.stringify(query)}`;
+    const cached = await getFromCache<OfferListResult>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const skip = (page - 1) * pageSize;
 
     const where: Prisma.OfferWhereInput = {};
@@ -74,7 +80,7 @@ export class OfferService {
       prisma.offer.count({ where }),
     ]);
 
-    return {
+    const res = {
       offers: offers as unknown as Array<
         Offer & { candidate: { id: string; name: string; email: string; phone: string } }
       >,
@@ -83,6 +89,9 @@ export class OfferService {
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     };
+
+    await setCache(cacheKey, res, 30);
+    return res;
   }
 
   /**
@@ -190,6 +199,7 @@ export class OfferService {
     });
 
     await clearStatsCache();
+    await clearListCache('offers:list:*');
     return offer;
   }
 
@@ -347,6 +357,7 @@ export class OfferService {
     });
 
     await clearStatsCache();
+    await clearListCache('offers:list:*');
   }
 }
 

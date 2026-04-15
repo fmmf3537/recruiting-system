@@ -2,6 +2,7 @@ import { Router, type Router as RouterType } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
+import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate, commonSchemas } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
@@ -34,6 +35,13 @@ router.get(
   validate(listQuerySchema, 'query'),
   asyncHandler(async (req, res) => {
     const { page, limit, search } = req.query as unknown as { page: number; limit: number; search?: string };
+    const cacheKey = `users:list:${JSON.stringify({ page, limit, search })}`;
+    const cached = await getFromCache<{ success: boolean; data: unknown; pagination: unknown }>(cacheKey);
+    if (cached) {
+      res.json(cached);
+      return;
+    }
+
     const skip = (page - 1) * limit;
 
     // 构建查询条件
@@ -65,7 +73,7 @@ router.get(
       prisma.user.count({ where }),
     ]);
 
-    res.json({
+    const result = {
       success: true,
       data: users,
       pagination: {
@@ -74,7 +82,10 @@ router.get(
         total,
         totalPages: Math.ceil(total / limit),
       },
-    });
+    };
+
+    await setCache(cacheKey, result, 60);
+    res.json(result);
   })
 );
 
@@ -182,6 +193,8 @@ router.put(
       },
     });
 
+    await clearListCache('users:list:*');
+
     res.json({
       success: true,
       message: '用户信息更新成功',
@@ -219,6 +232,8 @@ router.delete(
     await prisma.user.delete({
       where: { id },
     });
+
+    await clearListCache('users:list:*');
 
     res.json({
       success: true,

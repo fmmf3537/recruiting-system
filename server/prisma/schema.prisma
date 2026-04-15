@@ -66,6 +66,9 @@ model Job {
   @@index([location])
   @@index([createdById])
   @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([type, createdAt])
+  @@index([location, createdAt])
   @@map("job")
 }
 
@@ -115,6 +118,8 @@ model Candidate {
   @@index([source])
   @@index([createdById])
   @@index([createdAt])
+  @@index([source, createdAt])
+  @@index([education, createdAt])
   @@map("candidate")
 }
 
@@ -178,6 +183,9 @@ model StageRecord {
   @@index([assigneeId])
   @@index([enteredAt])
   @@index([createdAt])
+  @@index([stage, enteredAt])
+  @@index([status, enteredAt])
+  @@index([candidateId, stage, enteredAt])
   @@map("stage_record")
 }
 

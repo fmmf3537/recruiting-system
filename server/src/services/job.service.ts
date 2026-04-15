@@ -1,5 +1,6 @@
 import type { Job, Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
+import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
 // 职位列表查询参数类型
@@ -88,6 +89,7 @@ export class JobService {
       },
     });
 
+    await clearListCache('jobs:list:*');
     return job;
   }
 
@@ -105,6 +107,12 @@ export class JobService {
       department,
       createdBy,
     } = query;
+
+    const cacheKey = `jobs:list:${JSON.stringify({ ...query, userId, isAdmin })}`;
+    const cached = await getFromCache<JobListResult>(cacheKey);
+    if (cached) {
+      return cached;
+    }
 
     const skip = (page - 1) * pageSize;
 
@@ -169,8 +177,6 @@ export class JobService {
           location: true,
           type: true,
           status: true,
-          description: true,
-          requirements: true,
           createdById: true,
           createdAt: true,
           updatedAt: true,
@@ -184,13 +190,16 @@ export class JobService {
       prisma.job.count({ where }),
     ]);
 
-    return {
+    const result = {
       jobs: jobs as unknown as Job[],
       total,
       page,
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     };
+
+    await setCache(cacheKey, result, 30);
+    return result;
   }
 
   /**
@@ -301,6 +310,7 @@ export class JobService {
       },
     });
 
+    await clearListCache('jobs:list:*');
     return job;
   }
 

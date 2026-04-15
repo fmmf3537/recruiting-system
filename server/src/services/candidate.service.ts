@@ -1,7 +1,7 @@
 import type { Candidate, WorkHistory } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
-import { clearStatsCache } from '../lib/redis';
+import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
 // 阶段顺序定义
@@ -246,6 +246,7 @@ export class CandidateService {
     }
 
     await clearStatsCache();
+    await clearListCache('candidates:list:*');
 
     // 如果有重复，返回警告
     if (duplicates.length > 0) {
@@ -263,6 +264,12 @@ export class CandidateService {
    * 获取候选人列表（支持分页和多条件筛选）
    */
   async getCandidates(query: CandidateListQuery): Promise<CandidateListResult> {
+    const cacheKey = `candidates:list:${JSON.stringify(query)}`;
+    const cached = await getFromCache<CandidateListResult>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const {
       page = 1,
       pageSize = 10,
@@ -364,39 +371,60 @@ export class CandidateService {
       }
     }
 
-    // 并行查询数据和总数
+    // 并行查询数据和总数（主查询不再嵌套 include，减少 JOIN 开销）
     const [candidates, total] = await Promise.all([
       prisma.candidate.findMany({
         where,
         skip,
         take: pageSize,
         orderBy: { createdAt: 'desc' },
-        include: {
-          stageRecords: {
-            orderBy: { enteredAt: 'desc' },
-            take: 1,
-            select: { stage: true, status: true },
-          },
-          candidateJobs: {
-            include: {
-              job: {
-                select: { id: true, title: true },
-              },
-            },
-          },
-        },
       }),
       prisma.candidate.count({ where }),
     ]);
 
+    const candidateIds = candidates.map((c) => c.id);
+
+    // 批量查询最新阶段记录和关联职位（避免 Prisma 嵌套 JOIN 性能问题）
+    const [stageRecords, candidateJobs] = await Promise.all([
+      prisma.stageRecord.findMany({
+        where: { candidateId: { in: candidateIds } },
+        orderBy: { enteredAt: 'desc' },
+        select: { candidateId: true, stage: true, status: true },
+      }),
+      prisma.candidateJob.findMany({
+        where: { candidateId: { in: candidateIds } },
+        include: {
+          job: {
+            select: { id: true, title: true },
+          },
+        },
+      }),
+    ]);
+
+    const stageMap = new Map<string, { stage: string; status: string }>();
+    for (const sr of stageRecords) {
+      if (!stageMap.has(sr.candidateId)) {
+        stageMap.set(sr.candidateId, sr);
+      }
+    }
+
+    const jobsMap = new Map<string, typeof candidateJobs>();
+    for (const cj of candidateJobs) {
+      if (!jobsMap.has(cj.candidateId)) {
+        jobsMap.set(cj.candidateId, []);
+      }
+      jobsMap.get(cj.candidateId)!.push(cj);
+    }
+
     // 格式化返回数据
     const formattedCandidates = candidates.map((candidate) => ({
       ...candidate,
-      currentStage: candidate.stageRecords[0]?.stage || '入库',
-      stageStatus: candidate.stageRecords[0]?.status || 'in_progress',
+      currentStage: stageMap.get(candidate.id)?.stage || '入库',
+      stageStatus: stageMap.get(candidate.id)?.status || 'in_progress',
+      candidateJobs: jobsMap.get(candidate.id) || [],
     }));
 
-    return {
+    const result = {
       candidates: formattedCandidates as unknown as Array<
         Candidate & { currentStage?: string; stageStatus?: string }
       >,
@@ -405,6 +433,9 @@ export class CandidateService {
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     };
+
+    await setCache(cacheKey, result, 30);
+    return result;
   }
 
   /**
@@ -596,6 +627,7 @@ export class CandidateService {
       data: updateData,
     });
 
+    await clearListCache('candidates:list:*');
     return candidate;
   }
 
@@ -751,6 +783,7 @@ export class CandidateService {
     }
 
     await clearStatsCache();
+    await clearListCache('candidates:list:*');
   }
 
   /**
@@ -923,6 +956,7 @@ export class CandidateService {
     });
 
     await clearStatsCache();
+    await clearListCache('candidates:list:*');
   }
 
   /**

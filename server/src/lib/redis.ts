@@ -24,14 +24,38 @@ export async function connectRedis(): Promise<void> {
   }
 }
 
-// 清除统计缓存
-export async function clearStatsCache(): Promise<void> {
+// 通用缓存读取
+export async function getFromCache<T>(key: string): Promise<T | null> {
   try {
-    const keys = await redis.keys('stats:*');
+    const data = await redis.get(key);
+    return data ? JSON.parse(data) : null;
+  } catch {
+    return null;
+  }
+}
+
+// 通用缓存写入
+export async function setCache(key: string, value: unknown, ttlSeconds = 30): Promise<void> {
+  try {
+    await redis.setex(key, ttlSeconds, JSON.stringify(value));
+  } catch (error) {
+    console.error('Failed to set cache:', error);
+  }
+}
+
+// 按 pattern 清除列表缓存
+export async function clearListCache(pattern: string): Promise<void> {
+  try {
+    const keys = await redis.keys(pattern);
     if (keys.length > 0) {
       await redis.del(...keys);
     }
   } catch (error) {
-    console.error('Failed to clear stats cache:', error);
+    console.error(`Failed to clear cache ${pattern}:`, error);
   }
+}
+
+// 清除统计缓存
+export async function clearStatsCache(): Promise<void> {
+  await clearListCache('stats:*');
 }
