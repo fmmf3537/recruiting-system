@@ -425,15 +425,15 @@ function goToCandidateDetail(row: CandidateItem) {
 }
 
 // 初始化
-onMounted(() => {
-  fetchJobDetail();
-  fetchCandidates();
-});
+async function init() {
+  await fetchJobDetail();
+  if (!notFound.value) {
+    fetchCandidates();
+  }
+}
 
-onActivated(() => {
-  fetchJobDetail();
-  fetchCandidates();
-});
+onMounted(init);
+onActivated(init);
 </script>
 
 <style scoped lang="scss">
