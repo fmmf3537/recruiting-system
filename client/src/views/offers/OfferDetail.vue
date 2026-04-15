@@ -162,7 +162,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { ArrowLeft, Check, Close, CircleCheck, Edit, UserFilled } from '@element-plus/icons-vue';
@@ -337,6 +337,10 @@ async function handleJoinSubmit() {
 }
 
 onMounted(() => {
+  fetchOfferDetail();
+});
+
+onActivated(() => {
   fetchOfferDetail();
 });
 </script>

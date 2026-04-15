@@ -205,7 +205,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import {
@@ -426,6 +426,11 @@ function goToCandidateDetail(row: CandidateItem) {
 
 // 初始化
 onMounted(() => {
+  fetchJobDetail();
+  fetchCandidates();
+});
+
+onActivated(() => {
   fetchJobDetail();
   fetchCandidates();
 });

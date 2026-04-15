@@ -274,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { ArrowLeft, Edit, Delete, UserFilled, Promotion, ChatDotRound, Document, View } from '@element-plus/icons-vue';
@@ -519,6 +519,10 @@ function handleViewOffer() {
 }
 
 onMounted(() => {
+  fetchCandidateDetail();
+});
+
+onActivated(() => {
   fetchCandidateDetail();
 });
 </script>

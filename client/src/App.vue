@@ -14,7 +14,7 @@ onMounted(() => {
   <router-view v-slot="{ Component }">
     <transition name="fade" mode="out-in">
       <keep-alive>
-        <component :is="Component" />
+        <component :is="Component" :key="$route.path" />
       </keep-alive>
     </transition>
   </router-view>
