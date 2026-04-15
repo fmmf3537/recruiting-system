@@ -247,6 +247,7 @@ export class CandidateService {
 
     await clearStatsCache();
     await clearListCache('candidates:list:*');
+    await clearListCache('candidates:activities');
 
     // 如果有重复，返回警告
     if (duplicates.length > 0) {
@@ -701,6 +702,7 @@ export class CandidateService {
             completedAt: status !== 'in_progress' ? new Date() : null,
           },
         });
+        await clearListCache('candidates:activities');
         return;
       }
 
@@ -729,6 +731,7 @@ export class CandidateService {
           completedAt: status !== 'in_progress' ? new Date() : null,
         },
       });
+      await clearListCache('candidates:activities');
       return;
     }
 
@@ -784,6 +787,7 @@ export class CandidateService {
 
     await clearStatsCache();
     await clearListCache('candidates:list:*');
+    await clearListCache('candidates:activities');
   }
 
   /**
@@ -956,6 +960,7 @@ export class CandidateService {
     });
 
     await clearStatsCache();
+    await clearListCache('candidates:activities');
     await clearListCache('candidates:list:*');
   }
 
@@ -1083,6 +1088,101 @@ export class CandidateService {
     await prisma.workHistory.delete({
       where: { id },
     });
+  }
+
+  /**
+   * 获取近期候选人动态
+   */
+  async getRecentActivities(limit = 20): Promise<
+    Array<{
+      id: string;
+      candidateName: string;
+      action: string;
+      stage: string;
+      stageText: string;
+      time: string;
+    }>
+  > {
+    // 1. 最近新增的候选人（简历入库）
+    const candidates = await prisma.candidate.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: { id: true, name: true, createdAt: true },
+    });
+
+    // 2. 最近的阶段流转记录（排除入库，因为已由候选人创建覆盖）
+    const stageRecords = await prisma.stageRecord.findMany({
+      where: { stage: { not: '入库' } },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        stage: true,
+        status: true,
+        updatedAt: true,
+        candidate: { select: { name: true } },
+      },
+    });
+
+    // 3. 最近的 Offer 状态变化（接受或入职）
+    const offers = await prisma.offer.findMany({
+      where: {
+        OR: [{ result: 'accepted' }, { joined: true }],
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        result: true,
+        joined: true,
+        updatedAt: true,
+        candidate: { select: { name: true } },
+      },
+    });
+
+    // 映射为统一的活动格式
+    const candidateActivities = candidates.map((c) => ({
+      id: `c-${c.id}`,
+      candidateName: c.name,
+      action: '简历入库',
+      stage: 'screening',
+      stageText: '初筛',
+      time: c.createdAt.toISOString(),
+    }));
+
+    const stageActivities = stageRecords.map((s) => {
+      const stageMap: Record<string, { action: string; stageKey: string }> = {
+        初筛: { action: s.status === 'passed' ? '初筛通过' : s.status === 'rejected' ? '初筛未通过' : '进入初筛阶段', stageKey: 'screening' },
+        复试: { action: s.status === 'passed' ? '复试通过' : s.status === 'rejected' ? '复试未通过' : '进入复试阶段', stageKey: 'interview' },
+        终面: { action: s.status === 'passed' ? '终面通过' : s.status === 'rejected' ? '终面未通过' : '进入终面阶段', stageKey: 'interview' },
+        拟录用: { action: s.status === 'passed' ? '拟录用通过' : s.status === 'rejected' ? '拟录用未通过' : '进入拟录用阶段', stageKey: 'offer' },
+        Offer: { action: s.status === 'passed' ? 'Offer 审批通过' : s.status === 'rejected' ? 'Offer 审批未通过' : '进入 Offer 阶段', stageKey: 'offer' },
+        入职: { action: s.status === 'passed' ? '已入职' : s.status === 'rejected' ? '入职取消' : '进入入职阶段', stageKey: 'hired' },
+      };
+      const mapped = stageMap[s.stage] || { action: `${s.stage}更新`, stageKey: 'screening' };
+      return {
+        id: `s-${s.id}`,
+        candidateName: s.candidate.name,
+        action: mapped.action,
+        stage: mapped.stageKey,
+        stageText: s.stage,
+        time: s.updatedAt.toISOString(),
+      };
+    });
+
+    const offerActivities = offers.map((o) => ({
+      id: `o-${o.id}`,
+      candidateName: o.candidate.name,
+      action: o.joined ? '已入职' : '接受 Offer',
+      stage: o.joined ? 'hired' : 'offer',
+      stageText: o.joined ? '入职' : 'Offer',
+      time: o.updatedAt.toISOString(),
+    }));
+
+    // 合并并按时间倒序排列，取前 limit 条
+    const allActivities = [...candidateActivities, ...stageActivities, ...offerActivities];
+    allActivities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    return allActivities.slice(0, limit);
   }
 }
 

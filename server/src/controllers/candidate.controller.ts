@@ -333,6 +333,27 @@ export class CandidateController {
   }
 
   /**
+   * GET /api/candidates/activities
+   * 获取近期候选人动态
+   */
+  async getRecentActivities(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+      const activities = await candidateService.getRecentActivities(limit);
+      res.json({
+        success: true,
+        data: activities,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * DELETE /api/candidates/:id
    * 删除候选人（创建者或管理员）
    */

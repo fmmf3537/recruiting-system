@@ -273,6 +273,22 @@ export interface InterviewListData {
   };
 }
 
+// 近期动态项
+export interface ActivityItem {
+  id: string;
+  candidateName: string;
+  action: string;
+  stage: string;
+  stageText: string;
+  time: string;
+}
+
+// 近期动态响应
+export interface RecentActivitiesData {
+  success: boolean;
+  data: ActivityItem[];
+}
+
 // 操作结果响应
 export interface OperationResult {
   success: boolean;
@@ -352,6 +368,14 @@ export function deleteCandidate(id: string): Promise<OperationResult> {
  */
 export function getInterviewList(params?: InterviewListParams): Promise<InterviewListData> {
   return request.get('/candidates/interviews', { params }) as Promise<InterviewListData>;
+}
+
+/**
+ * 获取近期候选人动态
+ * @param limit 数量限制
+ */
+export function getRecentActivities(limit = 20): Promise<RecentActivitiesData> {
+  return request.get('/candidates/activities', { params: { limit } }) as Promise<RecentActivitiesData>;
 }
 
 // ============ 简历解析 ============

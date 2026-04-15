@@ -155,8 +155,8 @@ import type { EChartsOption } from 'echarts';
 import * as echarts from 'echarts/core';
 
 use([CanvasRenderer, FunnelChart, TooltipComponent]);
-import { getStats } from '@/api/stats';
-import { getCandidateList } from '@/api/candidate';
+import { getFunnelStats } from '@/api/stats';
+import { getCandidateList, getRecentActivities } from '@/api/candidate';
 import { getJobList } from '@/api/job';
 import { getOfferList } from '@/api/offer';
 
@@ -180,6 +180,36 @@ const funnelTimeRange = ref('month');
 const funnelChartRef = ref<HTMLDivElement>();
 let funnelChart: echarts.ECharts | null = null;
 
+// 漏斗图数据
+const funnelData = ref<{ value: number; name: string; itemStyle: { color: string } }[]>([
+  { value: 0, name: '简历入库', itemStyle: { color: '#5470c6' } },
+  { value: 0, name: '初筛通过', itemStyle: { color: '#91cc75' } },
+  { value: 0, name: '复试通过', itemStyle: { color: '#fac858' } },
+  { value: 0, name: '终面通过', itemStyle: { color: '#ee6666' } },
+  { value: 0, name: 'Offer接受', itemStyle: { color: '#73c0de' } },
+  { value: 0, name: '成功入职', itemStyle: { color: '#3ba272' } },
+]);
+
+// 根据时间范围类型计算起止日期
+function getDateRangeByType(type: string): { startDate: string; endDate: string } {
+  const now = new Date();
+  const endDate = now.toISOString().split('T')[0];
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  let startDate: string;
+
+  if (type === 'month') {
+    startDate = new Date(year, month, 1).toISOString().split('T')[0];
+  } else if (type === 'quarter') {
+    const quarter = Math.floor(month / 3);
+    startDate = new Date(year, quarter * 3, 1).toISOString().split('T')[0];
+  } else {
+    startDate = new Date(year, 0, 1).toISOString().split('T')[0];
+  }
+
+  return { startDate, endDate };
+}
+
 // 近期动态
 interface ActivityItem {
   id: string;
@@ -190,40 +220,22 @@ interface ActivityItem {
   time: string;
 }
 
-const recentActivities = ref<ActivityItem[]>([
-  {
-    id: '1',
-    candidateName: '张三',
-    action: '进入复试阶段',
-    stage: 'interview',
-    stageText: '复试',
-    time: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-  },
-  {
-    id: '2',
-    candidateName: '李四',
-    action: '简历初筛通过',
-    stage: 'screening',
-    stageText: '初筛',
-    time: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-  },
-  {
-    id: '3',
-    candidateName: '王五',
-    action: '接受 Offer',
-    stage: 'offer',
-    stageText: 'Offer',
-    time: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-  },
-  {
-    id: '4',
-    candidateName: '赵六',
-    action: '已入职',
-    stage: 'hired',
-    stageText: '入职',
-    time: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-  },
-]);
+const recentActivities = ref<ActivityItem[]>([]);
+
+// 获取近期候选人动态
+async function fetchRecentActivities() {
+  activityLoading.value = true;
+  try {
+    const res = await getRecentActivities(20);
+    if (res.success) {
+      recentActivities.value = res.data;
+    }
+  } catch (error) {
+    console.error('获取近期动态失败:', error);
+  } finally {
+    activityLoading.value = false;
+  }
+}
 
 // 跳转到指定页面
 function goTo(path: string) {
@@ -294,19 +306,31 @@ function initFunnelChart() {
             fontSize: 14,
           },
         },
-        data: [
-          { value: 100, name: '简历入库', itemStyle: { color: '#5470c6' } },
-          { value: 80, name: '初筛通过', itemStyle: { color: '#91cc75' } },
-          { value: 50, name: '复试通过', itemStyle: { color: '#fac858' } },
-          { value: 30, name: '终面通过', itemStyle: { color: '#ee6666' } },
-          { value: 20, name: 'Offer接受', itemStyle: { color: '#73c0de' } },
-          { value: 15, name: '成功入职', itemStyle: { color: '#3ba272' } },
-        ],
+        data: funnelData.value,
       },
     ],
   };
   
   funnelChart.setOption(option);
+}
+
+// 获取漏斗图数据
+async function fetchFunnelStats() {
+  try {
+    const { startDate, endDate } = getDateRangeByType(funnelTimeRange.value);
+    const res = await getFunnelStats({ startDate, endDate });
+    if (res.success && res.data) {
+      const colors = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272'];
+      funnelData.value = res.data.map((item, index) => ({
+        value: item.count,
+        name: item.stage,
+        itemStyle: { color: colors[index] || '#5470c6' },
+      }));
+      funnelChart?.setOption({ series: [{ data: funnelData.value }] });
+    }
+  } catch (error) {
+    console.error('获取漏斗数据失败:', error);
+  }
 }
 
 // 获取统计数据
@@ -334,10 +358,7 @@ async function fetchStats() {
 
 // 监听时间范围变化
 watch(funnelTimeRange, () => {
-  // 这里可以根据时间范围重新获取漏斗数据
-  if (funnelChart) {
-    funnelChart.resize();
-  }
+  fetchFunnelStats();
 });
 
 // 窗口大小变化时重新渲染图表
@@ -347,6 +368,8 @@ function handleResize() {
 
 onMounted(() => {
   fetchStats();
+  fetchFunnelStats();
+  fetchRecentActivities();
   nextTick(() => {
     initFunnelChart();
   });
@@ -355,6 +378,8 @@ onMounted(() => {
 
 onActivated(() => {
   fetchStats();
+  fetchFunnelStats();
+  fetchRecentActivities();
   nextTick(() => {
     funnelChart?.resize();
   });

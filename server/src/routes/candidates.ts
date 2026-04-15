@@ -216,6 +216,17 @@ router.get(
 );
 
 /**
+ * GET /api/candidates/activities
+ * 获取近期候选人动态
+ * 权限：登录用户
+ */
+router.get(
+  '/activities',
+  authenticate,
+  candidateController.getRecentActivities
+);
+
+/**
  * DELETE /api/candidates/:id
  * 删除候选人（创建者或管理员）
  * 权限：登录用户

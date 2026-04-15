@@ -213,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onActivated, computed } from 'vue';
+import { ref, reactive, onActivated, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { ArrowLeft, Upload, Document, Delete } from '@element-plus/icons-vue';
@@ -506,7 +506,6 @@ function init() {
   }
 }
 
-onMounted(init);
 onActivated(init);
 </script>
 
