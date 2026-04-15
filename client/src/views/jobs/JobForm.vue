@@ -223,7 +223,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, onActivated, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { ArrowLeft } from '@element-plus/icons-vue';
@@ -314,6 +314,20 @@ const formRules = {
   ],
 };
 
+function resetForm() {
+  Object.assign(formData, {
+    title: '',
+    departments: [],
+    level: '',
+    skills: [],
+    location: '',
+    type: '社招' as JobType,
+    description: '',
+    requirements: '',
+    status: 'open' as JobStatus,
+  });
+}
+
 // 获取职位详情
 async function fetchJobDetail() {
   if (!isEdit.value) return;
@@ -338,6 +352,14 @@ async function fetchJobDetail() {
     ElMessage.error('获取职位详情失败');
   } finally {
     loading.value = false;
+  }
+}
+
+function init() {
+  if (isEdit.value) {
+    fetchJobDetail();
+  } else {
+    resetForm();
   }
 }
 
@@ -395,9 +417,8 @@ async function handleSubmit() {
 }
 
 // 初始化
-onMounted(() => {
-  fetchJobDetail();
-});
+onMounted(init);
+onActivated(init);
 </script>
 
 <style scoped lang="scss">

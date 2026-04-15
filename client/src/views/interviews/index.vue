@@ -277,7 +277,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import {
@@ -503,6 +503,9 @@ function handleDotClick(item: InterviewItem) {
 }
 
 onMounted(() => {
+  fetchInterviews();
+});
+onActivated(() => {
   fetchInterviews();
 });
 </script>

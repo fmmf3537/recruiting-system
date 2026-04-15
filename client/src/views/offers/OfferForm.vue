@@ -214,7 +214,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { ArrowLeft } from '@element-plus/icons-vue';
@@ -224,9 +224,6 @@ import { getJobList, type JobItem } from '@/api/job';
 
 const route = useRoute();
 const router = useRouter();
-
-// 从URL参数获取候选人ID
-const initialCandidateId = route.query.candidateId as string;
 
 const loading = ref(false);
 const submitting = ref(false);
@@ -356,12 +353,37 @@ async function handleSubmit() {
   }
 }
 
-onMounted(() => {
+function resetForm() {
+  const candidateId = route.query.candidateId as string;
+  Object.assign(formData, {
+    candidateId: candidateId || '',
+    salary: '',
+    stock: '',
+    offerDate: new Date().toISOString().split('T')[0],
+    expectedJoinDate: '',
+    probation: 3,
+    reportTo: '',
+    workLocation: '',
+    workYears: 0,
+    insurance: '全额缴纳',
+    benefits: [],
+    jobId: '',
+    note: '',
+  });
+  selectedCandidate.value = null;
+  candidateOptions.value = [];
+}
+
+function init() {
+  resetForm();
   fetchJobList();
-  if (initialCandidateId) {
-    fetchCandidateDetail(initialCandidateId);
+  if (formData.candidateId) {
+    fetchCandidateDetail(formData.candidateId);
   }
-});
+}
+
+onMounted(init);
+onActivated(init);
 </script>
 
 <style scoped lang="scss">

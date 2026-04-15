@@ -222,7 +222,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Search } from '@element-plus/icons-vue';
@@ -467,6 +467,9 @@ async function handleDelete(row: JobItem & { deleteLoading?: boolean }) {
 
 // 初始化
 onMounted(() => {
+  fetchJobList();
+});
+onActivated(() => {
   fetchJobList();
 });
 </script>

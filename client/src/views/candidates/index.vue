@@ -246,7 +246,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, onActivated, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Plus, Search, UserFilled, Upload } from '@element-plus/icons-vue';
@@ -453,6 +453,7 @@ async function handleRejectSubmit() {
 }
 
 onMounted(() => { fetchCandidateList(); });
+onActivated(() => { fetchCandidateList(); });
 </script>
 
 <style scoped lang="scss">

@@ -145,7 +145,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onActivated } from 'vue';
 import { ElMessage } from 'element-plus';
 import { Download, Refresh } from '@element-plus/icons-vue';
 import { use } from 'echarts/core';
@@ -545,6 +545,9 @@ async function fetchStats() {
 }
 
 onMounted(() => {
+  fetchStats();
+});
+onActivated(() => {
   fetchStats();
 });
 </script>

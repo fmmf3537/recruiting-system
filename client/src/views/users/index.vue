@@ -179,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onActivated } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, UserFilled } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
@@ -420,6 +420,9 @@ async function confirmRoleChange() {
 
 // 初始化
 onMounted(() => {
+  fetchUserList();
+});
+onActivated(() => {
   fetchUserList();
 });
 </script>

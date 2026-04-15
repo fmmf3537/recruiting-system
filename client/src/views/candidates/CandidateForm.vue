@@ -213,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, onActivated, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { ArrowLeft, Upload, Document, Delete } from '@element-plus/icons-vue';
@@ -443,11 +443,28 @@ async function handleSubmit() {
   }
 }
 
-onMounted(() => {
-  fetchJobList();
-  fetchCandidateDetail();
+function resetForm() {
+  Object.assign(formData, {
+    name: '',
+    phone: '',
+    email: '',
+    gender: '男',
+    age: undefined,
+    education: '',
+    school: '',
+    workYears: undefined,
+    currentCompany: '',
+    currentPosition: '',
+    expectedSalary: '',
+    resumeUrl: '',
+    source: '',
+    sourceNote: '',
+    intro: '',
+    jobIds: [],
+  });
+}
 
-  // 检查是否有预填充数据（从简历解析跳转）
+function fillFromParsedResume() {
   const parsedData = sessionStorage.getItem('parsedResume');
   if (parsedData) {
     try {
@@ -477,7 +494,20 @@ onMounted(() => {
       console.error('解析预填充数据失败:', e);
     }
   }
-});
+}
+
+function init() {
+  fetchJobList();
+  if (isEdit.value) {
+    fetchCandidateDetail();
+  } else {
+    resetForm();
+    fillFromParsedResume();
+  }
+}
+
+onMounted(init);
+onActivated(init);
 </script>
 
 <style scoped lang="scss">

@@ -136,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { ref, reactive, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import {
@@ -351,6 +351,13 @@ onMounted(() => {
     initFunnelChart();
   });
   window.addEventListener('resize', handleResize);
+});
+
+onActivated(() => {
+  fetchStats();
+  nextTick(() => {
+    funnelChart?.resize();
+  });
 });
 
 onUnmounted(() => {
