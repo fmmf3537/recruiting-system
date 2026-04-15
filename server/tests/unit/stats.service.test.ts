@@ -25,6 +25,10 @@ vi.mock('../../src/lib/prisma', () => ({
     candidateJob: {
       findMany: vi.fn(),
     },
+    stageRecord: {
+      count: vi.fn(),
+      groupBy: vi.fn(),
+    },
   },
 }));
 
@@ -312,6 +316,52 @@ describe('StatsService - 统计服务单元测试', () => {
       });
 
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('getFunnelStats - 招聘漏斗统计', () => {
+    it('应返回各阶段统计数据', async () => {
+      vi.mocked(prisma.candidate.count).mockResolvedValue(100);
+      vi.mocked(prisma.stageRecord.groupBy)
+        .mockResolvedValueOnce([
+          { candidateId: 'c1' },
+          { candidateId: 'c2' },
+        ] as any)
+        .mockResolvedValueOnce([
+          { candidateId: 'c1' },
+        ] as any)
+        .mockResolvedValueOnce([
+          { candidateId: 'c1' },
+        ] as any);
+      vi.mocked(prisma.offer.count)
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(3);
+
+      const result = await service.getFunnelStats({
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-01-31'),
+      });
+
+      expect(result).toHaveLength(6);
+      expect(result[0]).toEqual({ stage: '简历入库', count: 100 });
+      expect(result[1]).toEqual({ stage: '初筛通过', count: 2 });
+      expect(result[2]).toEqual({ stage: '复试通过', count: 1 });
+      expect(result[3]).toEqual({ stage: '终面通过', count: 1 });
+      expect(result[4]).toEqual({ stage: 'Offer接受', count: 5 });
+      expect(result[5]).toEqual({ stage: '成功入职', count: 3 });
+    });
+
+    it('无数据时各阶段应为0', async () => {
+      vi.mocked(prisma.candidate.count).mockResolvedValue(0);
+      vi.mocked(prisma.stageRecord.groupBy).mockResolvedValue([] as any);
+      vi.mocked(prisma.offer.count).mockResolvedValue(0);
+
+      const result = await service.getFunnelStats({
+        startDate: new Date('2024-01-01'),
+        endDate: new Date('2024-01-31'),
+      });
+
+      expect(result.every((item) => item.count === 0)).toBe(true);
     });
   });
 });

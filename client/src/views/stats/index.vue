@@ -162,7 +162,7 @@ import {
 import { LinearGradient } from 'echarts/lib/util/graphic';
 import VChart from 'vue-echarts';
 import * as XLSX from 'xlsx';
-import { getWorkloadStats, getChannelStats } from '@/api/stats';
+import { getWorkloadStats, getChannelStats, getFunnelStats } from '@/api/stats';
 
 // 注册 ECharts 组件
 use([
@@ -227,14 +227,9 @@ function handleDateChange() {
 }
 
 // ============ 招聘漏斗数据 ============
-const funnelData = ref([
-  { stage: '简历入库', count: 1000, conversion: 100, dropOff: 0 },
-  { stage: '初筛通过', count: 600, conversion: 60, dropOff: 40 },
-  { stage: '复试通过', count: 300, conversion: 30, dropOff: 50 },
-  { stage: '终面通过', count: 150, conversion: 15, dropOff: 50 },
-  { stage: 'Offer接受', count: 80, conversion: 8, dropOff: 47 },
-  { stage: '成功入职', count: 60, conversion: 6, dropOff: 25 },
-]);
+const funnelData = ref<
+  { stage: string; count: number; conversion: number; dropOff: number }[]
+>([]);
 
 const funnelOption = computed(() => ({
   title: { text: '招聘漏斗分析', left: 'center' },
@@ -523,6 +518,23 @@ async function fetchStats() {
         ...item,
         cost: 0, // 成本数据需要额外计算
       }));
+    }
+
+    // 获取漏斗统计
+    const funnelRes = await getFunnelStats(params);
+    if (funnelRes.success && funnelRes.data.length > 0) {
+      const baseCount = funnelRes.data[0]?.count || 1;
+      funnelData.value = funnelRes.data.map((item: any, index: number) => {
+        const prevCount = index > 0 ? funnelRes.data[index - 1].count : item.count;
+        const conversion = baseCount > 0 ? Math.round((item.count / baseCount) * 100) : 0;
+        const dropOff = prevCount > 0 && index > 0 ? Math.round(((prevCount - item.count) / prevCount) * 100) : 0;
+        return {
+          stage: item.stage,
+          count: item.count,
+          conversion,
+          dropOff,
+        };
+      });
     }
   } catch (error) {
     console.error('获取统计数据失败:', error);

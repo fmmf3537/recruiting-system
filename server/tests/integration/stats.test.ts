@@ -12,6 +12,7 @@ vi.mock('../../src/services/stats.service', () => ({
     getWorkloadStats: vi.fn(),
     getChannelStats: vi.fn(),
     getJobStats: vi.fn(),
+    getFunnelStats: vi.fn(),
     exportWorkloadStats: vi.fn(),
     exportChannelStats: vi.fn(),
     exportJobStats: vi.fn(),
@@ -235,6 +236,46 @@ describe('统计模块 API 测试', () => {
         .expect(200);
 
       expect(res.headers['content-type']).toBeDefined();
+    });
+  });
+
+  describe('GET /api/stats/funnel - 招聘漏斗统计', () => {
+    it('应返回漏斗统计数据', async () => {
+      const mockStats = [
+        { stage: '简历入库', count: 100 },
+        { stage: '初筛通过', count: 60 },
+        { stage: '复试通过', count: 30 },
+        { stage: '终面通过', count: 15 },
+        { stage: 'Offer接受', count: 8 },
+        { stage: '成功入职', count: 5 },
+      ];
+      vi.mocked(statsService.getFunnelStats).mockResolvedValue(mockStats as any);
+
+      const res = await request(app)
+        .get('/api/stats/funnel')
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.data).toHaveLength(6);
+      expect(res.body.data[0].stage).toBe('简历入库');
+    });
+
+    it('应支持日期范围查询', async () => {
+      vi.mocked(statsService.getFunnelStats).mockResolvedValue([] as any);
+
+      await request(app)
+        .get('/api/stats/funnel?startDate=2024-01-01&endDate=2024-01-31')
+        .expect(200);
+
+      expect(statsService.getFunnelStats).toHaveBeenCalled();
+    });
+
+    it('应验证日期格式', async () => {
+      const res = await request(app)
+        .get('/api/stats/funnel?startDate=invalid&endDate=2024-01-31')
+        .expect(400);
+
+      expect(res.body).toBeDefined();
     });
   });
 });

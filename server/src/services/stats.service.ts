@@ -35,6 +35,12 @@ export interface JobStat {
   hiredCount: number;
 }
 
+// 漏斗统计项
+export interface FunnelStat {
+  stage: string;
+  count: number;
+}
+
 // 导出数据类型
 export interface ExportData {
   headers: string[];
@@ -269,6 +275,76 @@ export class StatsService {
 
     // 过滤掉没有候选人的职位（可选，根据需求决定是否保留）
     return stats.filter((s) => s.candidateCount > 0);
+  }
+
+  /**
+   * GET /api/stats/funnel
+   * 招聘漏斗统计
+   */
+  async getFunnelStats(dateRange?: DateRange): Promise<FunnelStat[]> {
+    const { startDate, endDate } = dateRange || this.getDefaultDateRange();
+
+    // 简历入库：在日期范围内创建的候选人
+    const newCandidates = await prisma.candidate.count({
+      where: {
+        createdAt: { gte: startDate, lte: endDate },
+      },
+    });
+
+    // 初筛通过
+    const initialScreenPassed = await prisma.stageRecord.groupBy({
+      by: ['candidateId'],
+      where: {
+        stage: '初筛',
+        status: 'passed',
+        enteredAt: { gte: startDate, lte: endDate },
+      },
+    });
+
+    // 复试通过
+    const retestPassed = await prisma.stageRecord.groupBy({
+      by: ['candidateId'],
+      where: {
+        stage: '复试',
+        status: 'passed',
+        enteredAt: { gte: startDate, lte: endDate },
+      },
+    });
+
+    // 终面通过
+    const finalInterviewPassed = await prisma.stageRecord.groupBy({
+      by: ['candidateId'],
+      where: {
+        stage: '终面',
+        status: 'passed',
+        enteredAt: { gte: startDate, lte: endDate },
+      },
+    });
+
+    // Offer 接受
+    const offerAccepted = await prisma.offer.count({
+      where: {
+        result: 'accepted',
+        offerDate: { gte: startDate, lte: endDate },
+      },
+    });
+
+    // 成功入职
+    const hired = await prisma.offer.count({
+      where: {
+        joined: true,
+        actualJoinDate: { gte: startDate, lte: endDate },
+      },
+    });
+
+    return [
+      { stage: '简历入库', count: newCandidates },
+      { stage: '初筛通过', count: initialScreenPassed.length },
+      { stage: '复试通过', count: retestPassed.length },
+      { stage: '终面通过', count: finalInterviewPassed.length },
+      { stage: 'Offer接受', count: offerAccepted },
+      { stage: '成功入职', count: hired },
+    ];
   }
 
   /**

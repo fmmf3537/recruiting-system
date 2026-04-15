@@ -196,4 +196,16 @@ router.get(
   statsController.getJobStats
 );
 
+/**
+ * GET /api/stats/funnel
+ * 招聘漏斗统计
+ * 权限：登录用户
+ */
+router.get(
+  '/funnel',
+  authenticate,
+  validate(dateRangeQuerySchema, 'query'),
+  statsController.getFunnelStats
+);
+
 export default router;

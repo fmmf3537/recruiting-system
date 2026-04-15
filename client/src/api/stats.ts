@@ -35,6 +35,12 @@ export interface JobStat {
   hiredCount: number;
 }
 
+// 漏斗统计项
+export interface FunnelStat {
+  stage: string;
+  count: number;
+}
+
 // 工作量统计响应
 export interface WorkloadStatsData {
   success: boolean;
@@ -59,6 +65,16 @@ export interface ChannelStatsData {
 export interface JobStatsData {
   success: boolean;
   data: JobStat[];
+  dateRange: {
+    startDate: string;
+    endDate: string;
+  };
+}
+
+// 漏斗统计响应
+export interface FunnelStatsData {
+  success: boolean;
+  data: FunnelStat[];
   dateRange: {
     startDate: string;
     endDate: string;
@@ -109,6 +125,14 @@ export function exportChannelStats(params?: DateRangeParams): Promise<Blob> {
  */
 export function getJobStats(params?: DateRangeParams): Promise<JobStatsData> {
   return request.get('/stats/jobs', { params }) as Promise<JobStatsData>;
+}
+
+/**
+ * 获取招聘漏斗统计
+ * @param params 日期范围参数
+ */
+export function getFunnelStats(params?: DateRangeParams): Promise<FunnelStatsData> {
+  return request.get('/stats/funnel', { params }) as Promise<FunnelStatsData>;
 }
 
 /**
