@@ -233,6 +233,46 @@ export interface InterviewFeedbackListData {
   data: InterviewFeedback[];
 }
 
+// 面试列表项
+export interface InterviewListItem {
+  id: string;
+  round: InterviewRound;
+  interviewerName: string;
+  interviewTime: string;
+  conclusion: InterviewConclusion | null;
+  feedbackContent: string | null;
+  rejectReason: string | null;
+  createdById: string;
+  createdByName: string | null;
+  createdAt: string;
+  candidateId: string;
+  candidateName: string;
+  jobTitle: string;
+}
+
+// 面试列表查询参数
+export interface InterviewListParams {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  round?: string;
+  conclusion?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+// 面试列表响应
+export interface InterviewListData {
+  success: boolean;
+  data: InterviewListItem[];
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 // 操作结果响应
 export interface OperationResult {
   success: boolean;
@@ -306,6 +346,14 @@ export function deleteCandidate(id: string): Promise<OperationResult> {
   return request.delete(`/candidates/${id}`) as Promise<OperationResult>;
 }
 
+/**
+ * 获取面试列表
+ * @param params 查询参数
+ */
+export function getInterviewList(params?: InterviewListParams): Promise<InterviewListData> {
+  return request.get('/candidates/interviews', { params }) as Promise<InterviewListData>;
+}
+
 // ============ 简历解析 ============
 
 // 工作经历
@@ -337,23 +385,44 @@ export interface ResumeParseResult {
   resumeUrl?: string;
 }
 
-// 简历解析响应
-export interface ResumeParseResponse {
+// 简历解析任务提交响应
+export interface ParseResumeJobResponse {
   success: boolean;
   message?: string;
-  data?: ResumeParseResult;
+  data?: {
+    jobId: string;
+  };
+}
+
+// 简历解析状态查询响应
+export interface ParseResumeStatusResponse {
+  success: boolean;
+  message?: string;
+  data?: {
+    state: string;
+    result?: ResumeParseResult;
+    failedReason?: string;
+  };
 }
 
 /**
- * 解析简历
+ * 提交简历解析任务（异步）
  * @param file 简历文件
  */
-export function parseResume(file: File): Promise<ResumeParseResponse> {
+export function parseResume(file: File): Promise<ParseResumeJobResponse> {
   const formData = new FormData();
   formData.append('file', file);
   return request.post('/candidates/parse-resume', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
-  }) as Promise<ResumeParseResponse>;
+  }) as Promise<ParseResumeJobResponse>;
+}
+
+/**
+ * 查询简历解析任务状态
+ * @param jobId 任务ID
+ */
+export function getParseResumeStatus(jobId: string): Promise<ParseResumeStatusResponse> {
+  return request.get(`/candidates/parse-resume/${jobId}`) as Promise<ParseResumeStatusResponse>;
 }

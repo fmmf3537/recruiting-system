@@ -22,6 +22,9 @@ const envSchema = z.object({
   // 文件上传
   UPLOAD_DIR: z.string().default('uploads'),
   MAX_FILE_SIZE: z.string().default('10485760').transform((val) => parseInt(val, 10)), // 10MB
+
+  // Redis
+  REDIS_URL: z.string().default('redis://localhost:6379'),
 });
 
 // 验证环境变量

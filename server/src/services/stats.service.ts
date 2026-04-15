@@ -1,4 +1,14 @@
 import prisma from '../lib/prisma';
+import { redis, connectRedis } from '../lib/redis';
+
+// 缓存时间：5 分钟
+const CACHE_TTL = 300;
+
+function getCacheKey(prefix: string, dateRange?: DateRange): string {
+  const start = dateRange?.startDate.toISOString().split('T')[0] || 'all';
+  const end = dateRange?.endDate.toISOString().split('T')[0] || 'all';
+  return `stats:${prefix}:${start}:${end}`;
+}
 
 // 时间范围类型
 export interface DateRange {
@@ -82,65 +92,50 @@ export class StatsService {
    * 工作量统计
    */
   async getWorkloadStats(dateRange?: DateRange): Promise<WorkloadStat[]> {
+    await connectRedis();
+    const cacheKey = getCacheKey('workload', dateRange);
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
 
-    // 获取所有用户
-    const users = await prisma.user.findMany({
-      select: { id: true, name: true },
-    });
+    const stats = await prisma.$queryRaw<WorkloadStat[]>`
+      SELECT 
+        u.id as "userId",
+        u.name as "userName",
+        COALESCE(c.count, 0) as "newCandidates",
+        COALESCE(s.count, 0) as "stageAdvances",
+        COALESCE(i.count, 0) as "interviews",
+        COALESCE(o.count, 0) as "offers"
+      FROM "user" u
+      LEFT JOIN (
+        SELECT "createdById", COUNT(*)::int as count FROM "candidate"
+        WHERE "createdAt" >= ${startDate} AND "createdAt" <= ${endDate}
+        GROUP BY "createdById"
+      ) c ON c."createdById" = u.id
+      LEFT JOIN (
+        SELECT "assigneeId", COUNT(*)::int as count FROM "stage_record"
+        WHERE "enteredAt" >= ${startDate} AND "enteredAt" <= ${endDate}
+        GROUP BY "assigneeId"
+      ) s ON s."assigneeId" = u.id
+      LEFT JOIN (
+        SELECT "createdById", COUNT(*)::int as count FROM "interview_feedback"
+        WHERE "createdAt" >= ${startDate} AND "createdAt" <= ${endDate}
+        GROUP BY "createdById"
+      ) i ON i."createdById" = u.id
+      LEFT JOIN (
+        SELECT ca."createdById", COUNT(*)::int as count FROM "offer" o
+        JOIN "candidate" ca ON o."candidateId" = ca.id
+        WHERE o."offerDate" >= ${startDate} AND o."offerDate" <= ${endDate}
+        GROUP BY ca."createdById"
+      ) o ON o."createdById" = u.id
+    `;
 
-    // 并行查询每个用户的统计数据
-    const statsPromises = users.map(async (user) => {
-      // 新增候选人数量
-      const newCandidates = await prisma.candidate.count({
-        where: {
-          createdById: user.id,
-          createdAt: { gte: startDate, lte: endDate },
-        },
-      });
-
-      // 阶段推进次数
-      const stageAdvances = await prisma.stageRecord.count({
-        where: {
-          assigneeId: user.id,
-          enteredAt: { gte: startDate, lte: endDate },
-        },
-      });
-
-      // 面试次数
-      const interviews = await prisma.interviewFeedback.count({
-        where: {
-          createdById: user.id,
-          createdAt: { gte: startDate, lte: endDate },
-        },
-      });
-
-      // 发放 Offer 数量
-      const offers = await prisma.offer.count({
-        where: {
-          offerDate: { gte: startDate, lte: endDate },
-          candidate: {
-            createdById: user.id,
-          },
-        },
-      });
-
-      return {
-        userId: user.id,
-        userName: user.name,
-        newCandidates,
-        stageAdvances,
-        interviews,
-        offers,
-      };
-    });
-
-    const stats = await Promise.all(statsPromises);
-
-    // 过滤掉全部数据为 0 的用户（可选，根据需求决定是否保留）
-    return stats.filter(
+    const result = stats.filter(
       (s) => s.newCandidates > 0 || s.stageAdvances > 0 || s.interviews > 0 || s.offers > 0
     );
+    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+    return result;
   }
 
   /**
@@ -148,6 +143,11 @@ export class StatsService {
    * 渠道效果分析
    */
   async getChannelStats(dateRange?: DateRange): Promise<ChannelStat[]> {
+    await connectRedis();
+    const cacheKey = getCacheKey('channel', dateRange);
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
 
     // 获取所有候选人按来源分组统计
@@ -188,8 +188,9 @@ export class StatsService {
       };
     });
 
-    // 按候选人数量降序排序
-    return stats.sort((a, b) => b.candidateCount - a.candidateCount);
+    const result = stats.sort((a, b) => b.candidateCount - a.candidateCount);
+    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+    return result;
   }
 
   /**
@@ -197,84 +198,60 @@ export class StatsService {
    * 职位维度统计
    */
   async getJobStats(dateRange?: DateRange): Promise<JobStat[]> {
+    await connectRedis();
+    const cacheKey = getCacheKey('jobs', dateRange);
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
 
-    // 获取所有职位
-    const jobs = await prisma.job.findMany({
-      select: {
-        id: true,
-        title: true,
-        departments: true,
-      },
-    });
+    const rawStats = await prisma.$queryRaw<Array<{
+      jobId: string;
+      jobTitle: string;
+      departments: unknown;
+      candidateCount: number;
+      interviewCount: number;
+      offerCount: number;
+      hiredCount: number;
+    }>>`
+      SELECT 
+        j.id as "jobId",
+        j.title as "jobTitle",
+        j.departments,
+        COUNT(DISTINCT cj."candidateId")::int as "candidateCount",
+        COUNT(DISTINCT CASE WHEN i."createdAt" >= ${startDate} AND i."createdAt" <= ${endDate} THEN i.id END)::int as "interviewCount",
+        COUNT(DISTINCT CASE WHEN o."offerDate" >= ${startDate} AND o."offerDate" <= ${endDate} THEN o.id END)::int as "offerCount",
+        COUNT(DISTINCT CASE WHEN o.joined = true AND o."actualJoinDate" >= ${startDate} AND o."actualJoinDate" <= ${endDate} THEN o.id END)::int as "hiredCount"
+      FROM "job" j
+      LEFT JOIN "candidate_job" cj ON cj."jobId" = j.id
+      LEFT JOIN "interview_feedback" i ON i."candidateId" = cj."candidateId"
+      LEFT JOIN "offer" o ON o."candidateId" = cj."candidateId"
+      GROUP BY j.id, j.title, j.departments
+    `;
 
-    // 并行查询每个职位的统计数据
-    const statsPromises = jobs.map(async (job) => {
-      // 获取关联的候选人 IDs
-      const candidateJobs = await prisma.candidateJob.findMany({
-        where: { jobId: job.id },
-        select: { candidateId: true },
+    const stats: JobStat[] = rawStats
+      .filter((s) => s.candidateCount > 0)
+      .map((s) => {
+        let department = '未分配';
+        try {
+          const departments = s.departments as string[];
+          department = departments && departments.length > 0 ? departments[0] : '未分配';
+        } catch {
+          department = '未分配';
+        }
+        return {
+          jobId: s.jobId,
+          jobTitle: s.jobTitle,
+          department,
+          candidateCount: s.candidateCount,
+          interviewCount: s.interviewCount,
+          offerCount: s.offerCount,
+          hiredCount: s.hiredCount,
+        };
       });
-      const candidateIds = candidateJobs.map((cj) => cj.candidateId);
 
-      // 候选人数量
-      const candidateCount = candidateIds.length;
-
-      // 面试次数（这些候选人的面试反馈）
-      const interviewCount = candidateCount > 0
-        ? await prisma.interviewFeedback.count({
-            where: {
-              candidateId: { in: candidateIds },
-              createdAt: { gte: startDate, lte: endDate },
-            },
-          })
-        : 0;
-
-      // Offer 数量
-      const offerCount = candidateCount > 0
-        ? await prisma.offer.count({
-            where: {
-              candidateId: { in: candidateIds },
-              offerDate: { gte: startDate, lte: endDate },
-            },
-          })
-        : 0;
-
-      // 已入职数量
-      const hiredCount = candidateCount > 0
-        ? await prisma.offer.count({
-            where: {
-              candidateId: { in: candidateIds },
-              joined: true,
-              actualJoinDate: { gte: startDate, lte: endDate },
-            },
-          })
-        : 0;
-
-      // 解析部门（JSON 数组）
-      let department = '未分配';
-      try {
-        const departments = job.departments as string[];
-        department = departments && departments.length > 0 ? departments[0] : '未分配';
-      } catch {
-        department = '未分配';
-      }
-
-      return {
-        jobId: job.id,
-        jobTitle: job.title,
-        department,
-        candidateCount,
-        interviewCount,
-        offerCount,
-        hiredCount,
-      };
-    });
-
-    const stats = await Promise.all(statsPromises);
-
-    // 过滤掉没有候选人的职位（可选，根据需求决定是否保留）
-    return stats.filter((s) => s.candidateCount > 0);
+    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(stats));
+    return stats;
   }
 
   /**
@@ -282,6 +259,11 @@ export class StatsService {
    * 招聘漏斗统计
    */
   async getFunnelStats(dateRange?: DateRange): Promise<FunnelStat[]> {
+    await connectRedis();
+    const cacheKey = getCacheKey('funnel', dateRange);
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
 
     // 简历入库：在日期范围内创建的候选人
@@ -337,7 +319,7 @@ export class StatsService {
       },
     });
 
-    return [
+    const result = [
       { stage: '简历入库', count: newCandidates },
       { stage: '初筛通过', count: initialScreenPassed.length },
       { stage: '复试通过', count: retestPassed.length },
@@ -345,6 +327,8 @@ export class StatsService {
       { stage: 'Offer接受', count: offerAccepted },
       { stage: '成功入职', count: hired },
     ];
+    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+    return result;
   }
 
   /**

@@ -161,7 +161,7 @@ import {
 } from 'echarts/components';
 import { LinearGradient } from 'echarts/lib/util/graphic';
 import VChart from 'vue-echarts';
-import * as XLSX from 'xlsx';
+
 import { getWorkloadStats, getChannelStats, getFunnelStats } from '@/api/stats';
 
 // 注册 ECharts 组件
@@ -500,19 +500,21 @@ async function fetchStats() {
       params.endDate = dateRange.value[1];
     }
 
-    // 获取工作量统计
-    const workloadRes = await getWorkloadStats(params);
+    const [workloadRes, channelRes, funnelRes] = await Promise.all([
+      getWorkloadStats(params),
+      getChannelStats(params),
+      getFunnelStats(params),
+    ]);
+
     if (workloadRes.success && workloadRes.data.length > 0) {
       workloadData.value = workloadRes.data.map((item: any) => ({
         ...item,
-        conversionRate: item.newCandidates > 0 
-          ? Math.round((item.hired || item.offers) / item.newCandidates * 100) 
+        conversionRate: item.newCandidates > 0
+          ? Math.round((item.hired || item.offers) / item.newCandidates * 100)
           : 0,
       }));
     }
 
-    // 获取渠道统计
-    const channelRes = await getChannelStats(params);
     if (channelRes.success && channelRes.data.length > 0) {
       channelData.value = channelRes.data.map((item: any) => ({
         ...item,
@@ -520,8 +522,6 @@ async function fetchStats() {
       }));
     }
 
-    // 获取漏斗统计
-    const funnelRes = await getFunnelStats(params);
     if (funnelRes.success && funnelRes.data.length > 0) {
       const baseCount = funnelRes.data[0]?.count || 1;
       funnelData.value = funnelRes.data.map((item: any, index: number) => {

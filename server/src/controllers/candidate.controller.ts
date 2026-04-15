@@ -199,7 +199,7 @@ export class CandidateController {
 
   /**
    * POST /api/candidates/parse-resume
-   * 解析简历
+   * 提交简历解析任务（异步）
    */
   async parseResume(
     req: Request,
@@ -236,19 +236,98 @@ export class CandidateController {
         return;
       }
 
-      const { parseResume } = await import('../services/resume-parser.service');
-      const result = await parseResume(file.buffer, file.mimetype);
+      const { resumeParseQueue } = await import('../lib/queue');
+      const job = await resumeParseQueue.add('parse', {
+        buffer: file.buffer,
+        mimetype: file.mimetype,
+      });
 
       res.json({
         success: true,
-        data: result,
+        data: { jobId: job.id },
       });
     } catch (error) {
       const errorMsg = `【简历解析错误】${new Date().toISOString()}\n${error}`;
       console.error(errorMsg);
       // 写入文件以便查看
-      const fs = await import('fs');
-      fs.appendFileSync('resume-parse-error.log', errorMsg + '\n\n');
+      const fs = await import('fs/promises');
+      await fs.appendFile('resume-parse-error.log', errorMsg + '\n\n');
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/candidates/parse-resume/:jobId
+   * 查询简历解析任务状态
+   */
+  async getParseResumeStatus(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const { resumeParseQueue } = await import('../lib/queue');
+      const job = await resumeParseQueue.getJob(jobId);
+
+      if (!job) {
+        res.status(404).json({
+          success: false,
+          error: '任务不存在',
+        });
+        return;
+      }
+
+      const state = await job.getState();
+      const result = job.returnvalue;
+      const failedReason = job.failedReason;
+
+      res.json({
+        success: true,
+        data: {
+          state,
+          result,
+          failedReason,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/candidates/interviews
+   * 获取面试列表（支持分页和筛选）
+   */
+  async getInterviewList(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const query = {
+        page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
+        pageSize: req.query.pageSize ? parseInt(req.query.pageSize as string, 10) : undefined,
+        keyword: req.query.keyword as string | undefined,
+        round: req.query.round as string | undefined,
+        conclusion: req.query.conclusion as string | undefined,
+        startDate: req.query.startDate as string | undefined,
+        endDate: req.query.endDate as string | undefined,
+      };
+
+      const result = await candidateService.getInterviewList(query);
+
+      res.json({
+        success: true,
+        data: result.interviews,
+        pagination: {
+          page: result.page,
+          pageSize: result.pageSize,
+          total: result.total,
+          totalPages: result.totalPages,
+        },
+      });
+    } catch (error) {
       next(error);
     }
   }

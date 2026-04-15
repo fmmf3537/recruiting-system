@@ -147,7 +147,14 @@ import {
   TrendCharts,
   UserFilled,
 } from '@element-plus/icons-vue';
-import * as echarts from 'echarts';
+import { use } from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { FunnelChart } from 'echarts/charts';
+import { TooltipComponent } from 'echarts/components';
+import type { EChartsOption } from 'echarts';
+import * as echarts from 'echarts/core';
+
+use([CanvasRenderer, FunnelChart, TooltipComponent]);
 import { getStats } from '@/api/stats';
 import { getCandidateList } from '@/api/candidate';
 import { getJobList } from '@/api/job';
@@ -250,7 +257,7 @@ function initFunnelChart() {
   
   funnelChart = echarts.init(funnelChartRef.value);
   
-  const option: echarts.EChartsOption = {
+  const option: EChartsOption = {
     tooltip: {
       trigger: 'item',
       formatter: '{b}: {c}人 ({d}%)',
@@ -305,35 +312,20 @@ function initFunnelChart() {
 // 获取统计数据
 async function fetchStats() {
   try {
-    // 获取本月新增候选人
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const candidatesRes = await getCandidateList({
-      page: 1,
-      pageSize: 1,
-    });
+    const [candidatesRes, jobsRes, offersRes] = await Promise.all([
+      getCandidateList({ page: 1, pageSize: 1 }),
+      getJobList({ page: 1, pageSize: 1, status: 'open' }),
+      getOfferList({ page: 1, pageSize: 100, result: 'accepted' }),
+    ]);
+
     if (candidatesRes.success) {
       stats.newCandidates = candidatesRes.pagination.total;
     }
-
-    // 获取进行中职位
-    const jobsRes = await getJobList({
-      page: 1,
-      pageSize: 1,
-      status: 'open',
-    });
     if (jobsRes.success) {
       stats.openJobs = jobsRes.pagination.total;
     }
-
-    // 获取待入职人数（已接受 Offer 但未入职）
-    const offersRes = await getOfferList({
-      page: 1,
-      pageSize: 100,
-      result: 'accepted',
-    });
     if (offersRes.success) {
-      stats.pendingJoin = offersRes.data.filter(o => !o.joined).length;
+      stats.pendingJoin = offersRes.data.filter((o: any) => !o.joined).length;
     }
   } catch (error) {
     console.error('获取统计数据失败:', error);

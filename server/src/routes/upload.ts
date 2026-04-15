@@ -2,7 +2,7 @@ import { Router, type Router as RouterType } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
+import fs from 'fs/promises';
 import { env } from '../lib/env';
 import { authenticate } from '../middleware/auth';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
@@ -11,9 +11,7 @@ const router: RouterType = Router();
 
 // 确保上传目录存在
 const uploadDir = path.resolve(process.cwd(), env.UPLOAD_DIR);
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+await fs.mkdir(uploadDir, { recursive: true });
 
 // 配置 multer 存储
 const storage = multer.diskStorage({
@@ -134,13 +132,13 @@ router.delete(
 
     const filePath = path.join(uploadDir, filename);
 
-    // 检查文件是否存在
-    if (!fs.existsSync(filePath)) {
+    // 检查文件是否存在并删除
+    try {
+      await fs.access(filePath);
+    } catch {
       throw new AppError('文件不存在', 404);
     }
-
-    // 删除文件
-    fs.unlinkSync(filePath);
+    await fs.unlink(filePath);
 
     res.json({
       success: true,

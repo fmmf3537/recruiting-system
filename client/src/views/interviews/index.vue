@@ -289,7 +289,7 @@ import {
   UserFilled,
   User,
 } from '@element-plus/icons-vue';
-import { getCandidateList, addInterviewFeedback, type InterviewFeedback } from '@/api/candidate';
+import { getInterviewList, addInterviewFeedback, type InterviewListItem } from '@/api/candidate';
 
 const router = useRouter();
 
@@ -314,10 +314,7 @@ const filterForm = reactive({
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 
 // ============ 面试列表数据 ============
-interface InterviewItem extends InterviewFeedback {
-  candidateName: string;
-  jobTitle: string;
-}
+type InterviewItem = InterviewListItem;
 
 const interviewList = ref<InterviewItem[]>([]);
 
@@ -370,28 +367,26 @@ const feedbackRules: FormRules = {
 async function fetchInterviews() {
   loading.value = true;
   try {
-    // 从候选人列表中获取有面试反馈的数据
-    const res = await getCandidateList({ page: 1, pageSize: 100 });
+    const params: any = {
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+    };
+    if (filterForm.round) {
+      params.round = filterForm.round;
+    }
+    if (filterForm.conclusion) {
+      params.conclusion = filterForm.conclusion;
+    }
+    if (filterForm.dateRange && filterForm.dateRange.length === 2) {
+      params.startDate = filterForm.dateRange[0];
+      params.endDate = filterForm.dateRange[1];
+    }
+
+    const res = await getInterviewList(params);
     if (res.success) {
-      const interviews: InterviewItem[] = [];
-      res.data.forEach(candidate => {
-        if (candidate.interviewFeedbacks?.length) {
-          candidate.interviewFeedbacks.forEach((feedback: InterviewFeedback) => {
-            interviews.push({
-              ...feedback,
-              candidateName: candidate.name,
-              jobTitle: candidate.candidateJobs?.[0]?.job?.title || '未知职位',
-            });
-          });
-        }
-      });
-      // 按时间排序
-      interviews.sort((a, b) => new Date(b.interviewTime).getTime() - new Date(a.interviewTime).getTime());
-      interviewList.value = interviews;
-      pagination.total = interviews.length;
-      
-      // 更新统计
-      updateStats(interviews);
+      interviewList.value = res.data;
+      pagination.total = res.pagination.total;
+      updateStats(res.data);
     }
   } catch (error) {
     console.error('获取面试列表失败:', error);
@@ -411,15 +406,16 @@ function updateStats(interviews: InterviewItem[]) {
 }
 
 function handleSearch() {
-  // 实现筛选逻辑
-  console.log('筛选条件:', filterForm);
+  pagination.page = 1;
+  fetchInterviews();
 }
 
 function handleReset() {
   filterForm.dateRange = [];
   filterForm.round = '';
   filterForm.conclusion = '';
-  handleSearch();
+  pagination.page = 1;
+  fetchInterviews();
 }
 
 function handleDateChange() {
@@ -428,11 +424,13 @@ function handleDateChange() {
 
 function handlePageChange(page: number) {
   pagination.page = page;
+  fetchInterviews();
 }
 
 function handleSizeChange(size: number) {
   pagination.pageSize = size;
   pagination.page = 1;
+  fetchInterviews();
 }
 
 function formatDateTime(dateStr: string): string {

@@ -2,7 +2,7 @@ import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { statsController } from '../controllers/stats.controller';
 import { statsService } from '../services/stats.service';
-import prisma from '../lib/prisma';
+
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 
@@ -60,14 +60,14 @@ router.get(
   authenticate,
   async (_req, res, next) => {
     try {
-      // 直接查询数据库
-      const users = await prisma.user.findMany({ select: { id: true, name: true } });
-      
-      const rows = [];
-      for (const user of users) {
-        const newCandidates = await prisma.candidate.count({ where: { createdById: user.id } });
-        rows.push([user.name, newCandidates, 0, 0, 0]);
-      }
+      const stats = await statsService.getWorkloadStats(undefined);
+      const rows = stats.map((s) => [
+        s.userName,
+        s.newCandidates,
+        s.stageAdvances,
+        s.interviews,
+        s.offers,
+      ]);
       
       const csvContent = '\uFEFF成员,新增候选人,阶段推进,面试次数,发放 Offer\n' + 
         rows.map(r => r.join(',')).join('\n');

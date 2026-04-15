@@ -1,7 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../lib/env';
-import prisma from '../lib/prisma';
 
 // JWT Payload 类型
 export interface JwtPayload {
@@ -45,22 +44,7 @@ export const authenticate = async (
     // 验证 JWT
     const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
 
-    // 验证用户是否存在
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, email: true, role: true },
-    });
-
-    if (!user) {
-      res.status(401).json({
-        success: false,
-        error: '用户不存在或已被删除',
-        code: 401,
-      });
-      return;
-    }
-
-    // 将用户信息注入到请求对象
+    // 将用户信息注入到请求对象（JWT payload 已包含完整用户信息，无需查库）
     req.user = decoded;
     next();
   } catch (error) {

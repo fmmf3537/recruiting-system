@@ -60,6 +60,7 @@ model Job {
   // 关系：一个 Job 有多个 Candidate（通过关联表）
   candidateJobs CandidateJob[]
 
+  @@index([title])
   @@index([status])
   @@index([type])
   @@index([location])
@@ -108,6 +109,7 @@ model Candidate {
   // 关系：一个 Candidate 有多个工作经历
   workHistories WorkHistory[]
 
+  @@index([name])
   @@index([email])
   @@index([phone])
   @@index([source])
@@ -170,7 +172,7 @@ model StageRecord {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([candidateId])
+  @@index([candidateId, enteredAt])
   @@index([stage])
   @@index([status])
   @@index([assigneeId])

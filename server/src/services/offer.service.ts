@@ -1,5 +1,6 @@
 import type { Offer, Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
+import { clearStatsCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
 // Offer 列表查询参数类型
@@ -188,6 +189,7 @@ export class OfferService {
       },
     });
 
+    await clearStatsCache();
     return offer;
   }
 
@@ -263,6 +265,7 @@ export class OfferService {
       }
     }
 
+    await clearStatsCache();
     return offer;
   }
 
@@ -313,6 +316,7 @@ export class OfferService {
       },
     });
 
+    await clearStatsCache();
     return offer;
   }
 
@@ -341,6 +345,8 @@ export class OfferService {
     await prisma.offer.delete({
       where: { candidateId },
     });
+
+    await clearStatsCache();
   }
 }
 

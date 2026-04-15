@@ -1,5 +1,7 @@
 import app from './app';
 import { env } from './lib/env';
+import { redis } from './lib/redis';
+import './workers/resume-parser.worker';
 
 const PORT = env.PORT;
 
@@ -27,18 +29,20 @@ Available endpoints:
 });
 
 // 优雅关闭
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('SIGTERM received, closing server...');
-  server.close(() => {
+  server.close(async () => {
     console.log('Server closed');
+    await redis.disconnect();
     process.exit(0);
   });
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('SIGINT received, closing server...');
-  server.close(() => {
+  server.close(async () => {
     console.log('Server closed');
+    await redis.disconnect();
     process.exit(0);
   });
 });

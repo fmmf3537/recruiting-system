@@ -88,7 +88,7 @@
 import { ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { UploadFilled } from '@element-plus/icons-vue';
-import { parseResume, type ResumeParseResult } from '@/api/candidate';
+import { parseResume, getParseResumeStatus, type ResumeParseResult } from '@/api/candidate';
 import { uploadFile } from '@/utils/request';
 
 const visible = defineModel<boolean>({ default: false });
@@ -127,15 +127,39 @@ async function handleParse() {
     }
     resumeUrl.value = uploadRes.data.url;
 
-    // 解析简历
+    // 提交解析任务
     const res = await parseResume(selectedFile.value);
-    if (res.success && res.data) {
-      parsedData.value = {
-        ...res.data,
-        resumeUrl: resumeUrl.value,
-      };
-    } else {
-      ElMessage.error(res.message || '简历解析失败');
+    if (!res.success || !res.data?.jobId) {
+      ElMessage.error(res.message || '提交解析任务失败');
+      return;
+    }
+
+    const jobId = res.data.jobId;
+    let completed = false;
+
+    // 轮询查询结果（最多 120 秒）
+    for (let i = 0; i < 60; i++) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const statusRes = await getParseResumeStatus(jobId);
+      if (!statusRes.success || !statusRes.data) continue;
+
+      const { state, result, failedReason } = statusRes.data;
+      if (state === 'completed') {
+        parsedData.value = {
+          ...result,
+          resumeUrl: resumeUrl.value,
+        } as ResumeParseResult;
+        completed = true;
+        break;
+      }
+      if (state === 'failed') {
+        ElMessage.error(failedReason || '简历解析失败');
+        break;
+      }
+    }
+
+    if (!completed && !parsedData.value) {
+      ElMessage.error('简历解析超时，请稍后重试');
     }
   } catch (error: any) {
     ElMessage.error(error.message || '简历解析失败');

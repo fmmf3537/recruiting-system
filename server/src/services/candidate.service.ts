@@ -1,5 +1,7 @@
-import type { Candidate, Prisma, WorkHistory } from '@prisma/client';
+import type { Candidate, WorkHistory } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
+import { clearStatsCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 
 // 阶段顺序定义
@@ -243,6 +245,8 @@ export class CandidateService {
       }
     }
 
+    await clearStatsCache();
+
     // 如果有重复，返回警告
     if (duplicates.length > 0) {
       return {
@@ -318,6 +322,48 @@ export class CandidateService {
       where.id = { in: candidateIdsByJob };
     }
 
+    // 阶段/状态筛选（基于最新阶段记录，下推到数据库）
+    if (stage || status) {
+      const stageWhere = stage ? Prisma.sql`AND stage = ${stage}` : Prisma.empty;
+      const statusWhere = status ? Prisma.sql`AND status = ${status}` : Prisma.empty;
+
+      const matched = await prisma.$queryRaw<{ candidateId: string }[]>`
+        SELECT "candidateId" FROM (
+          SELECT "candidateId", stage, status,
+                 ROW_NUMBER() OVER (PARTITION BY "candidateId" ORDER BY "enteredAt" DESC) as rn
+          FROM "stage_record"
+        ) t WHERE rn = 1 ${stageWhere} ${statusWhere}
+      `;
+
+      const matchedIds = matched.map((m) => m.candidateId);
+
+      if (matchedIds.length === 0) {
+        return {
+          candidates: [],
+          total: 0,
+          page,
+          pageSize,
+          totalPages: 0,
+        };
+      }
+
+      if (candidateIdsByJob) {
+        const intersection = candidateIdsByJob.filter((id) => matchedIds.includes(id));
+        if (intersection.length === 0) {
+          return {
+            candidates: [],
+            total: 0,
+            page,
+            pageSize,
+            totalPages: 0,
+          };
+        }
+        where.id = { in: intersection };
+      } else {
+        where.id = { in: matchedIds };
+      }
+    }
+
     // 并行查询数据和总数
     const [candidates, total] = await Promise.all([
       prisma.candidate.findMany({
@@ -343,23 +389,8 @@ export class CandidateService {
       prisma.candidate.count({ where }),
     ]);
 
-    // 过滤阶段和状态（需要在内存中过滤，因为涉及关联表）
-    let filteredCandidates = candidates;
-
-    if (stage) {
-      filteredCandidates = filteredCandidates.filter(
-        (c) => c.stageRecords[0]?.stage === stage
-      );
-    }
-
-    if (status) {
-      filteredCandidates = filteredCandidates.filter(
-        (c) => c.stageRecords[0]?.status === status
-      );
-    }
-
     // 格式化返回数据
-    const formattedCandidates = filteredCandidates.map((candidate) => ({
+    const formattedCandidates = candidates.map((candidate) => ({
       ...candidate,
       currentStage: candidate.stageRecords[0]?.stage || '入库',
       stageStatus: candidate.stageRecords[0]?.status || 'in_progress',
@@ -718,6 +749,8 @@ export class CandidateService {
         });
       }
     }
+
+    await clearStatsCache();
   }
 
   /**
@@ -754,6 +787,8 @@ export class CandidateService {
         createdById,
       },
     });
+
+    await clearStatsCache();
   }
 
   /**
@@ -807,6 +842,64 @@ export class CandidateService {
   }
 
   /**
+   * 获取面试列表（直接查询 interview_feedback，支持分页和筛选）
+   */
+  async getInterviewList(query: InterviewListQuery): Promise<InterviewListResult> {
+    const { page = 1, pageSize = 10, keyword, round, conclusion, startDate, endDate } = query;
+    const skip = (page - 1) * pageSize;
+
+    const keywordWhere = keyword ? Prisma.sql`AND c.name ILIKE ${`%${keyword}%`}` : Prisma.empty;
+    const roundWhere = round ? Prisma.sql`AND i.round = ${round}` : Prisma.empty;
+    const conclusionWhere = conclusion ? Prisma.sql`AND i.conclusion = ${conclusion}` : Prisma.empty;
+    const dateWhere = (startDate && endDate)
+      ? Prisma.sql`AND i.interview_time >= ${new Date(startDate)} AND i.interview_time <= ${new Date(endDate)}`
+      : Prisma.empty;
+
+    const interviews = await prisma.$queryRaw<InterviewListItem[]>`
+      SELECT
+        i.id,
+        i.round,
+        i.interviewer_name as "interviewerName",
+        i.interview_time as "interviewTime",
+        i.conclusion,
+        i.feedback_content as "feedbackContent",
+        i.reject_reason as "rejectReason",
+        i.created_by_id as "createdById",
+        u.name as "createdByName",
+        i.created_at as "createdAt",
+        c.id as "candidateId",
+        c.name as "candidateName",
+        COALESCE(
+          (SELECT j.title FROM "candidate_job" cj JOIN "job" j ON cj."jobId" = j.id WHERE cj."candidateId" = c.id LIMIT 1),
+          '未知职位'
+        ) as "jobTitle"
+      FROM "interview_feedback" i
+      JOIN "candidate" c ON i."candidateId" = c.id
+      LEFT JOIN "user" u ON i."createdById" = u.id
+      WHERE 1=1 ${keywordWhere} ${roundWhere} ${conclusionWhere} ${dateWhere}
+      ORDER BY i.interview_time DESC
+      LIMIT ${pageSize} OFFSET ${skip}
+    `;
+
+    const countResult = await prisma.$queryRaw<{ count: number }[]>`
+      SELECT COUNT(*)::int as count
+      FROM "interview_feedback" i
+      JOIN "candidate" c ON i."candidateId" = c.id
+      WHERE 1=1 ${keywordWhere} ${roundWhere} ${conclusionWhere} ${dateWhere}
+    `;
+
+    const total = countResult[0]?.count || 0;
+
+    return {
+      interviews,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  /**
    * 删除候选人（只能删除自己创建的）
    */
   async deleteCandidate(id: string, userId: string, isAdmin: boolean): Promise<void> {
@@ -828,6 +921,8 @@ export class CandidateService {
     await prisma.candidate.delete({
       where: { id },
     });
+
+    await clearStatsCache();
   }
 
   /**
@@ -959,6 +1054,43 @@ export class CandidateService {
 
 // 导出单例实例
 export const candidateService = new CandidateService();
+
+// 面试列表查询参数
+export interface InterviewListQuery {
+  page?: number;
+  pageSize?: number;
+  keyword?: string;
+  round?: string;
+  conclusion?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+// 面试列表项
+export interface InterviewListItem {
+  id: string;
+  round: string;
+  interviewerName: string;
+  interviewTime: Date;
+  conclusion: string | null;
+  feedbackContent: string | null;
+  rejectReason: string | null;
+  createdById: string;
+  createdByName: string | null;
+  createdAt: Date;
+  candidateName: string;
+  candidateId: string;
+  jobTitle: string;
+}
+
+// 面试列表返回类型
+export interface InterviewListResult {
+  interviews: InterviewListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
 
 // WorkHistory 相关类型
 export interface CreateWorkHistoryInput {

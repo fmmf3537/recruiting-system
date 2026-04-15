@@ -1,6 +1,14 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { ElMessage } from 'element-plus';
+import {
+  Odometer,
+  Briefcase,
+  UserFilled,
+  DocumentChecked,
+  TrendCharts,
+  User,
+} from '@element-plus/icons-vue';
 
 // 路由配置
 const routes: RouteRecordRaw[] = [
@@ -25,7 +33,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/dashboard/index.vue'),
         meta: {
           title: '仪表盘',
-          icon: 'Dashboard',
+          icon: Odometer,
         },
       },
       {
@@ -34,7 +42,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/jobs/index.vue'),
         meta: {
           title: '职位管理',
-          icon: 'Briefcase',
+          icon: Briefcase,
         },
       },
       {
@@ -73,7 +81,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/candidates/index.vue'),
         meta: {
           title: '候选人管理',
-          icon: 'UserFilled',
+          icon: UserFilled,
         },
       },
       {
@@ -112,7 +120,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/offers/index.vue'),
         meta: {
           title: 'Offer管理',
-          icon: 'DocumentChecked',
+          icon: DocumentChecked,
         },
       },
       {
@@ -141,7 +149,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/stats/index.vue'),
         meta: {
           title: '数据统计',
-          icon: 'TrendCharts',
+          icon: TrendCharts,
         },
       },
       {
@@ -150,7 +158,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/users/index.vue'),
         meta: {
           title: '成员管理',
-          icon: 'User',
+          icon: User,
           requireAdmin: true,
         },
       },

@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'path';
+import rateLimit from 'express-rate-limit';
 import routes from './routes';
 import { env } from './lib/env';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
@@ -33,6 +34,19 @@ app.use(express.json({ limit: '10mb' }));
 
 // 解析 URL 编码请求体
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 全局限流：15 分钟内最多 1000 次请求
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: '请求过于频繁，请稍后再试',
+  },
+});
+app.use(limiter);
 
 // 静态文件服务（上传的文件）
 app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_DIR)));

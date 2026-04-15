@@ -82,6 +82,17 @@ const interviewFeedbackSchema = z.object({
   rejectReason: z.string().optional(),
 });
 
+// 面试列表查询验证 Schema
+const listInterviewsQuerySchema = z.object({
+  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  pageSize: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 10)),
+  keyword: z.string().optional(),
+  round: z.string().optional(),
+  conclusion: z.string().optional(),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+});
+
 /**
  * GET /api/candidates
  * 候选人列表（支持分页和多条件筛选）
@@ -169,8 +180,20 @@ router.get(
 );
 
 /**
+ * GET /api/candidates/interviews
+ * 获取面试列表（支持分页和筛选）
+ * 权限：登录用户
+ */
+router.get(
+  '/interviews',
+  authenticate,
+  validate(listInterviewsQuerySchema, 'query'),
+  candidateController.getInterviewList
+);
+
+/**
  * POST /api/candidates/parse-resume
- * 解析简历
+ * 提交简历解析任务（异步）
  * 权限：登录用户
  */
 router.post(
@@ -178,6 +201,18 @@ router.post(
   authenticate,
   upload.single('file'),
   candidateController.parseResume
+);
+
+/**
+ * GET /api/candidates/parse-resume/:jobId
+ * 查询简历解析任务状态
+ * 权限：登录用户
+ */
+router.get(
+  '/parse-resume/:jobId',
+  authenticate,
+  validate(z.object({ jobId: z.string() }), 'params'),
+  candidateController.getParseResumeStatus
 );
 
 /**
