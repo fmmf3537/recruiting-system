@@ -2,6 +2,7 @@ import express, { type Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import compression from 'compression';
 import path from 'path';
 import rateLimit from 'express-rate-limit';
 import routes from './routes';
@@ -34,6 +35,9 @@ app.use(express.json({ limit: '10mb' }));
 
 // 解析 URL 编码请求体
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// 响应压缩
+app.use(compression());
 
 // 全局限流：15 分钟内最多 1000 次请求
 const limiter = rateLimit({
