@@ -117,6 +117,17 @@ router.post(
 );
 
 /**
+ * GET /api/candidates/activities
+ * 获取近期候选人动态
+ * 权限：登录用户
+ */
+router.get(
+  '/activities',
+  authenticate,
+  candidateController.getRecentActivities
+);
+
+/**
  * GET /api/candidates/:id
  * 候选人详情（含流程记录、面试反馈、Offer 信息）
  * 权限：登录用户
@@ -213,17 +224,6 @@ router.get(
   authenticate,
   validate(z.object({ jobId: z.string() }), 'params'),
   candidateController.getParseResumeStatus
-);
-
-/**
- * GET /api/candidates/activities
- * 获取近期候选人动态
- * 权限：登录用户
- */
-router.get(
-  '/activities',
-  authenticate,
-  candidateController.getRecentActivities
 );
 
 /**

@@ -227,11 +227,12 @@ async function fetchRecentActivities() {
   activityLoading.value = true;
   try {
     const res = await getRecentActivities(20);
+    console.log('[Dashboard] 近期动态 API 返回:', res.data?.length, res.data);
     if (res.success) {
       recentActivities.value = res.data;
     }
-  } catch (error) {
-    console.error('获取近期动态失败:', error);
+  } catch (error: any) {
+    console.error('[Dashboard] 近期动态 API 错误:', error?.response?.data || error);
   } finally {
     activityLoading.value = false;
   }

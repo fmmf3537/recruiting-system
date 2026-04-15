@@ -1103,55 +1103,64 @@ export class CandidateService {
       time: string;
     }>
   > {
-    // 1. 最近新增的候选人（简历入库）
-    const candidates = await prisma.candidate.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      select: { id: true, name: true, createdAt: true },
-    });
+    let stageRecords: Array<{
+      id: string;
+      stage: string;
+      status: string;
+      updatedAt: Date;
+      candidate: { name: string } | null;
+    }> = [];
+    let offers: Array<{
+      id: string;
+      result: string;
+      joined: boolean;
+      updatedAt: Date;
+      candidate: { name: string } | null;
+    }> = [];
 
-    // 2. 最近的阶段流转记录（排除入库，因为已由候选人创建覆盖）
-    const stageRecords = await prisma.stageRecord.findMany({
-      where: { stage: { not: '入库' } },
-      orderBy: { updatedAt: 'desc' },
-      take: limit,
-      select: {
-        id: true,
-        stage: true,
-        status: true,
-        updatedAt: true,
-        candidate: { select: { name: true } },
-      },
-    });
+    // 1. 查询阶段记录（包含入库，覆盖候选人创建和阶段推进）
+    try {
+      stageRecords = await prisma.stageRecord.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          stage: true,
+          status: true,
+          updatedAt: true,
+          candidate: { select: { name: true } },
+        },
+      });
+      console.log('[getRecentActivities] stageRecords count:', stageRecords.length);
+    } catch (err) {
+      console.error('[getRecentActivities] stageRecords query failed:', err);
+    }
 
-    // 3. 最近的 Offer 状态变化（接受或入职）
-    const offers = await prisma.offer.findMany({
-      where: {
-        OR: [{ result: 'accepted' }, { joined: true }],
-      },
-      orderBy: { updatedAt: 'desc' },
-      take: limit,
-      select: {
-        id: true,
-        result: true,
-        joined: true,
-        updatedAt: true,
-        candidate: { select: { name: true } },
-      },
-    });
+    // 2. 查询 Offer 作为补充（直接接受或入职）
+    try {
+      offers = await prisma.offer.findMany({
+        where: {
+          OR: [{ result: 'accepted' }, { joined: true }],
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: limit,
+        select: {
+          id: true,
+          result: true,
+          joined: true,
+          updatedAt: true,
+          candidate: { select: { name: true } },
+        },
+      });
+      console.log('[getRecentActivities] offers count:', offers.length);
+    } catch (err) {
+      console.error('[getRecentActivities] offers query failed:', err);
+    }
 
     // 映射为统一的活动格式
-    const candidateActivities = candidates.map((c) => ({
-      id: `c-${c.id}`,
-      candidateName: c.name,
-      action: '简历入库',
-      stage: 'screening',
-      stageText: '初筛',
-      time: c.createdAt.toISOString(),
-    }));
-
     const stageActivities = stageRecords.map((s) => {
       const stageMap: Record<string, { action: string; stageKey: string }> = {
+        入库: { action: '简历入库', stageKey: 'screening' },
         初筛: { action: s.status === 'passed' ? '初筛通过' : s.status === 'rejected' ? '初筛未通过' : '进入初筛阶段', stageKey: 'screening' },
         复试: { action: s.status === 'passed' ? '复试通过' : s.status === 'rejected' ? '复试未通过' : '进入复试阶段', stageKey: 'interview' },
         终面: { action: s.status === 'passed' ? '终面通过' : s.status === 'rejected' ? '终面未通过' : '进入终面阶段', stageKey: 'interview' },
@@ -1162,7 +1171,7 @@ export class CandidateService {
       const mapped = stageMap[s.stage] || { action: `${s.stage}更新`, stageKey: 'screening' };
       return {
         id: `s-${s.id}`,
-        candidateName: s.candidate.name,
+        candidateName: s.candidate?.name ?? '未知候选人',
         action: mapped.action,
         stage: mapped.stageKey,
         stageText: s.stage,
@@ -1172,7 +1181,7 @@ export class CandidateService {
 
     const offerActivities = offers.map((o) => ({
       id: `o-${o.id}`,
-      candidateName: o.candidate.name,
+      candidateName: o.candidate?.name ?? '未知候选人',
       action: o.joined ? '已入职' : '接受 Offer',
       stage: o.joined ? 'hired' : 'offer',
       stageText: o.joined ? '入职' : 'Offer',
@@ -1180,8 +1189,9 @@ export class CandidateService {
     }));
 
     // 合并并按时间倒序排列，取前 limit 条
-    const allActivities = [...candidateActivities, ...stageActivities, ...offerActivities];
+    const allActivities = [...stageActivities, ...offerActivities];
     allActivities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    console.log('[getRecentActivities] total returned:', allActivities.slice(0, limit).length);
     return allActivities.slice(0, limit);
   }
 }
