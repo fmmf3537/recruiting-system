@@ -1,5 +1,6 @@
 import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig } from 'axios';
 import { showToast } from 'vant';
+import router from '@/router';
 
 // 创建 axios 实例
 const request: AxiosInstance = axios.create({
@@ -27,9 +28,35 @@ request.interceptors.response.use(
     return response.data;
   },
   (error: AxiosError) => {
-    const data = error.response?.data as { message?: string } | undefined;
-    const message = data?.message || error.message || '请求失败';
-    showToast(message);
+    const { response } = error;
+
+    if (response) {
+      const { status, data } = response;
+      const errorData = data as { success?: boolean; error?: string; message?: string } | undefined;
+      const message = errorData?.error || errorData?.message || `请求失败 (${status})`;
+
+      switch (status) {
+        case 401:
+          showToast('登录已过期，请重新登录');
+          localStorage.removeItem('ats_token');
+          router.push('/login');
+          break;
+        case 403:
+          showToast('没有权限执行此操作');
+          break;
+        case 404:
+          showToast(errorData?.error || '请求的资源不存在');
+          break;
+        case 500:
+          showToast('服务器内部错误，请稍后重试');
+          break;
+        default:
+          showToast(message);
+      }
+    } else {
+      showToast('网络错误，请检查网络连接');
+    }
+
     return Promise.reject(error);
   }
 );
