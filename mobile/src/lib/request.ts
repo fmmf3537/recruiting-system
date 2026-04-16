@@ -36,11 +36,17 @@ request.interceptors.response.use(
       const message = errorData?.error || errorData?.message || `请求失败 (${status})`;
 
       switch (status) {
-        case 401:
-          showToast('登录已过期，请重新登录');
-          localStorage.removeItem('ats_token');
-          router.push('/login');
+        case 401: {
+          const msg = errorData?.error || errorData?.message || '登录已过期，请重新登录';
+          showToast(msg);
+          // 登录接口的 401 只提示错误，不跳转；其他接口的 401 才清除 token 并强制跳转
+          const isLoginApi = error.config?.url?.includes('/auth/login');
+          if (!isLoginApi) {
+            localStorage.removeItem('ats_token');
+            router.push('/login');
+          }
           break;
+        }
         case 403:
           showToast('没有权限执行此操作');
           break;
