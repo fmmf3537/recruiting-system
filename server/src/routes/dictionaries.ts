@@ -15,7 +15,7 @@ const listQuerySchema = z.object({
 // 创建字典项验证
 const createSchema = z.object({
   category: z.string().min(1, '分类不能为空'),
-  code: z.string().min(1, '编码不能为空'),
+  code: z.string().min(1, '编码不能为空').optional(),
   name: z.string().min(1, '名称不能为空'),
   sortOrder: z.number().int().optional(),
   enabled: z.boolean().optional(),

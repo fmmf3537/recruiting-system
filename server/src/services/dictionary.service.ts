@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+import { pinyin } from 'pinyin-pro';
 
 // 默认字典数据：按 category 分组
 const DEFAULT_DICTIONARIES: Record<string, Array<{ code: string; name: string; sortOrder: number }>> = {
@@ -45,7 +46,7 @@ export interface DictionaryItem {
 
 export interface CreateDictionaryInput {
   category: string;
-  code: string;
+  code?: string;
   name: string;
   sortOrder?: number;
   enabled?: boolean;
@@ -110,14 +111,48 @@ export class DictionaryService {
   }
 
   /**
+   * 根据名称自动生成拼音编码
+   */
+  private async generateUniqueCode(category: string, name: string): Promise<string> {
+    const rawPinyin = pinyin(name, { toneType: 'none', type: 'string', separator: '' });
+    let baseCode = rawPinyin
+      .replace(/[^a-zA-Z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .toLowerCase();
+
+    if (!baseCode) {
+      baseCode = 'code';
+    }
+
+    let code = baseCode;
+    let suffix = 2;
+
+    while (
+      await prisma.dictionary.findFirst({
+        where: { category, code },
+      })
+    ) {
+      code = `${baseCode}-${suffix}`;
+      suffix++;
+    }
+
+    return code;
+  }
+
+  /**
    * 创建字典项
    */
   async createDictionary(data: CreateDictionaryInput): Promise<DictionaryItem> {
+    const code =
+      data.code && data.code.trim()
+        ? data.code.trim()
+        : await this.generateUniqueCode(data.category, data.name);
+
     // 校验同一分类下 code 不能重复
     const existing = await prisma.dictionary.findFirst({
       where: {
         category: data.category,
-        code: data.code,
+        code,
       },
     });
 
@@ -128,7 +163,7 @@ export class DictionaryService {
     return prisma.dictionary.create({
       data: {
         category: data.category,
-        code: data.code,
+        code,
         name: data.name,
         sortOrder: data.sortOrder ?? 0,
         enabled: data.enabled ?? true,

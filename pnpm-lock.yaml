@@ -147,6 +147,9 @@ importers:
       pdf-parse:
         specifier: 1.1.4
         version: 1.1.4
+      pinyin-pro:
+        specifier: ^3.28.1
+        version: 3.28.1
       uuid:
         specifier: ^9.0.1
         version: 9.0.1
@@ -2781,6 +2784,9 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  pinyin-pro@3.28.1:
+    resolution: {integrity: sha512-oqz8ulwRgtUXRi0vbqEfGNly19zpyCxYrjhkk5TibGcgSW6eNwS5woajCXRwqURi8Ehc2yOFTiB4uNoZ+NJOnA==}
 
   pkg-types@1.3.1:
     resolution: {integrity: sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==}
@@ -6233,6 +6239,8 @@ snapshots:
       typescript: 5.9.3
     transitivePeerDependencies:
       - '@vue/composition-api'
+
+  pinyin-pro@3.28.1: {}
 
   pkg-types@1.3.1:
     dependencies:

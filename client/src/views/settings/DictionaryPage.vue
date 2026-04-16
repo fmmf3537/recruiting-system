@@ -54,8 +54,8 @@
         <el-form-item label="分类">
           <el-input :model-value="categoryText" disabled />
         </el-form-item>
-        <el-form-item label="编码" prop="code">
-          <el-input v-model="formData.code" placeholder="请输入编码，如 tech" />
+        <el-form-item v-if="isEdit" label="编码" prop="code">
+          <el-input v-model="formData.code" disabled />
         </el-form-item>
         <el-form-item label="名称" prop="name">
           <el-input v-model="formData.name" placeholder="请输入显示名称" />
@@ -133,7 +133,6 @@ const formData = reactive({
 });
 
 const formRules: FormRules = {
-  code: [{ required: true, message: '请输入编码', trigger: 'blur' }],
   name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
 };
 
@@ -187,7 +186,6 @@ async function handleSubmit() {
     } else {
       const res = await createDictionary({
         category: formData.category,
-        code: formData.code,
         name: formData.name,
         sortOrder: formData.sortOrder,
         enabled: formData.enabled,
