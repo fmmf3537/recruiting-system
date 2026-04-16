@@ -90,14 +90,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { addInterviewFeedback, type InterviewRound, type InterviewConclusion } from '@/api/candidates';
 
 const route = useRoute();
 const router = useRouter();
-const candidateId = route.params.id as string || (route.query.candidateId as string);
+const rawId = route.params.id as string || (route.query.candidateId as string);
+const candidateId = rawId && rawId !== 'undefined' && rawId !== 'null' ? rawId : '';
 const defaultRound = (route.query.round as InterviewRound) || '';
 
 const submitting = ref(false);
@@ -142,9 +143,16 @@ function onConclusionConfirm({ selectedOptions }: { selectedOptions: { text: str
   showConclusionPicker.value = false;
 }
 
+onMounted(() => {
+  if (!candidateId) {
+    showToast('缺少或无效的候选人ID');
+    router.back();
+  }
+});
+
 async function onSubmit() {
   if (!candidateId) {
-    showToast('缺少候选人ID');
+    showToast('缺少或无效的候选人ID');
     return;
   }
   submitting.value = true;

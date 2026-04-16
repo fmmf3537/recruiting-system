@@ -23,12 +23,6 @@ const router = createRouter({
       meta: { showTabBar: false },
     },
     {
-      path: '/candidates/:id',
-      name: 'CandidateDetail',
-      component: () => import('@/views/candidates/CandidateDetail.vue'),
-      meta: { showTabBar: false },
-    },
-    {
       path: '/candidates/:id/feedback',
       name: 'InterviewForm',
       component: () => import('@/views/interviews/InterviewForm.vue'),
@@ -38,6 +32,12 @@ const router = createRouter({
       path: '/candidates/:id/resume',
       name: 'ResumeUpload',
       component: () => import('@/views/candidates/ResumeUpload.vue'),
+      meta: { showTabBar: false },
+    },
+    {
+      path: '/candidates/:id',
+      name: 'CandidateDetail',
+      component: () => import('@/views/candidates/CandidateDetail.vue'),
       meta: { showTabBar: false },
     },
     {

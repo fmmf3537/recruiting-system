@@ -83,18 +83,18 @@
         <van-cell title="入职状态" :value="candidate.offer.joined ? '已入职' : '未入职'" />
       </van-cell-group>
       <van-empty v-else description="暂无 Offer" />
-    </div>
 
-    <!-- 底部操作栏 -->
-    <div class="bottom-actions">
-      <van-action-bar-icon icon="edit" text="编辑" @click="goEdit" />
-      <van-action-bar-icon icon="records-o" text="反馈" @click="goFeedback" />
-      <van-action-bar-icon icon="upgrade" text="推进" @click="showStage = true" />
-      <van-action-bar-icon icon="description" text="简历" @click="goResume" />
-      <van-action-bar-button type="danger" text="创建 Offer" @click="goOffer" />
-    </div>
+      <!-- 底部操作栏 -->
+      <div class="bottom-actions">
+        <van-action-bar-icon icon="edit" text="编辑" @click="goEdit" />
+        <van-action-bar-icon icon="records-o" text="反馈" @click="goFeedback" />
+        <van-action-bar-icon icon="upgrade" text="推进" @click="showStage = true" />
+        <van-action-bar-icon icon="description" text="简历" @click="goResume" />
+        <van-action-bar-button type="danger" text="创建 Offer" @click="goOffer" />
+      </div>
 
-    <StageActionSheet v-model:show="showStage" :candidate-id="candidateId" @success="reload" />
+      <StageActionSheet v-model:show="showStage" :candidate-id="candidateId" @success="reload" />
+    </div>
   </div>
 </template>
 

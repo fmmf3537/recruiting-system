@@ -56,14 +56,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { createOffer } from '@/api/offers';
 
 const route = useRoute();
 const router = useRouter();
-const candidateId = route.query.candidateId as string;
+const rawId = route.query.candidateId as string;
+const candidateId = rawId && rawId !== 'undefined' && rawId !== 'null' ? rawId : '';
 
 const submitting = ref(false);
 const showDatePicker = ref(false);
@@ -86,9 +87,16 @@ function onJoinDateConfirm({ selectedValues }: { selectedValues: string[] }) {
   showJoinDatePicker.value = false;
 }
 
+onMounted(() => {
+  if (!candidateId) {
+    showToast('缺少或无效的候选人ID');
+    router.back();
+  }
+});
+
 async function onSubmit() {
   if (!candidateId) {
-    showToast('缺少候选人ID');
+    showToast('缺少或无效的候选人ID');
     return;
   }
   submitting.value = true;

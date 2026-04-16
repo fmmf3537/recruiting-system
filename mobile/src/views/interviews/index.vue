@@ -27,6 +27,7 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
+import { showToast } from 'vant';
 import ListPage from '@/components/ListPage.vue';
 import { getInterviewList, type InterviewListItem } from '@/api/interviews';
 import type { InterviewConclusion } from '@/api/candidates';
@@ -38,6 +39,10 @@ function fetchApi(params: { page: number; pageSize: number }) {
 }
 
 function goDetail(item: InterviewListItem) {
+  if (!item.candidateId || item.candidateId === 'undefined') {
+    showToast('该记录缺少候选人ID');
+    return;
+  }
   router.push(`/interviews/form?candidateId=${item.candidateId}&round=${item.round}`);
 }
 
