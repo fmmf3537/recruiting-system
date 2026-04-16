@@ -8,9 +8,9 @@
     <!-- 快捷入口 -->
     <van-grid :column-num="4" class="quick-grid">
       <van-grid-item icon="friends-o" text="候选人" to="/candidates" />
-      <van-grid-item icon="notes-o" text="面试" to="/messages" />
-      <van-grid-item icon="gold-coin-o" text="Offer" to="/messages" />
-      <van-grid-item icon="bag-o" text="职位" to="/messages" />
+      <van-grid-item icon="notes-o" text="面试" to="/interviews" />
+      <van-grid-item icon="gold-coin-o" text="Offer" to="/offers" />
+      <van-grid-item icon="bag-o" text="职位" to="/jobs" />
     </van-grid>
 
     <!-- 今日待办 -->
