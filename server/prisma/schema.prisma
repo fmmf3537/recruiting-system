@@ -262,3 +262,21 @@ model OperationLog {
   @@index([createdAt])
   @@map("operation_log")
 }
+
+// ==================== 字典表（系统配置） ====================
+model Dictionary {
+  id          String   @id @default(cuid())
+  category    String   // 字典分类：department, location 等
+  code        String   // 内部编码
+  name        String   // 显示名称
+  sortOrder   Int      @default(0) // 排序权重
+  enabled     Boolean  @default(true)
+  description String?  // 备注说明
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([category, enabled])
+  @@index([category, sortOrder])
+  @@map("dictionary")
+}

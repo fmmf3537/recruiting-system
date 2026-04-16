@@ -66,12 +66,12 @@
             style="width: 140px"
             @change="handleSearch"
           >
-            <el-option label="北京" value="北京" />
-            <el-option label="上海" value="上海" />
-            <el-option label="深圳" value="深圳" />
-            <el-option label="杭州" value="杭州" />
-            <el-option label="广州" value="广州" />
-            <el-option label="其他" value="其他" />
+            <el-option
+              v-for="item in dictionaryStore.locationOptions"
+              :key="item.code"
+              :label="item.name"
+              :value="item.name"
+            />
           </el-select>
         </el-form-item>
 
@@ -227,6 +227,7 @@ import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Search } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
+import { useDictionaryStore } from '@/stores/dictionary';
 import {
   getJobList,
   closeJob,
@@ -240,6 +241,7 @@ import {
 
 const router = useRouter();
 const authStore = useAuthStore();
+const dictionaryStore = useDictionaryStore();
 
 // ============ 表格数据 ============
 const loading = ref(false);
@@ -467,9 +469,11 @@ async function handleDelete(row: JobItem & { deleteLoading?: boolean }) {
 
 // 初始化
 onMounted(() => {
+  dictionaryStore.fetchDictionaries('location');
   fetchJobList();
 });
 onActivated(() => {
+  dictionaryStore.fetchDictionaries('location');
   fetchJobList();
 });
 </script>

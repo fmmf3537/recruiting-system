@@ -8,6 +8,7 @@ import {
   DocumentChecked,
   TrendCharts,
   User,
+  Setting,
 } from '@element-plus/icons-vue';
 
 // 路由配置
@@ -160,6 +161,17 @@ const routes: RouteRecordRaw[] = [
           title: '成员管理',
           icon: User,
           requireAdmin: true,
+        },
+      },
+      {
+        path: '/settings/dictionary',
+        name: 'Dictionary',
+        component: () => import('@/views/settings/DictionaryPage.vue'),
+        meta: {
+          title: '字典管理',
+          icon: Setting,
+          requireAdmin: true,
+          hidden: true,
         },
       },
       {

@@ -90,6 +90,7 @@ import {
   DocumentChecked,
   TrendCharts,
   User,
+  Setting,
   Fold,
   Expand,
   ArrowDown,
@@ -118,9 +119,10 @@ const menuItems = computed(() => {
     { path: '/stats', title: '数据统计', icon: TrendCharts },
   ];
   
-  // 仅管理员可见成员管理
+  // 仅管理员可见成员管理和字典管理
   if (authStore.isAdmin) {
     items.push({ path: '/users', title: '成员管理', icon: User });
+    items.push({ path: '/settings/dictionary', title: '字典管理', icon: Setting });
   }
   
   return items;

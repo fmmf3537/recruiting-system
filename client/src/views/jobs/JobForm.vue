@@ -46,18 +46,12 @@
                       placeholder="请选择所属部门"
                       style="width: 100%"
                     >
-                      <el-option label="技术部" value="技术部" />
-                      <el-option label="产品部" value="产品部" />
-                      <el-option label="设计部" value="设计部" />
-                      <el-option label="运营部" value="运营部" />
-                      <el-option label="市场部" value="市场部" />
-                      <el-option label="销售部" value="销售部" />
-                      <el-option label="人力资源部" value="人力资源部" />
-                      <el-option label="财务部" value="财务部" />
-                      <el-option label="新航卓越" value="新航卓越" />
-                      <el-option label="新航-生产部" value="新航-生产部" />
-                      <el-option label="新航-采购部" value="新航-采购部" />
-                      <el-option label="新航-技术研发中心" value="新航-技术研发中心" />
+                      <el-option
+                        v-for="item in dictionaryStore.departmentOptions"
+                        :key="item.code"
+                        :label="item.name"
+                        :value="item.name"
+                      />
                     </el-select>
                   </el-form-item>
                 </el-col>
@@ -79,16 +73,12 @@
                       placeholder="请选择工作城市"
                       style="width: 100%"
                     >
-                      <el-option label="北京" value="北京" />
-                      <el-option label="上海" value="上海" />
-                      <el-option label="深圳" value="深圳" />
-                      <el-option label="杭州" value="杭州" />
-                      <el-option label="广州" value="广州" />
-                      <el-option label="成都" value="成都" />
-                      <el-option label="眉山" value="眉山" />
-                      <el-option label="武汉" value="武汉" />
-                      <el-option label="西安" value="西安" />
-                      <el-option label="其他" value="其他" />
+                      <el-option
+                        v-for="item in dictionaryStore.locationOptions"
+                        :key="item.code"
+                        :label="item.name"
+                        :value="item.name"
+                      />
                     </el-select>
                   </el-form-item>
                 </el-col>
@@ -238,9 +228,11 @@ import {
   type JobStatus,
   type JobType,
 } from '@/api/job';
+import { useDictionaryStore } from '@/stores/dictionary';
 
 const route = useRoute();
 const router = useRouter();
+const dictionaryStore = useDictionaryStore();
 
 // 判断是否为编辑模式
 const isEdit = computed(() => !!route.params.id && route.path.includes('/edit'));
@@ -356,6 +348,8 @@ async function fetchJobDetail() {
 }
 
 function init() {
+  dictionaryStore.fetchDictionaries('department');
+  dictionaryStore.fetchDictionaries('location');
   if (isEdit.value) {
     fetchJobDetail();
   } else {

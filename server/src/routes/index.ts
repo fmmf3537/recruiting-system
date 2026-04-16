@@ -6,6 +6,7 @@ import candidateRoutes from './candidates';
 import offerRoutes from './offers';
 import statsRoutes from './stats';
 import uploadRoutes from './upload';
+import dictionaryRoutes from './dictionaries';
 
 const router: RouterType = Router();
 
@@ -29,5 +30,6 @@ router.use('/candidates', candidateRoutes);
 router.use('/offers', offerRoutes);
 router.use('/stats', statsRoutes);
 router.use('/upload', uploadRoutes);
+router.use('/dictionaries', dictionaryRoutes);
 
 export default router;
