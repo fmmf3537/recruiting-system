@@ -1,6 +1,7 @@
 packages:
   - 'client'
   - 'server'
+  - 'mobile'
 allowBuilds:
   '@parcel/watcher': true
   '@prisma/client': true
