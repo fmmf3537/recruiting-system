@@ -1,21 +1,119 @@
 <template>
   <div class="candidates-page">
     <van-nav-bar title="候选人" fixed placeholder />
-    <div class="page-content">
-      <van-empty description="候选人列表将在 Phase 2 中实现" />
+    <van-search v-model="keyword" placeholder="搜索姓名/邮箱" @search="onSearch" />
+
+    <div class="filter-bar">
+      <van-dropdown-menu>
+        <van-dropdown-item v-model="stage" :options="stageOptions" @change="onFilterChange" />
+      </van-dropdown-menu>
     </div>
+
+    <ListPage ref="listRef" :fetch-api="fetchApi" :page-size="10" empty-text="暂无候选人">
+      <template #default="{ data }">
+        <van-cell
+          v-for="item in data as CandidateItem[]"
+          :key="item.id"
+          :title="item.name"
+          is-link
+          @click="goDetail(item.id)"
+        >
+          <template #label>
+            <div class="candidate-label">
+              <p>{{ item.email }} | {{ item.phone }}</p>
+              <p>
+                <van-tag :type="getStageType(item.stageStatus)">{{ item.currentStage }}</van-tag>
+                <span v-if="item.candidateJobs.length" class="job-text">
+                  {{ item.candidateJobs.map((j) => j.job.title).join(', ') }}
+                </span>
+              </p>
+            </div>
+          </template>
+        </van-cell>
+      </template>
+    </ListPage>
+
+    <van-floating-bubble
+      axis="xy"
+      icon="plus"
+      magnetic="x"
+      @click="goCreate"
+    />
   </div>
 </template>
 
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import ListPage from '@/components/ListPage.vue';
+import { getCandidateList, type CandidateItem } from '@/api/candidates';
+
+const router = useRouter();
+const listRef = ref<InstanceType<typeof ListPage> | null>(null);
+const keyword = ref('');
+const stage = ref('');
+
+const stageOptions = [
+  { text: '全部阶段', value: '' },
+  { text: '入库', value: '入库' },
+  { text: '初筛', value: '初筛' },
+  { text: '复试', value: '复试' },
+  { text: '终面', value: '终面' },
+  { text: '拟录用', value: '拟录用' },
+  { text: 'Offer', value: 'Offer' },
+  { text: '入职', value: '入职' },
+];
+
+function fetchApi(params: { page: number; pageSize: number }) {
+  return getCandidateList({
+    ...params,
+    keyword: keyword.value || undefined,
+    stage: stage.value || undefined,
+  });
+}
+
+function onSearch() {
+  listRef.value?.reload();
+}
+
+function onFilterChange() {
+  listRef.value?.reload();
+}
+
+function goDetail(id: string) {
+  router.push(`/candidates/${id}`);
+}
+
+function goCreate() {
+  router.push('/candidates/form');
+}
+
+function getStageType(status: string) {
+  if (status === 'rejected') return 'danger';
+  if (status === 'passed') return 'success';
+  return 'primary';
+}
+</script>
 
 <style scoped>
 .candidates-page {
   min-height: 100%;
   background-color: #f7f8fa;
+  padding-bottom: 80px;
 }
 
-.page-content {
-  padding: 16px;
+.filter-bar {
+  margin-bottom: 8px;
+}
+
+.candidate-label p {
+  margin: 2px 0;
+  font-size: 12px;
+  color: #666;
+}
+
+.job-text {
+  margin-left: 8px;
+  color: #999;
 }
 </style>
