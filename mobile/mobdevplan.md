@@ -788,6 +788,100 @@ recruiting-system/mobile/
 
 ---
 
-*文档版本：v1.0*  
+## 附录 A：未来 App 封装路径（Capacitor）
+
+### A.1 可行性结论
+> **方案 B（Vue 3 + Vant 4 独立 H5）完全可以、且非常适合在未来封装为 iOS / Android App。**
+
+当前 `mobile/` 项目的本质是"优质 H5 应用"。通过 [Capacitor](https://capacitorjs.com/)（Ionic 团队出品），可以**几乎零代码改动**地将这套 H5 代码打包成原生 App 壳（基于 WebView 渲染），同时通过桥接层调用相机、推送、文件系统等原生能力。
+
+### A.2 为什么不推荐现在就用 UniApp 重写？
+
+| 方案 | 对当前 `mobile/` 的影响 | 工作量 |  verdict |
+|------|------------------------|--------|----------|
+| **Capacitor 封装** | **零影响**，H5 代码原样复用 | **3～5 天** | ✅ **首推** |
+| UniApp 重写 | 基本废弃现有 `mobile/` 项目 | **+6～8 周** | ❌ 严重不划算 |
+| Cordova | 零影响，但生态老旧 | **5～7 天** | ⚠️ 不如 Capacitor |
+
+### A.3 Capacitor 集成步骤（H5 稳定后执行）
+
+```bash
+# 1. 进入 mobile/ 目录
+cd recruiting-system/mobile
+
+# 2. 安装 Capacitor 核心与平台包
+pnpm add @capacitor/core @capacitor/cli
+pnpm add -D @capacitor/ios @capacitor/android
+
+# 3. 初始化 Capacitor（指定 webDir 为 dist）
+npx cap init RecruitmentMobile com.yourcompany.recruitment --web-dir dist
+
+# 4. 构建 H5 产物
+pnpm build
+
+# 5. 添加原生平台
+npx cap add ios
+npx cap add android
+
+# 6. 每次 H5 更新后同步到原生项目
+npx cap sync
+
+# 7. 用 Xcode / Android Studio 打开并打包
+npx cap open ios
+npx cap open android
+```
+
+### A.4 可能需要改动的代码清单
+
+| 能力 | 当前 H5 实现 | App 封装时的改动 | 是否必须 |
+|------|-------------|-----------------|---------|
+| **运行环境** | 浏览器 / 飞书 WebView | **无需改动** | 否 |
+| **相机/相册** | `<input type="file" accept="image/*">` | 可升级为 `@capacitor/camera`（体验更好） | 可选 |
+| **本地存储** | `localStorage` | 可继续使用，或升级为 `@capacitor/preferences`（更稳定） | 可选 |
+| **文件预览** | `window.open` / 飞书 `openDocument` | 可替换为 `@capacitor/browser` | 可选 |
+| **推送通知** | 无 | 需集成 `@capacitor/push-notifications` 或极光推送 | 可选 |
+| **返回键控制** | 浏览器默认 / 飞书 JSAPI | 需监听 Capacitor `backButton` 事件，控制页面返回/退出 App | 推荐 |
+| **网络状态** | 无 | 可接入 `@capacitor/network` 做离线提示 | 可选 |
+
+### A.5 对当前 H5 开发的预留建议
+
+虽然 App 封装是未来的事，但在当前写 H5 代码时做少量预留，可以大幅降低未来的迁移成本：
+
+1. **环境判断统一封装**：
+   ```ts
+   // src/lib/env.ts
+   export function isWeb() { return !isApp() && !isFeishu(); }
+   export function isFeishu() { /* ... */ }
+   export function isApp() { return typeof (window as any).Capacitor !== 'undefined'; }
+   ```
+
+2. **文件上传保留抽象层**：
+   继续使用 Vant `Uploader` 组件，但将"真正上传"的逻辑抽离到一个独立函数中，未来替换为 Capacitor Camera 时只需改一处。
+
+3. **路由模式**：
+   Vue Router 的 `createWebHistory` 在 Capacitor App 中支持良好；若未来需要兼容某些文件协议场景，可降级为 `createWebHashHistory`。
+
+4. **避免硬编码 `window` 全局调用**：
+   如需调用 `window.jsapi`（飞书）或 `window.Capacitor`（App），统一通过 `src/lib/` 下的封装文件代理。
+
+### A.6 工作量预估（未来阶段）
+
+| 任务 | 人天 | 说明 |
+|------|------|------|
+| Capacitor 环境配置与初始化 | 0.5 | 安装依赖、生成 ios/android 项目 |
+| 图标/启动图适配 | 1 | 生成各尺寸 App Icon 和 Splash Screen |
+| 返回键与生命周期适配 | 1 | 监听 `backButton`、`pause`、`resume` |
+| 原生能力替换（相机/存储等） | 1～2 | 按需替换为 Capacitor 插件 |
+| 真机测试与签名打包 | 1 | iOS TestFlight / Android APK |
+| **总计** | **约 3～5 天** | 前提是 H5 代码已经稳定 |
+
+### A.7 上架注意点
+- **iOS App Store**：纯 WebView App 需体现足够的原生功能价值（如相机、推送、离线能力），否则可能被拒。
+- **Android 各大应用市场**：审核相对宽松，但需适配不同厂商的权限策略。
+- **企业内部分发**：若仅内部使用，可通过企业签名（iOS）或 APK 直装（Android）绕过商店审核。
+
+---
+
+*文档版本：v1.1*  
 *编制日期：2026-04-16*  
-*状态：待启动*
+*状态：Phase 0 已完成，待 Phase 1 启动*
