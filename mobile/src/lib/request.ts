@@ -1,5 +1,5 @@
 import axios, { AxiosError, type AxiosInstance, type AxiosRequestConfig } from 'axios';
-import { showToast } from 'vant';
+import { showToast, showLoadingToast, closeToast } from 'vant';
 import router from '@/router';
 
 // 创建 axios 实例
@@ -8,9 +8,20 @@ const request: AxiosInstance = axios.create({
   timeout: 30000,
 });
 
+// 不需要全局 loading 的接口白名单
+const silentApiList = ['/auth/login', '/auth/feishu/login'];
+
+function shouldShowLoading(url?: string): boolean {
+  if (!url) return true;
+  return !silentApiList.some((path) => url.includes(path));
+}
+
 // 请求拦截器
 request.interceptors.request.use(
   (config) => {
+    if (shouldShowLoading(config.url)) {
+      showLoadingToast({ message: '加载中...', forbidClick: true });
+    }
     const token = localStorage.getItem('ats_token');
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -18,6 +29,7 @@ request.interceptors.request.use(
     return config;
   },
   (error: AxiosError) => {
+    closeToast();
     return Promise.reject(error);
   }
 );
@@ -25,42 +37,50 @@ request.interceptors.request.use(
 // 响应拦截器
 request.interceptors.response.use(
   (response) => {
+    closeToast();
     return response.data;
   },
   (error: AxiosError) => {
-    const { response } = error;
+    closeToast();
+    const { response, code, message: errMsg } = error;
 
-    if (response) {
-      const { status, data } = response;
-      const errorData = data as { success?: boolean; error?: string; message?: string } | undefined;
-      const message = errorData?.error || errorData?.message || `请求失败 (${status})`;
-
-      switch (status) {
-        case 401: {
-          const msg = errorData?.error || errorData?.message || '登录已过期，请重新登录';
-          showToast(msg);
-          // 登录接口的 401 只提示错误，不跳转；其他接口的 401 才清除 token 并强制跳转
-          const isLoginApi = error.config?.url?.includes('/auth/login');
-          if (!isLoginApi) {
-            localStorage.removeItem('ats_token');
-            router.push('/login');
-          }
-          break;
-        }
-        case 403:
-          showToast('没有权限执行此操作');
-          break;
-        case 404:
-          showToast(errorData?.error || '请求的资源不存在');
-          break;
-        case 500:
-          showToast('服务器内部错误，请稍后重试');
-          break;
-        default:
-          showToast(message);
+    // 网络超时/断网兜底
+    if (!response) {
+      if (code === 'ECONNABORTED' || errMsg?.includes('timeout')) {
+        showToast('请求超时，请稍后重试');
+      } else {
+        showToast('网络错误，请检查网络连接');
       }
-    } else {
-      showToast('网络错误，请检查网络连接');
+      return Promise.reject(error);
+    }
+
+    const { status, data } = response;
+    const errorData = data as { success?: boolean; error?: string; message?: string } | undefined;
+    const message = errorData?.error || errorData?.message || `请求失败 (${status})`;
+
+    switch (status) {
+      case 401: {
+        const msg = errorData?.error || errorData?.message || '登录已过期，请重新登录';
+        showToast(msg);
+        // 登录接口的 401 只提示错误，不跳转；其他接口的 401 才清除 token 并强制跳转
+        const isLoginApi = error.config?.url?.includes('/auth/login');
+        if (!isLoginApi) {
+          localStorage.removeItem('ats_token');
+          router.push('/login');
+        }
+        break;
+      }
+      case 403:
+        showToast('没有权限执行此操作');
+        break;
+      case 404:
+        showToast(errorData?.error || '请求的资源不存在');
+        break;
+      case 500:
+        showToast('服务器内部错误，请稍后重试');
+        break;
+      default:
+        showToast(message);
     }
 
     return Promise.reject(error);

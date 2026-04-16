@@ -29,6 +29,9 @@
         name="phone"
         label="电话"
         placeholder="请输入电话"
+        type="tel"
+        inputmode="tel"
+        autocomplete="tel"
         :rules="[{ required: true, message: '请输入电话' }]"
       />
       <van-field
@@ -36,6 +39,9 @@
         name="email"
         label="邮箱"
         placeholder="请输入邮箱"
+        type="email"
+        inputmode="email"
+        autocomplete="email"
         :rules="[{ required: true, message: '请输入邮箱' }]"
       />
       <van-field
@@ -57,6 +63,8 @@
         label="工作年限"
         placeholder="请输入工作年限"
         type="digit"
+        inputmode="numeric"
+        autocomplete="off"
       />
       <van-field
         v-model="form.currentCompany"
@@ -98,7 +106,7 @@
         placeholder="请输入候选人说明"
       />
 
-      <div class="submit-area">
+      <div class="submit-area safe-bottom">
         <van-button round block type="primary" native-type="submit" :loading="submitting">
           {{ isEdit ? '保存' : '创建' }}
         </van-button>
@@ -205,5 +213,9 @@ onMounted(async () => {
 
 .submit-area {
   padding: 24px 16px;
+}
+
+.safe-bottom {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
 </style>

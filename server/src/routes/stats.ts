@@ -51,6 +51,17 @@ function convertToCSV(headers: string[], rows: (string | number | null | undefin
 // ============ 路由定义 ============
 
 /**
+ * GET /api/stats/dashboard
+ * 数据看板：核心 KPI + 近 7 天新增候选人趋势
+ * 权限：登录用户
+ */
+router.get(
+  '/dashboard',
+  authenticate,
+  statsController.getDashboard
+);
+
+/**
  * GET /api/stats/workload/export
  * 导出工作量统计 CSV
  * 权限：登录用户

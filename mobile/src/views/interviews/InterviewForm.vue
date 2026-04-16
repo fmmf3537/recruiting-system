@@ -22,6 +22,7 @@
         name="interviewerName"
         label="面试官"
         placeholder="请输入面试官姓名"
+        autocomplete="name"
         :rules="[{ required: true, message: '请输入面试官姓名' }]"
       />
 
@@ -80,7 +81,7 @@
         :rules="[{ required: true, message: '请输入反馈内容' }]"
       />
 
-      <div class="submit-area">
+      <div class="submit-area safe-bottom">
         <van-button round block type="primary" native-type="submit" :loading="submitting">
           提交反馈
         </van-button>
@@ -188,5 +189,9 @@ async function onSubmit() {
 
 .submit-area {
   padding: 24px 16px;
+}
+
+.safe-bottom {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
 </style>

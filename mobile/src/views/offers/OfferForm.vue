@@ -8,6 +8,8 @@
         name="salary"
         label="薪资"
         placeholder="请输入薪资"
+        inputmode="text"
+        autocomplete="off"
         :rules="[{ required: true, message: '请输入薪资' }]"
       />
       <van-field
@@ -46,7 +48,7 @@
         placeholder="请输入备注"
       />
 
-      <div class="submit-area">
+      <div class="submit-area safe-bottom">
         <van-button round block type="primary" native-type="submit" :loading="submitting">
           创建 Offer
         </van-button>
@@ -131,5 +133,9 @@ async function onSubmit() {
 
 .submit-area {
   padding: 24px 16px;
+}
+
+.safe-bottom {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
 </style>

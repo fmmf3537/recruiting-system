@@ -15,6 +15,7 @@ vi.mock('../../src/lib/prisma', () => ({
     },
     interviewFeedback: {
       count: vi.fn(),
+      findMany: vi.fn(),
     },
     offer: {
       count: vi.fn(),
@@ -316,6 +317,31 @@ describe('StatsService - 统计服务单元测试', () => {
       });
 
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('getDashboardStats - 数据看板', () => {
+    it('应返回核心 KPI 和近 7 天趋势', async () => {
+      vi.mocked(prisma.candidate.count)
+        .mockResolvedValueOnce(12) // newCandidatesThisMonth
+        .mockResolvedValue(0); // trend days (7 times)
+      vi.mocked(prisma.interviewFeedback.findMany).mockResolvedValue([
+        { candidateId: 'c1' },
+        { candidateId: 'c2' },
+      ] as any);
+      vi.mocked(prisma.offer.count)
+        .mockResolvedValueOnce(3) // pendingOffers
+        .mockResolvedValueOnce(2); // joinedThisMonth
+
+      const result = await service.getDashboardStats();
+
+      expect(result.kpi.newCandidatesThisMonth).toBe(12);
+      expect(result.kpi.interviewingCount).toBe(2);
+      expect(result.kpi.pendingOffers).toBe(3);
+      expect(result.kpi.joinedThisMonth).toBe(2);
+      expect(result.trend).toHaveLength(7);
+      expect(result.trend[0]).toHaveProperty('date');
+      expect(result.trend[0]).toHaveProperty('count');
     });
   });
 

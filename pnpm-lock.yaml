@@ -108,20 +108,26 @@ importers:
       dayjs:
         specifier: ^1.11.20
         version: 1.11.20
+      echarts:
+        specifier: ^6.0.0
+        version: 6.0.0
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
       pinia:
-        specifier: '2'
+        specifier: ^2.3.0
         version: 2.3.1(typescript@6.0.2)(vue@3.5.32(typescript@6.0.2))
       vant:
-        specifier: '4'
+        specifier: ^4.9.17
         version: 4.9.24(vue@3.5.32(typescript@6.0.2))
       vue:
         specifier: ^3.5.32
         version: 3.5.32(typescript@6.0.2)
+      vue-echarts:
+        specifier: ^8.0.1
+        version: 8.0.1(echarts@6.0.0)(vue@3.5.32(typescript@6.0.2))
       vue-router:
-        specifier: '4'
+        specifier: ^4.5.0
         version: 4.6.4(vue@3.5.32(typescript@6.0.2))
     devDependencies:
       '@rushstack/eslint-patch':
@@ -8439,6 +8445,11 @@ snapshots:
     dependencies:
       echarts: 6.0.0
       vue: 3.5.32(typescript@5.9.3)
+
+  vue-echarts@8.0.1(echarts@6.0.0)(vue@3.5.32(typescript@6.0.2)):
+    dependencies:
+      echarts: 6.0.0
+      vue: 3.5.32(typescript@6.0.2)
 
   vue-eslint-parser@9.4.3(eslint@8.57.1):
     dependencies:

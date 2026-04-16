@@ -889,21 +889,21 @@ export class CandidateService {
     const roundWhere = round ? Prisma.sql`AND i.round = ${round}` : Prisma.empty;
     const conclusionWhere = conclusion ? Prisma.sql`AND i.conclusion = ${conclusion}` : Prisma.empty;
     const dateWhere = (startDate && endDate)
-      ? Prisma.sql`AND i.interview_time >= ${new Date(startDate)} AND i.interview_time <= ${new Date(endDate)}`
+      ? Prisma.sql`AND i."interviewTime" >= ${new Date(startDate)} AND i."interviewTime" <= ${new Date(endDate)}`
       : Prisma.empty;
 
     const interviews = await prisma.$queryRaw<InterviewListItem[]>`
       SELECT
         i.id,
         i.round,
-        i.interviewer_name as "interviewerName",
-        i.interview_time as "interviewTime",
+        i."interviewerName",
+        i."interviewTime",
         i.conclusion,
-        i.feedback_content as "feedbackContent",
-        i.reject_reason as "rejectReason",
-        i.created_by_id as "createdById",
+        i."feedbackContent",
+        i."rejectReason",
+        i."createdById",
         u.name as "createdByName",
-        i.created_at as "createdAt",
+        i."createdAt",
         c.id as "candidateId",
         c.name as "candidateName",
         COALESCE(
@@ -914,7 +914,7 @@ export class CandidateService {
       JOIN "candidate" c ON i."candidateId" = c.id
       LEFT JOIN "user" u ON i."createdById" = u.id
       WHERE 1=1 ${keywordWhere} ${roundWhere} ${conclusionWhere} ${dateWhere}
-      ORDER BY i.interview_time DESC
+      ORDER BY i."interviewTime" DESC
       LIMIT ${pageSize} OFFSET ${skip}
     `;
 

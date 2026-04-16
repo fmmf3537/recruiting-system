@@ -11,7 +11,13 @@
       />
       <p class="tip">支持 PDF、Word、JPG、PNG 格式，最大 10MB</p>
 
-      <div class="submit-area">
+      <div v-if="uploadedUrl" class="preview-area">
+        <van-button plain block type="primary" @click="previewFile">
+          预览已上传文件
+        </van-button>
+      </div>
+
+      <div class="submit-area safe-bottom">
         <van-button round block type="primary" :loading="submitting" @click="onSubmit">
           确认上传
         </van-button>
@@ -23,9 +29,10 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showToast } from 'vant';
+import { showToast, showImagePreview } from 'vant';
 import { uploadFile } from '@/api/upload';
 import { updateCandidate } from '@/api/candidates';
+import { isFeishu, openDocument } from '@/lib/feishu';
 
 const route = useRoute();
 const router = useRouter();
@@ -46,6 +53,22 @@ async function afterRead(fileItem: any | any[]) {
     }
   } catch {
     showToast('上传失败');
+  }
+}
+
+function previewFile() {
+  if (!uploadedUrl.value) return;
+  if (isFeishu()) {
+    openDocument(uploadedUrl.value).catch(() => {
+      showToast('打开文档失败');
+    });
+    return;
+  }
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(uploadedUrl.value);
+  if (isImage) {
+    showImagePreview([uploadedUrl.value]);
+  } else {
+    window.open(uploadedUrl.value, '_blank');
   }
 }
 
@@ -83,5 +106,13 @@ async function onSubmit() {
 
 .submit-area {
   margin-top: 24px;
+}
+
+.safe-bottom {
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+.preview-area {
+  margin-top: 16px;
 }
 </style>

@@ -88,6 +88,83 @@ export class StatsService {
   }
 
   /**
+   * GET /api/stats/dashboard
+   * 数据看板：核心 KPI + 近 7 天新增候选人趋势
+   */
+  async getDashboardStats(): Promise<{
+    kpi: {
+      newCandidatesThisMonth: number;
+      interviewingCount: number;
+      pendingOffers: number;
+      joinedThisMonth: number;
+    };
+    trend: Array<{ date: string; count: number }>;
+  }> {
+    await connectRedis();
+    const cacheKey = 'stats:dashboard';
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+    // 本月新增候选人
+    const newCandidatesThisMonth = await prisma.candidate.count({
+      where: { createdAt: { gte: monthStart, lte: monthEnd } },
+    });
+
+    // 在面人数：有面试反馈且结论为 pending 的候选人（去重）
+    const interviewingCandidates = await prisma.interviewFeedback.findMany({
+      where: { conclusion: 'pending' },
+      distinct: ['candidateId'],
+      select: { candidateId: true },
+    });
+    const interviewingCount = interviewingCandidates.length;
+
+    // 待发 Offer：result 为 pending 的 Offer 数量
+    const pendingOffers = await prisma.offer.count({
+      where: { result: 'pending' },
+    });
+
+    // 本月入职人数
+    const joinedThisMonth = await prisma.offer.count({
+      where: {
+        joined: true,
+        actualJoinDate: { gte: monthStart, lte: monthEnd },
+      },
+    });
+
+    // 近 7 天新增候选人趋势
+    const trend: Array<{ date: string; count: number }> = [];
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+      const nextD = new Date(d);
+      nextD.setDate(nextD.getDate() + 1);
+      const count = await prisma.candidate.count({
+        where: { createdAt: { gte: d, lt: nextD } },
+      });
+      const dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      trend.push({ date: dateStr, count });
+    }
+
+    const result = {
+      kpi: {
+        newCandidatesThisMonth,
+        interviewingCount,
+        pendingOffers,
+        joinedThisMonth,
+      },
+      trend,
+    };
+
+    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+    return result;
+  }
+
+  /**
    * GET /api/stats/workload
    * 工作量统计
    */

@@ -37,6 +37,18 @@ declare global {
         success?: () => void;
         fail?: (err: { errMsg: string }) => void;
       }) => void;
+      scanQRCode: (options: {
+        success?: (res: { result: string }) => void;
+        fail?: (err: { errMsg: string }) => void;
+      }) => void;
+      showNavigationBarLoading: (options?: {
+        success?: () => void;
+        fail?: (err: { errMsg: string }) => void;
+      }) => void;
+      hideNavigationBarLoading: (options?: {
+        success?: () => void;
+        fail?: (err: { errMsg: string }) => void;
+      }) => void;
     };
   }
 }
@@ -160,6 +172,54 @@ export function setNavigationBarTitle(title: string): Promise<void> {
       title,
       success: () => resolve(),
       fail: (err) => reject(new Error(err.errMsg || '设置标题失败')),
+    });
+  });
+}
+
+/**
+ * 飞书扫一扫
+ */
+export function scanQRCode(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (!window.tt?.scanQRCode) {
+      reject(new Error('飞书 JSAPI 未就绪'));
+      return;
+    }
+    window.tt.scanQRCode({
+      success: (res) => resolve(res.result),
+      fail: (err) => reject(new Error(err.errMsg || '扫码失败')),
+    });
+  });
+}
+
+/**
+ * 显示飞书导航栏加载状态
+ */
+export function showNavigationBarLoading(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!window.tt?.showNavigationBarLoading) {
+      reject(new Error('飞书 JSAPI 未就绪'));
+      return;
+    }
+    window.tt.showNavigationBarLoading({
+      success: () => resolve(),
+      fail: (err) => reject(new Error(err.errMsg || '显示加载失败')),
+    });
+  });
+}
+
+/**
+ * 隐藏飞书导航栏加载状态
+ */
+export function hideNavigationBarLoading(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!window.tt?.hideNavigationBarLoading) {
+      reject(new Error('飞书 JSAPI 未就绪'));
+      return;
+    }
+    window.tt.hideNavigationBarLoading({
+      success: () => resolve(),
+      fail: (err) => reject(new Error(err.errMsg || '隐藏加载失败')),
     });
   });
 }

@@ -128,6 +128,42 @@ router.get(
 );
 
 /**
+ * GET /api/candidates/interviews
+ * 获取面试列表（支持分页和筛选）
+ * 权限：登录用户
+ */
+router.get(
+  '/interviews',
+  authenticate,
+  validate(listInterviewsQuerySchema, 'query'),
+  candidateController.getInterviewList
+);
+
+/**
+ * POST /api/candidates/parse-resume
+ * 提交简历解析任务（异步）
+ * 权限：登录用户
+ */
+router.post(
+  '/parse-resume',
+  authenticate,
+  upload.single('file'),
+  candidateController.parseResume
+);
+
+/**
+ * GET /api/candidates/parse-resume/:jobId
+ * 查询简历解析任务状态
+ * 权限：登录用户
+ */
+router.get(
+  '/parse-resume/:jobId',
+  authenticate,
+  validate(z.object({ jobId: z.string() }), 'params'),
+  candidateController.getParseResumeStatus
+);
+
+/**
  * GET /api/candidates/:id
  * 候选人详情（含流程记录、面试反馈、Offer 信息）
  * 权限：登录用户
@@ -188,42 +224,6 @@ router.get(
   authenticate,
   validate(candidateIdParamSchema, 'params'),
   candidateController.getInterviewFeedbacks
-);
-
-/**
- * GET /api/candidates/interviews
- * 获取面试列表（支持分页和筛选）
- * 权限：登录用户
- */
-router.get(
-  '/interviews',
-  authenticate,
-  validate(listInterviewsQuerySchema, 'query'),
-  candidateController.getInterviewList
-);
-
-/**
- * POST /api/candidates/parse-resume
- * 提交简历解析任务（异步）
- * 权限：登录用户
- */
-router.post(
-  '/parse-resume',
-  authenticate,
-  upload.single('file'),
-  candidateController.parseResume
-);
-
-/**
- * GET /api/candidates/parse-resume/:jobId
- * 查询简历解析任务状态
- * 权限：登录用户
- */
-router.get(
-  '/parse-resume/:jobId',
-  authenticate,
-  validate(z.object({ jobId: z.string() }), 'params'),
-  candidateController.getParseResumeStatus
 );
 
 /**

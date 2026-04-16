@@ -8,7 +8,7 @@
         @load="onLoad"
       >
         <slot v-if="data.length" name="default" :data="data" />
-        <van-empty v-else-if="!loading && !refreshing" :description="emptyText" />
+        <van-empty v-else-if="!loading && !refreshing" image="search" :description="emptyText" />
       </van-list>
     </van-pull-refresh>
   </div>

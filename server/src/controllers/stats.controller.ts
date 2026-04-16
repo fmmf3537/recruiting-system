@@ -8,6 +8,23 @@ import { statsService } from '../services/stats.service';
  */
 export class StatsController {
   /**
+   * GET /api/stats/dashboard
+   * 数据看板统计
+   */
+  async getDashboard(
+    _req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const data = await statsService.getDashboardStats();
+      res.json({ success: true, data });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /api/stats/workload
    * 工作量统计
    */

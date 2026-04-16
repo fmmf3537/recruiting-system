@@ -11,6 +11,7 @@
       <van-grid-item icon="notes-o" text="面试" to="/interviews" />
       <van-grid-item icon="gold-coin-o" text="Offer" to="/offers" />
       <van-grid-item icon="bag-o" text="职位" to="/jobs" />
+      <van-grid-item icon="chart-trending-o" text="看板" to="/stats" />
     </van-grid>
 
     <!-- 今日待办 -->
@@ -35,8 +36,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useUserStore } from '@/stores/user';
+import { getCandidateList } from '@/api/candidates';
+import { getInterviewList } from '@/api/interviews';
+import { getOfferList } from '@/api/offers';
 
 const userStore = useUserStore();
 
@@ -48,9 +52,30 @@ const greeting = computed(() => {
 });
 
 const todo = ref({
-  pendingCandidates: 12,
-  pendingInterviews: 5,
-  pendingOffers: 3,
+  pendingCandidates: 0,
+  pendingInterviews: 0,
+  pendingOffers: 0,
+});
+
+async function loadTodo() {
+  try {
+    const [cRes, iRes, oRes] = await Promise.all([
+      getCandidateList({ page: 1, pageSize: 1, stage: '初筛' }),
+      getInterviewList({ page: 1, pageSize: 1, conclusion: 'pending' }),
+      getOfferList({ page: 1, pageSize: 1, result: 'pending' }),
+    ]);
+    todo.value = {
+      pendingCandidates: cRes.success ? cRes.pagination.total : 0,
+      pendingInterviews: iRes.success ? iRes.pagination.total : 0,
+      pendingOffers: oRes.success ? oRes.pagination.total : 0,
+    };
+  } catch {
+    // 静默失败，保持 0
+  }
+}
+
+onMounted(() => {
+  loadTodo();
 });
 </script>
 

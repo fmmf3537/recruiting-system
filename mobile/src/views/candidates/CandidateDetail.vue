@@ -74,6 +74,13 @@
         <van-empty v-if="!candidate.interviewFeedbacks.length" description="暂无面试反馈" />
       </van-cell-group>
 
+      <!-- 简历 -->
+      <div class="section-title">简历</div>
+      <van-cell-group v-if="candidate.resumeUrl" inset class="group">
+        <van-cell title="查看简历" is-link @click="previewResume(candidate.resumeUrl)" />
+      </van-cell-group>
+      <van-empty v-else description="暂无简历" />
+
       <!-- Offer 信息 -->
       <div class="section-title">Offer</div>
       <van-cell-group v-if="candidate.offer" inset class="group">
@@ -101,9 +108,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { showToast } from 'vant';
+import { showToast, showImagePreview } from 'vant';
 import { getCandidateById, type CandidateDetail } from '@/api/candidates';
 import StageActionSheet from '@/components/StageActionSheet.vue';
+import { isFeishu, openDocument } from '@/lib/feishu';
 
 const route = useRoute();
 const router = useRouter();
@@ -142,6 +150,21 @@ function goResume() {
 
 function goOffer() {
   router.push(`/offers/form?candidateId=${candidateId}`);
+}
+
+function previewResume(url: string) {
+  if (isFeishu()) {
+    openDocument(url).catch(() => {
+      showToast('打开文档失败');
+    });
+    return;
+  }
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+  if (isImage) {
+    showImagePreview([url]);
+  } else {
+    window.open(url, '_blank');
+  }
 }
 
 onMounted(() => {

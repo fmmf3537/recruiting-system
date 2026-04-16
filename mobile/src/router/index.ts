@@ -83,6 +83,12 @@ const router = createRouter({
       meta: { showTabBar: false },
     },
     {
+      path: '/stats',
+      name: 'Stats',
+      component: () => import('@/views/stats/index.vue'),
+      meta: { showTabBar: false, title: '数据看板' },
+    },
+    {
       path: '/messages',
       name: 'Messages',
       component: () => import('@/views/messages/index.vue'),
@@ -111,6 +117,23 @@ const router = createRouter({
 
 // 白名单路由
 const whiteList = ['/login'];
+
+router.afterEach((to) => {
+  const title = (to.meta.title as string) || (to.name as string) || '';
+  if (title) {
+    document.title = title;
+    // 仅在飞书环境同步导航栏标题
+    import('@/lib/feishu').then(({ isFeishu, setNavigationBarTitle }) => {
+      if (isFeishu()) {
+        setNavigationBarTitle(title).catch(() => {
+          // 静默失败
+        });
+      }
+    }).catch(() => {
+      // 忽略动态导入失败
+    });
+  }
+});
 
 router.beforeEach((to, _from, next) => {
   const userStore = useUserStore();
