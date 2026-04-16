@@ -53,3 +53,13 @@ coverage/
 # Test results
 test-results/
 e2e/test-results/
+
+# Playwright reports
+e2e/playwright-report/
+
+# Kimi exports
+kimi-export-*.md
+
+# Bug screenshots
+bug/
+
