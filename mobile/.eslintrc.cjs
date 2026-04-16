@@ -45,5 +45,13 @@ module.exports = {
     'import/prefer-default-export': 'off',
     'max-len': ['error', { code: 120, ignoreStrings: true, ignoreTemplateLiterals: true }],
   },
+  overrides: [
+    {
+      files: ['src/tests/**/*.{test,spec}.{js,ts}', 'src/**/*.test.ts'],
+      rules: {
+        'import/no-extraneous-dependencies': 'off',
+      },
+    },
+  ],
   ignorePatterns: ['dist', 'node_modules', '*.d.ts'],
 };

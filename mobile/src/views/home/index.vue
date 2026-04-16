@@ -1,65 +1,126 @@
 <template>
   <div class="home-page">
-    <van-search v-model="searchValue" placeholder="请输入搜索关键词" />
-    <van-cell title="单元格" value="内容" />
-    <van-cell title="单元格" value="内容" label="描述信息" />
-
-    <div class="button-group">
-      <van-button type="primary">主要按钮</van-button>
-      <van-button type="success">成功按钮</van-button>
-      <van-button type="default">默认按钮</van-button>
+    <div class="header">
+      <h2>{{ greeting }}，{{ userStore.userInfo?.name || 'HR' }}</h2>
+      <p class="subtitle">祝您工作愉快</p>
     </div>
 
-    <div class="test-box">
-      <p>这是一个 100px × 100px 的测试方块，用于验证 vw 适配</p>
-    </div>
+    <!-- 快捷入口 -->
+    <van-grid :column-num="4" class="quick-grid">
+      <van-grid-item icon="friends-o" text="候选人" to="/candidates" />
+      <van-grid-item icon="notes-o" text="面试" to="/messages" />
+      <van-grid-item icon="gold-coin-o" text="Offer" to="/messages" />
+      <van-grid-item icon="bag-o" text="职位" to="/messages" />
+    </van-grid>
 
-    <div class="router-test">
-      <van-button type="primary" @click="$router.push('/test')">
-        跳转到测试页
-      </van-button>
+    <!-- 今日待办 -->
+    <div class="todo-section">
+      <h3>今日待办</h3>
+      <div class="todo-cards">
+        <div class="todo-card">
+          <span class="number">{{ todo.pendingCandidates }}</span>
+          <span class="label">待处理候选人</span>
+        </div>
+        <div class="todo-card">
+          <span class="number">{{ todo.pendingInterviews }}</span>
+          <span class="label">待面试</span>
+        </div>
+        <div class="todo-card">
+          <span class="number">{{ todo.pendingOffers }}</span>
+          <span class="label">待审批 Offer</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { useUserStore } from '@/stores/user';
 
-const searchValue = ref('');
+const userStore = useUserStore();
+
+const greeting = computed(() => {
+  const hour = new Date().getHours();
+  if (hour < 12) return '早上好';
+  if (hour < 18) return '下午好';
+  return '晚上好';
+});
+
+const todo = ref({
+  pendingCandidates: 12,
+  pendingInterviews: 5,
+  pendingOffers: 3,
+});
 </script>
 
 <style scoped>
 .home-page {
+  min-height: 100%;
+  padding: 16px;
+  background-color: #f7f8fa;
+  box-sizing: border-box;
+}
+
+.header {
+  margin-bottom: 16px;
+}
+
+.header h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  color: #333;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+}
+
+.quick-grid {
+  margin-bottom: 16px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.todo-section {
+  background-color: #fff;
+  border-radius: 8px;
   padding: 16px;
 }
 
-.button-group {
-  margin-top: 16px;
+.todo-section h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: #333;
+}
+
+.todo-cards {
   display: flex;
-  flex-direction: column;
   gap: 12px;
 }
 
-.test-box {
-  width: 100px;
-  height: 100px;
-  background-color: #1989fa;
-  margin-top: 16px;
+.todo-card {
+  flex: 1;
+  background-color: #f2f3f5;
   border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-}
-
-.test-box p {
-  color: #fff;
-  font-size: 12px;
-  margin: 0;
+  padding: 16px 8px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.router-test {
-  margin-top: 24px;
+.todo-card .number {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1989fa;
+  margin-bottom: 4px;
+}
+
+.todo-card .label {
+  font-size: 12px;
+  color: #666;
 }
 </style>
