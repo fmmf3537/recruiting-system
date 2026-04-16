@@ -52,9 +52,12 @@
             style="width: 140px"
             @change="handleSearch"
           >
-            <el-option label="社招" value="社招" />
-            <el-option label="校招" value="校招" />
-            <el-option label="实习生" value="实习生" />
+            <el-option
+              v-for="item in dictionaryStore.jobTypeOptions"
+              :key="item.code"
+              :label="item.name"
+              :value="item.name"
+            />
           </el-select>
         </el-form-item>
 
@@ -470,10 +473,12 @@ async function handleDelete(row: JobItem & { deleteLoading?: boolean }) {
 // 初始化
 onMounted(() => {
   dictionaryStore.fetchDictionaries('location');
+  dictionaryStore.fetchDictionaries('job_type');
   fetchJobList();
 });
 onActivated(() => {
   dictionaryStore.fetchDictionaries('location');
+  dictionaryStore.fetchDictionaries('job_type');
   fetchJobList();
 });
 </script>

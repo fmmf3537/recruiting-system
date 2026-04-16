@@ -32,6 +32,22 @@ export const useDictionaryStore = defineStore('dictionary', {
     locationOptions() {
       return this.byCategory('location');
     },
+
+    educationOptions() {
+      return this.byCategory('education');
+    },
+
+    sourceOptions() {
+      return this.byCategory('source');
+    },
+
+    jobTypeOptions() {
+      return this.byCategory('job_type');
+    },
+
+    skillOptions() {
+      return this.byCategory('skills');
+    },
   },
 
   actions: {

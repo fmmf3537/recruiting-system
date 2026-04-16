@@ -16,6 +16,10 @@
       <el-radio-group v-model="currentCategory" @change="handleCategoryChange">
         <el-radio-button label="department">所属部门</el-radio-button>
         <el-radio-button label="location">工作城市</el-radio-button>
+        <el-radio-button label="education">学历</el-radio-button>
+        <el-radio-button label="source">来源渠道</el-radio-button>
+        <el-radio-button label="job_type">招聘类型</el-radio-button>
+        <el-radio-button label="skills">技能要求</el-radio-button>
       </el-radio-group>
     </el-card>
 
@@ -102,10 +106,20 @@ import {
 
 const dictionaryStore = useDictionaryStore();
 
-const currentCategory = ref<'department' | 'location'>('department');
+type CategoryKey = 'department' | 'location' | 'education' | 'source' | 'job_type' | 'skills';
+const currentCategory = ref<CategoryKey>('department');
+
+const CATEGORY_LABELS: Record<CategoryKey, string> = {
+  department: '所属部门',
+  location: '工作城市',
+  education: '学历',
+  source: '来源渠道',
+  job_type: '招聘类型',
+  skills: '技能要求',
+};
 
 const categoryText = computed(() => {
-  return currentCategory.value === 'department' ? '所属部门' : '工作城市';
+  return CATEGORY_LABELS[currentCategory.value];
 });
 
 const displayList = computed(() => {
@@ -124,7 +138,7 @@ const formRef = ref<FormInstance>();
 
 const formData = reactive({
   id: '',
-  category: 'department' as 'department' | 'location',
+  category: 'department' as CategoryKey,
   code: '',
   name: '',
   sortOrder: 0,
@@ -155,7 +169,7 @@ function handleAdd() {
 function handleEdit(row: DictionaryItem) {
   isEdit.value = true;
   formData.id = row.id;
-  formData.category = row.category as 'department' | 'location';
+  formData.category = row.category as CategoryKey;
   formData.code = row.code;
   formData.name = row.name;
   formData.sortOrder = row.sortOrder;

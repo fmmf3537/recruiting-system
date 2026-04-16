@@ -30,6 +30,41 @@ const DEFAULT_DICTIONARIES: Record<string, Array<{ code: string; name: string; s
     { code: 'xian', name: '西安', sortOrder: 9 },
     { code: 'other', name: '其他', sortOrder: 99 },
   ],
+  education: [
+    { code: 'doctor', name: '博士', sortOrder: 1 },
+    { code: 'master', name: '硕士', sortOrder: 2 },
+    { code: 'bachelor', name: '本科', sortOrder: 3 },
+    { code: 'college', name: '大专', sortOrder: 4 },
+    { code: 'high_school', name: '高中及以下', sortOrder: 5 },
+  ],
+  source: [
+    { code: 'boss', name: 'BOSS直聘', sortOrder: 1 },
+    { code: 'liepin', name: '猎聘', sortOrder: 2 },
+    { code: 'zhaopin', name: '智联招聘', sortOrder: 3 },
+    { code: '51job', name: '前程无忧', sortOrder: 4 },
+    { code: 'referral', name: '内推', sortOrder: 5 },
+    { code: 'official', name: '官网投递', sortOrder: 6 },
+    { code: 'other', name: '其他', sortOrder: 99 },
+  ],
+  job_type: [
+    { code: 'social', name: '社招', sortOrder: 1 },
+    { code: 'campus', name: '校招', sortOrder: 2 },
+    { code: 'intern', name: '实习生', sortOrder: 3 },
+  ],
+  skills: [
+    { code: 'javascript', name: 'JavaScript', sortOrder: 1 },
+    { code: 'typescript', name: 'TypeScript', sortOrder: 2 },
+    { code: 'vuejs', name: 'Vue.js', sortOrder: 3 },
+    { code: 'react', name: 'React', sortOrder: 4 },
+    { code: 'nodejs', name: 'Node.js', sortOrder: 5 },
+    { code: 'python', name: 'Python', sortOrder: 6 },
+    { code: 'java', name: 'Java', sortOrder: 7 },
+    { code: 'go', name: 'Go', sortOrder: 8 },
+    { code: 'mysql', name: 'MySQL', sortOrder: 9 },
+    { code: 'redis', name: 'Redis', sortOrder: 10 },
+    { code: 'docker', name: 'Docker', sortOrder: 11 },
+    { code: 'kubernetes', name: 'Kubernetes', sortOrder: 12 },
+  ],
 };
 
 export interface DictionaryItem {

@@ -69,13 +69,12 @@
             style="width: 140px"
             @change="handleSearch"
           >
-            <el-option label="BOSS直聘" value="BOSS直聘" />
-            <el-option label="猎聘" value="猎聘" />
-            <el-option label="智联招聘" value="智联招聘" />
-            <el-option label="前程无忧" value="前程无忧" />
-            <el-option label="内推" value="内推" />
-            <el-option label="官网投递" value="官网投递" />
-            <el-option label="其他" value="其他" />
+            <el-option
+              v-for="item in dictionaryStore.sourceOptions"
+              :key="item.code"
+              :label="item.name"
+              :value="item.name"
+            />
           </el-select>
         </el-form-item>
 
@@ -259,10 +258,12 @@ import {
   type ResumeParseResult,
 } from '@/api/candidate';
 import { useAuthStore } from '@/stores/auth';
+import { useDictionaryStore } from '@/stores/dictionary';
 import ResumeUpload from './ResumeUpload.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const dictionaryStore = useDictionaryStore();
 
 // ============ 数据 ============
 const loading = ref(false);
@@ -452,7 +453,10 @@ async function handleRejectSubmit() {
   }
 }
 
-onMounted(() => { fetchCandidateList(); });
+onMounted(() => {
+  dictionaryStore.fetchDictionaries('source');
+  fetchCandidateList();
+});
 onActivated(() => { fetchCandidateList(); });
 </script>
 

@@ -85,9 +85,13 @@
                 <el-col :span="12">
                   <el-form-item label="招聘类型" prop="type">
                     <el-radio-group v-model="formData.type">
-                      <el-radio-button label="社招">社招</el-radio-button>
-                      <el-radio-button label="校招">校招</el-radio-button>
-                      <el-radio-button label="实习生">实习生</el-radio-button>
+                      <el-radio-button
+                        v-for="item in dictionaryStore.jobTypeOptions"
+                        :key="item.code"
+                        :label="item.name"
+                      >
+                        {{ item.name }}
+                      </el-radio-button>
                     </el-radio-group>
                   </el-form-item>
                 </el-col>
@@ -103,18 +107,12 @@
                   placeholder="请选择或输入技能要求"
                   style="width: 100%"
                 >
-                  <el-option label="JavaScript" value="JavaScript" />
-                  <el-option label="TypeScript" value="TypeScript" />
-                  <el-option label="Vue.js" value="Vue.js" />
-                  <el-option label="React" value="React" />
-                  <el-option label="Node.js" value="Node.js" />
-                  <el-option label="Python" value="Python" />
-                  <el-option label="Java" value="Java" />
-                  <el-option label="Go" value="Go" />
-                  <el-option label="MySQL" value="MySQL" />
-                  <el-option label="Redis" value="Redis" />
-                  <el-option label="Docker" value="Docker" />
-                  <el-option label="Kubernetes" value="Kubernetes" />
+                  <el-option
+                    v-for="item in dictionaryStore.skillOptions"
+                    :key="item.code"
+                    :label="item.name"
+                    :value="item.name"
+                  />
                 </el-select>
               </el-form-item>
             </div>
@@ -350,6 +348,8 @@ async function fetchJobDetail() {
 function init() {
   dictionaryStore.fetchDictionaries('department');
   dictionaryStore.fetchDictionaries('location');
+  dictionaryStore.fetchDictionaries('job_type');
+  dictionaryStore.fetchDictionaries('skills');
   if (isEdit.value) {
     fetchJobDetail();
   } else {

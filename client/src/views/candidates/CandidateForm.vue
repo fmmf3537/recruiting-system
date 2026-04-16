@@ -78,11 +78,12 @@
                 <el-col :span="12">
                   <el-form-item label="最高学历" prop="education">
                     <el-select v-model="formData.education" placeholder="请选择学历" style="width: 100%">
-                      <el-option label="博士" value="博士" />
-                      <el-option label="硕士" value="硕士" />
-                      <el-option label="本科" value="本科" />
-                      <el-option label="大专" value="大专" />
-                      <el-option label="高中及以下" value="高中及以下" />
+                      <el-option
+                        v-for="item in dictionaryStore.educationOptions"
+                        :key="item.code"
+                        :label="item.name"
+                        :value="item.name"
+                      />
                     </el-select>
                   </el-form-item>
                 </el-col>
@@ -146,13 +147,12 @@
 
               <el-form-item label="来源渠道" prop="source">
                 <el-select v-model="formData.source" placeholder="请选择来源渠道" style="width: 100%">
-                  <el-option label="BOSS直聘" value="BOSS直聘" />
-                  <el-option label="猎聘" value="猎聘" />
-                  <el-option label="智联招聘" value="智联招聘" />
-                  <el-option label="前程无忧" value="前程无忧" />
-                  <el-option label="内推" value="内推" />
-                  <el-option label="官网投递" value="官网投递" />
-                  <el-option label="其他" value="其他" />
+                  <el-option
+                    v-for="item in dictionaryStore.sourceOptions"
+                    :key="item.code"
+                    :label="item.name"
+                    :value="item.name"
+                  />
                 </el-select>
               </el-form-item>
 
@@ -226,8 +226,10 @@ import {
 } from '@/api/candidate';
 import { getJobList, type JobItem } from '@/api/job';
 import { uploadFile } from '@/utils/request';
+import { useDictionaryStore } from '@/stores/dictionary';
 
 const route = useRoute();
+const dictionaryStore = useDictionaryStore();
 const router = useRouter();
 
 const isEdit = computed(() => !!route.params.id);
@@ -497,6 +499,8 @@ function fillFromParsedResume() {
 }
 
 function init() {
+  dictionaryStore.fetchDictionaries('education');
+  dictionaryStore.fetchDictionaries('source');
   fetchJobList();
   if (isEdit.value) {
     fetchCandidateDetail();
