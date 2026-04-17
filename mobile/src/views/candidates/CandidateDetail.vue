@@ -161,17 +161,25 @@ function goOffer() {
 }
 
 function previewResume(url: string) {
+  if (!url) {
+    showToast('暂无简历文件');
+    return;
+  }
+  const fullUrl = url.startsWith('http')
+    ? url
+    : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
+
   if (isFeishu()) {
-    openDocument(url).catch(() => {
-      showToast('打开文档失败');
+    openDocument(fullUrl).catch(() => {
+      window.open(fullUrl, '_blank');
     });
     return;
   }
-  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fullUrl);
   if (isImage) {
-    showImagePreview([url]);
+    showImagePreview([fullUrl]);
   } else {
-    window.open(url, '_blank');
+    window.open(fullUrl, '_blank');
   }
 }
 

@@ -164,9 +164,12 @@ export function openDocument(url: string, fileName?: string): Promise<void> {
       reject(new Error('飞书 JSAPI 未就绪'));
       return;
     }
+    const rawType = (fileName || url).split('.').pop() || '';
+    const fileType = rawType.toLowerCase();
     window.tt.openDocument({
       url,
       fileName,
+      fileType,
       success: () => resolve(),
       fail: (err) => reject(new Error(err.errMsg || '打开文档失败')),
     });

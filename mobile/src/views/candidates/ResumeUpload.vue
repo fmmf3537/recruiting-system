@@ -58,17 +58,21 @@ async function afterRead(fileItem: any | any[]) {
 
 function previewFile() {
   if (!uploadedUrl.value) return;
+  const url = uploadedUrl.value;
+  const fullUrl = url.startsWith('http')
+    ? url
+    : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
   if (isFeishu()) {
-    openDocument(uploadedUrl.value).catch(() => {
-      showToast('打开文档失败');
+    openDocument(fullUrl).catch(() => {
+      window.open(fullUrl, '_blank');
     });
     return;
   }
-  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(uploadedUrl.value);
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fullUrl);
   if (isImage) {
-    showImagePreview([uploadedUrl.value]);
+    showImagePreview([fullUrl]);
   } else {
-    window.open(uploadedUrl.value, '_blank');
+    window.open(fullUrl, '_blank');
   }
 }
 
