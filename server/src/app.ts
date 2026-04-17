@@ -17,9 +17,10 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
 
-// CORS 配置
+// CORS 配置（支持逗号分隔的多 origin）
+const corsOrigins = env.CORS_ORIGIN.split(',').map((s) => s.trim());
 app.use(cors({
-  origin: env.CORS_ORIGIN,
+  origin: corsOrigins,
   credentials: true,
 }));
 

@@ -42,7 +42,7 @@ request.interceptors.response.use(
   },
   (error: AxiosError) => {
     closeToast();
-    const { response, code, message: errMsg } = error;
+    const { response, code, message: errMsg, config } = error;
 
     // 网络超时/断网兜底
     if (!response) {
@@ -55,6 +55,14 @@ request.interceptors.response.use(
     }
 
     const { status, data } = response;
+    const url = config?.url || '';
+
+    // 飞书登录相关接口的业务错误由调用方自行处理
+    const businessErrorWhitelist = ['/auth/feishu/login', '/auth/bind-feishu'];
+    if (businessErrorWhitelist.some((path) => url.includes(path))) {
+      return data as any;
+    }
+
     const errorData = data as { success?: boolean; error?: string; message?: string } | undefined;
     const message = errorData?.error || errorData?.message || `请求失败 (${status})`;
 
@@ -63,7 +71,7 @@ request.interceptors.response.use(
         const msg = errorData?.error || errorData?.message || '登录已过期，请重新登录';
         showToast(msg);
         // 登录接口的 401 只提示错误，不跳转；其他接口的 401 才清除 token 并强制跳转
-        const isLoginApi = error.config?.url?.includes('/auth/login');
+        const isLoginApi = url.includes('/auth/login');
         if (!isLoginApi) {
           localStorage.removeItem('ats_token');
           router.push('/login');

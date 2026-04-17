@@ -30,5 +30,5 @@ export interface UserListParams {
  * 获取成员列表（仅管理员）
  */
 export function getUsers(params: UserListParams = {}): Promise<UserListResult> {
-  return request.get('/api/users', { params });
+  return request.get('/users', { params });
 }

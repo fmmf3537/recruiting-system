@@ -57,9 +57,9 @@ export interface JobDetailData {
 }
 
 export function getJobList(params?: JobListParams): Promise<JobListData> {
-  return request.get('/api/jobs', { params });
+  return request.get('/jobs', { params });
 }
 
 export function getJobById(id: string): Promise<JobDetailData> {
-  return request.get(`/api/jobs/${id}`);
+  return request.get(`/jobs/${id}`);
 }

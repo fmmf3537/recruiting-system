@@ -2,6 +2,11 @@
   <div class="detail-page">
     <van-nav-bar title="Offer 详情" left-arrow fixed placeholder @click-left="$router.back()" />
 
+    <div v-if="loadError" class="error-block">
+      <p>加载失败，请检查网络后重试</p>
+      <van-button round block type="primary" @click="loadData">重新加载</van-button>
+    </div>
+
     <div v-if="offer" class="content">
       <van-cell-group inset class="group">
         <van-cell title="候选人" :value="offer.candidate.name" />
@@ -52,6 +57,7 @@ const candidateId = route.params.candidateId as string;
 const offer = ref<OfferDetailData['data'] | null>(null);
 const showResult = ref(false);
 const showJoin = ref(false);
+const loadError = ref(false);
 
 const resultActions = [
   { name: 'pending', text: '待定' },
@@ -60,12 +66,14 @@ const resultActions = [
 ];
 
 async function loadData() {
+  loadError.value = false;
   try {
     const res = await getOfferByCandidateId(candidateId);
     if (res.success) {
       offer.value = res.data;
     }
   } catch {
+    loadError.value = true;
     showToast('加载详情失败');
   }
 }
@@ -129,5 +137,12 @@ onMounted(() => {
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   background-color: #fff;
   border-top: 1px solid #ebedf0;
+}
+
+.error-block {
+  text-align: center;
+  padding: 48px 24px;
+  color: #666;
+  font-size: 14px;
 }
 </style>

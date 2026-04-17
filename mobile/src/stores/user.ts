@@ -42,8 +42,8 @@ export const useUserStore = defineStore('user', () => {
     return res;
   }
 
-  async function feishuLoginAction(params: FeishuLoginParams) {
-    const res = await feishuLogin(params);
+  async function feishuLoginAction(params: FeishuLoginParams): Promise<any> {
+    const res = await feishuLogin(params) as any;
     if (res.success && res.token) {
       setToken(res.token);
       setUserInfo(res.user);

@@ -203,6 +203,94 @@ router.post(
 );
 
 /**
+ * POST /api/auth/bind-feishu
+ * 飞书用户首次登录时绑定本地账号
+ */
+router.post(
+  '/bind-feishu',
+  asyncHandler(async (req, res) => {
+    const { email, password, feishuEmployeeId } = req.body;
+
+    if (!email || !password || !feishuEmployeeId) {
+      res.status(400).json({
+        success: false,
+        error: '缺少必要参数',
+      });
+      return;
+    }
+
+    if (!feishuEmployeeId) {
+      res.status(400).json({
+        success: false,
+        error: '无法获取飞书用户标识，请重新进入应用',
+      });
+      return;
+    }
+
+    // 1. 查找本地用户并验证密码
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      res.status(401).json({
+        success: false,
+        error: '邮箱或密码错误',
+        code: 401,
+      });
+      return;
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      res.status(401).json({
+        success: false,
+        error: '邮箱或密码错误',
+        code: 401,
+      });
+      return;
+    }
+
+    // 2. 更新 feishuEmployeeId
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { feishuEmployeeId },
+      });
+    } catch (err: any) {
+      if (err.code === 'P2002') {
+        res.status(409).json({
+          success: false,
+          error: '该飞书账号已被其他用户绑定',
+        });
+        return;
+      }
+      throw err;
+    }
+
+    // 3. 签发 JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      env.JWT_SECRET,
+      { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
+    );
+
+    res.json({
+      success: true,
+      message: '绑定并登录成功',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    });
+  })
+);
+
+/**
  * POST /api/auth/change-password
  * 修改密码
  */
@@ -252,6 +340,108 @@ router.post(
     res.json({
       success: true,
       message: '密码修改成功',
+    });
+  })
+);
+
+/**
+ * POST /api/auth/feishu/login
+ * 飞书免登登录
+ */
+router.post(
+  '/feishu/login',
+  asyncHandler(async (req, res) => {
+    const { authCode } = req.body;
+    if (!authCode) {
+      res.status(400).json({ success: false, error: '缺少 authCode' });
+      return;
+    }
+
+    // 1. 获取飞书应用凭证
+    const appAccessTokenRes = await fetch(
+      'https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          app_id: env.FEISHU_APP_ID,
+          app_secret: env.FEISHU_APP_SECRET,
+        }),
+      }
+    ).then((r) => r.json());
+
+    if (appAccessTokenRes.code !== 0) {
+      res.status(400).json({
+        success: false,
+        error: appAccessTokenRes.msg || '获取飞书应用凭证失败',
+      });
+      return;
+    }
+
+    const appAccessToken = appAccessTokenRes.app_access_token;
+
+    // 2. 用 authCode 获取用户信息
+    const userInfoRes = await fetch(
+      'https://open.feishu.cn/open-apis/authen/v1/access_token',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${appAccessToken}`,
+        },
+        body: JSON.stringify({
+          grant_type: 'authorization_code',
+          code: authCode,
+        }),
+      }
+    ).then((r) => r.json());
+
+    if (userInfoRes.code !== 0) {
+      res.status(400).json({
+        success: false,
+        error: userInfoRes.msg || '飞书授权码无效或已过期',
+      });
+      return;
+    }
+
+    const feishuEmployeeId =
+      userInfoRes.data.employee_no || userInfoRes.data.user_id;
+    const feishuUserId = userInfoRes.data.user_id;
+    const feishuName = userInfoRes.data.name;
+
+    // 3. 匹配本地用户
+    const user = await prisma.user.findFirst({
+      where: { feishuEmployeeId },
+    });
+
+    if (!user) {
+      res.status(404).json({
+        success: false,
+        code: 'USER_NOT_BOUND',
+        error: '账号未绑定，请使用账号密码完成首次绑定',
+        feishuEmployeeId,
+      });
+      return;
+    }
+
+    // 4. 签发 JWT
+    const token = jwt.sign(
+      { userId: user.id, email: user.email, role: user.role },
+      env.JWT_SECRET,
+      { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
+    );
+
+    res.json({
+      success: true,
+      message: '登录成功',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        createdAt: user.createdAt,
+      },
     });
   })
 );

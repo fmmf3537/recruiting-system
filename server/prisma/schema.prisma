@@ -9,13 +9,14 @@ datasource db {
 
 // ==================== 成员表 ====================
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      String   // admin, member
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  email            String   @unique
+  password         String
+  name             String
+  role             String   // admin, member
+  feishuEmployeeId String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   // 关系：一个 User 创建多个 Candidate
   createdCandidates Candidate[] @relation("CreatedCandidates")

@@ -31,12 +31,12 @@ export interface FunnelStat {
  * 获取数据看板统计
  */
 export function getDashboard(): Promise<ApiResponse<DashboardData>> {
-  return get('/api/stats/dashboard');
+  return get('/stats/dashboard');
 }
 
 /**
  * 获取招聘漏斗统计
  */
 export function getFunnelStats(): Promise<ApiResponse<FunnelStat[]>> {
-  return get('/api/stats/funnel');
+  return get('/stats/funnel');
 }

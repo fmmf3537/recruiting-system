@@ -78,14 +78,22 @@ export function initFeishu(): Promise<void> {
     }
     // 若 SDK 未加载，简单轮询等待
     let count = 0;
+    // eslint-disable-next-line no-console
+    console.log('[Feishu] initFeishu start, h5sdk:', window.h5sdk);
     const timer = setInterval(() => {
       count += 1;
+      // eslint-disable-next-line no-console
+      console.log(`[Feishu] waiting for h5sdk... ${count}`);
       if (window.h5sdk?.ready) {
         clearInterval(timer);
+        // eslint-disable-next-line no-console
+        console.log('[Feishu] h5sdk.ready found');
         window.h5sdk.ready(() => {
+          // eslint-disable-next-line no-console
+          console.log('[Feishu] h5sdk.ready callback executed');
           resolve();
         });
-      } else if (count > 20) {
+      } else if (count > 50) {
         clearInterval(timer);
         reject(new Error('飞书 SDK 加载超时'));
       }
@@ -105,6 +113,8 @@ export function getAuthCode(): Promise<string> {
     }
     // appId 从环境变量读取，若未配置则降级
     const appId = import.meta.env.VITE_FEISHU_APP_ID || '';
+    // eslint-disable-next-line no-console
+    console.log('[Feishu] getAuthCode appId:', appId);
     if (!appId) {
       reject(new Error('未配置飞书 AppID'));
       return;
@@ -112,10 +122,14 @@ export function getAuthCode(): Promise<string> {
     window.tt.requestAuthCode({
       appId,
       success: (res) => {
+        // eslint-disable-next-line no-console
+        console.log('[Feishu] requestAuthCode success:', res);
         resolve(res.code);
       },
       fail: (err) => {
-        reject(new Error(err.errMsg || '获取 authCode 失败'));
+        // eslint-disable-next-line no-console
+        console.error('[Feishu] requestAuthCode fail:', err);
+        reject(new Error(err.errMsg || '获取 authCode 失败，请检查飞书应用配置'));
       },
     });
   });

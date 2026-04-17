@@ -2,6 +2,11 @@
   <div class="detail-page">
     <van-nav-bar title="职位详情" left-arrow fixed placeholder @click-left="$router.back()" />
 
+    <div v-if="loadError" class="error-block">
+      <p>加载失败，请检查网络后重试</p>
+      <van-button round block type="primary" @click="loadData">重新加载</van-button>
+    </div>
+
     <div v-if="job" class="content">
       <van-cell-group inset class="group">
         <van-cell title="职位名称" :value="job.title" />
@@ -47,14 +52,17 @@ const route = useRoute();
 const jobId = route.params.id as string;
 
 const job = ref<JobDetail | null>(null);
+const loadError = ref(false);
 
 async function loadData() {
+  loadError.value = false;
   try {
     const res = await getJobById(jobId);
     if (res.success) {
       job.value = res.data;
     }
   } catch {
+    loadError.value = true;
     showToast('加载详情失败');
   }
 }
@@ -149,5 +157,12 @@ onMounted(() => {
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   background-color: #fff;
   border-top: 1px solid #ebedf0;
+}
+
+.error-block {
+  text-align: center;
+  padding: 48px 24px;
+  color: #666;
+  font-size: 14px;
 }
 </style>

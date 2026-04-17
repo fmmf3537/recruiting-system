@@ -201,29 +201,29 @@ export interface InterviewFeedbackListData {
 }
 
 export function getCandidateList(params?: CandidateListParams): Promise<CandidateListData> {
-  return request.get('/api/candidates', { params });
+  return request.get('/candidates', { params });
 }
 
 export function getCandidateById(id: string): Promise<CandidateDetailData> {
-  return request.get(`/api/candidates/${id}`);
+  return request.get(`/candidates/${id}`);
 }
 
 export function createCandidate(data: CreateCandidateParams): Promise<OperationResult> {
-  return request.post('/api/candidates', data);
+  return request.post('/candidates', data);
 }
 
 export function updateCandidate(id: string, data: UpdateCandidateParams): Promise<OperationResult> {
-  return request.patch(`/api/candidates/${id}`, data);
+  return request.patch(`/candidates/${id}`, data);
 }
 
 export function advanceStage(id: string, data: AdvanceStageParams): Promise<OperationResult> {
-  return request.post(`/api/candidates/${id}/stage`, data);
+  return request.post(`/candidates/${id}/stage`, data);
 }
 
 export function addInterviewFeedback(id: string, data: InterviewFeedbackParams): Promise<OperationResult> {
-  return request.post(`/api/candidates/${id}/feedback`, data);
+  return request.post(`/candidates/${id}/feedback`, data);
 }
 
 export function getInterviewFeedbacks(id: string): Promise<InterviewFeedbackListData> {
-  return request.get(`/api/candidates/${id}/feedback`);
+  return request.get(`/candidates/${id}/feedback`);
 }

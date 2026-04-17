@@ -85,25 +85,25 @@ export interface OperationResult {
 }
 
 export function getOfferList(params?: OfferListParams): Promise<OfferListData> {
-  return request.get('/api/offers', { params });
+  return request.get('/offers', { params });
 }
 
 export function getOfferByCandidateId(candidateId: string): Promise<OfferDetailData> {
-  return request.get(`/api/offers/${candidateId}`);
+  return request.get(`/offers/${candidateId}`);
 }
 
 export function createOffer(data: CreateOfferParams): Promise<OperationResult> {
-  return request.post('/api/offers', data);
+  return request.post('/offers', data);
 }
 
 export function updateOffer(candidateId: string, data: UpdateOfferParams): Promise<OperationResult> {
-  return request.put(`/api/offers/${candidateId}`, data);
+  return request.put(`/offers/${candidateId}`, data);
 }
 
 export function updateOfferResult(candidateId: string, data: UpdateOfferResultParams): Promise<OperationResult> {
-  return request.put(`/api/offers/${candidateId}/result`, data);
+  return request.put(`/offers/${candidateId}/result`, data);
 }
 
 export function markOfferAsJoined(candidateId: string, data: MarkAsJoinedParams): Promise<OperationResult> {
-  return request.post(`/api/offers/${candidateId}/join`, data);
+  return request.post(`/offers/${candidateId}/join`, data);
 }

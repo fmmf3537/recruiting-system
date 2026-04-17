@@ -39,5 +39,5 @@ export interface InterviewListData {
 }
 
 export function getInterviewList(params?: InterviewListParams): Promise<InterviewListData> {
-  return request.get('/api/candidates/interviews', { params });
+  return request.get('/candidates/interviews', { params });
 }
