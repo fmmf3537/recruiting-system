@@ -368,7 +368,7 @@ router.post(
           app_secret: env.FEISHU_APP_SECRET,
         }),
       }
-    ).then((r) => r.json());
+    ).then((r) => r.json() as Promise<{ code: number; msg?: string; app_access_token?: string }>);
 
     if (appAccessTokenRes.code !== 0) {
       res.status(400).json({
@@ -394,7 +394,7 @@ router.post(
           code: authCode,
         }),
       }
-    ).then((r) => r.json());
+    ).then((r) => r.json() as Promise<{ code: number; msg?: string; data?: { employee_no?: string; user_id?: string; name?: string } }>);
 
     if (userInfoRes.code !== 0) {
       res.status(400).json({
@@ -405,9 +405,7 @@ router.post(
     }
 
     const feishuEmployeeId =
-      userInfoRes.data.employee_no || userInfoRes.data.user_id;
-    const feishuUserId = userInfoRes.data.user_id;
-    const feishuName = userInfoRes.data.name;
+      userInfoRes.data?.employee_no || userInfoRes.data?.user_id || '';
 
     // 3. 匹配本地用户
     const user = await prisma.user.findFirst({
