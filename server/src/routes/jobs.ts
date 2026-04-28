@@ -1,6 +1,8 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
+import { JOB_STATUS } from '../constants';
 import { jobController } from '../controllers/job.controller';
+import { tagController } from '../controllers/tag.controller';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 
@@ -18,7 +20,8 @@ const createJobSchema = z.object({
   type: z.string().min(1, '招聘类型不能为空'),
   description: z.string().min(1, '职位描述不能为空'),
   requirements: z.string().min(1, '职位要求不能为空'),
-  status: z.enum(['open', 'paused', 'closed']).optional().default('open'),
+  status: z.enum([...JOB_STATUS] as [string, ...string[]]).optional().default('open'),
+  tagIds: z.array(z.string()).max(20, '最多设置20个标签').optional(),
 });
 
 // 更新职位验证 Schema（所有字段可选）
@@ -31,7 +34,8 @@ const updateJobSchema = z.object({
   type: z.string().optional(),
   description: z.string().optional(),
   requirements: z.string().optional(),
-  status: z.enum(['open', 'paused', 'closed']).optional(),
+  status: z.enum([...JOB_STATUS] as [string, ...string[]]).optional(),
+  tagIds: z.array(z.string()).max(20, '最多设置20个标签').optional(),
 });
 
 // 职位 ID 参数验证
@@ -137,6 +141,35 @@ router.delete(
   authorize('admin'),
   validate(jobIdParamSchema, 'params'),
   jobController.deleteJob
+);
+
+// ============ 职位标签 ============
+
+const setTagsSchema = z.object({
+  tagIds: z.array(z.string()).max(20, '最多设置20个标签'),
+});
+
+/**
+ * GET /api/jobs/:id/tags
+ * 获取职位的标签
+ */
+router.get(
+  '/:id/tags',
+  authenticate,
+  validate(jobIdParamSchema, 'params'),
+  tagController.getJobTags
+);
+
+/**
+ * PUT /api/jobs/:id/tags
+ * 设置职位的标签
+ */
+router.put(
+  '/:id/tags',
+  authenticate,
+  validate(jobIdParamSchema, 'params'),
+  validate(setTagsSchema),
+  tagController.setJobTags
 );
 
 export default router;

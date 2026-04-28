@@ -27,7 +27,7 @@
       />
 
       <van-field
-        v-model="form.interviewTime"
+        v-model="displayDateTime"
         is-link
         readonly
         name="interviewTime"
@@ -37,12 +37,14 @@
         @click="showDatePicker = true"
       />
       <van-popup v-model:show="showDatePicker" round position="bottom">
-        <van-date-picker
-          title="选择日期时间"
-          type="datetime"
-          @confirm="onDateConfirm"
-          @cancel="showDatePicker = false"
-        />
+        <div class="datetime-picker">
+          <van-date-picker
+            title="选择日期"
+            :min-date="minDate"
+            @confirm="onDateConfirm"
+            @cancel="showDatePicker = false"
+          />
+        </div>
       </van-popup>
 
       <van-field
@@ -91,10 +93,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { addInterviewFeedback, type InterviewRound, type InterviewConclusion } from '@/api/candidates';
+import { INTERVIEW_ROUNDS, INTERVIEW_CONCLUSIONS, INTERVIEW_CONCLUSION_MAP } from '@/constants';
 
 const route = useRoute();
 const router = useRouter();
@@ -107,17 +110,22 @@ const showRoundPicker = ref(false);
 const showDatePicker = ref(false);
 const showConclusionPicker = ref(false);
 
-const roundColumns = [
-  { text: '初试', value: '初试' },
-  { text: '复试', value: '复试' },
-  { text: '终面', value: '终面' },
-];
+const minDate = new Date(2020, 0, 1);
+const displayDateTime = computed(() => {
+  if (!form.value.interviewTime) return '';
+  const d = new Date(form.value.interviewTime);
+  if (Number.isNaN(d.getTime())) return form.value.interviewTime;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+});
 
-const conclusionColumns = [
-  { text: '通过', value: 'pass' },
-  { text: '淘汰', value: 'reject' },
-  { text: '待定', value: 'pending' },
-];
+const roundColumns = INTERVIEW_ROUNDS.map((r) => ({ text: r, value: r }));
+
+const conclusionColumns = INTERVIEW_CONCLUSIONS.map((c) => ({ text: INTERVIEW_CONCLUSION_MAP[c], value: c }));
 
 const form = ref({
   round: defaultRound,

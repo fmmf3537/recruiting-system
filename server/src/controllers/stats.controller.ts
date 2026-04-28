@@ -112,6 +112,35 @@ export class StatsController {
   }
 
   /**
+   * GET /api/stats/referral
+   * 内推统计
+   */
+  async getReferralStats(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      const dateRange = statsService.parseDateRange(startDate, endDate);
+
+      const stats = await statsService.getReferralStats(dateRange);
+
+      res.json({
+        success: true,
+        data: stats,
+        dateRange: {
+          startDate: dateRange.startDate.toISOString().split('T')[0],
+          endDate: dateRange.endDate.toISOString().split('T')[0],
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /api/stats/funnel
    * 招聘漏斗统计
    */

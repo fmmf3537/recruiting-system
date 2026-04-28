@@ -8,6 +8,7 @@ import rateLimit from 'express-rate-limit';
 import routes from './routes';
 import { env } from './lib/env';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { setupSwagger } from './lib/swagger';
 
 // 创建 Express 应用
 const app: Application = express();
@@ -58,6 +59,11 @@ app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_DIR)));
 
 // 挂载 API 路由
 app.use('/api', routes);
+
+// Swagger 文档（仅在非生产环境显示）
+if (env.NODE_ENV !== 'production') {
+  setupSwagger(app);
+}
 
 // 404 处理
 app.use(notFoundHandler);

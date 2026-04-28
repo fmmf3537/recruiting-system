@@ -1,6 +1,6 @@
 <template>
   <div class="stats-page">
-    <van-nav-bar title="数据看板" left-arrow fixed placeholder @click-left="$router.back()" />
+    <van-nav-bar title="数据看板" fixed placeholder />
 
     <div class="content">
       <!-- KPI 卡片 -->

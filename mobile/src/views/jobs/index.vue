@@ -29,6 +29,7 @@
 import { useRouter } from 'vue-router';
 import ListPage from '@/components/ListPage.vue';
 import { getJobList, type JobItem, type JobStatus } from '@/api/jobs';
+import { getJobStatusType } from '@/constants';
 
 const router = useRouter();
 
@@ -41,9 +42,7 @@ function goDetail(id: string) {
 }
 
 function getStatusType(status: JobStatus) {
-  if (status === 'open') return 'success';
-  if (status === 'closed') return 'danger';
-  return 'warning';
+  return getJobStatusType(status);
 }
 </script>
 

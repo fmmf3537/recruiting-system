@@ -25,9 +25,10 @@ A full-featured **Applicant Tracking System (ATS)** built with modern web techno
 - 📊 **Recruitment Pipeline**: Visualize candidates through hiring stages (New → Screening → Interview → Offer → Hired)
 - 📈 **Analytics Dashboard**: Data visualization with ECharts for recruitment metrics
 - 🔐 **Role-based Access**: Admin and Member roles with different permissions
-- 📱 **Responsive Design**: Mobile-friendly interface using Element Plus
+- 📱 **Mobile H5**: Dedicated mobile interface (Vue 3 + Vant 4) for on-the-go recruiting
 - 🔍 **Duplicate Detection**: Automatic candidate deduplication by phone/email
 - 📄 **Resume Upload**: Support for PDF and Word documents
+- 🚀 **Feishu Integration**: SSO login via Feishu (Lark) for enterprise users
 
 ---
 
@@ -83,8 +84,17 @@ A full-featured **Applicant Tracking System (ATS)** built with modern web techno
    pnpm dev
    ```
 
-6. **Access the application**
-   - Frontend: http://localhost:5173
+6. **Start mobile development server (optional)**
+   ```bash
+   # Terminal 3: Start mobile H5
+   cd mobile
+   pnpm install
+   pnpm dev
+   ```
+
+7. **Access the application**
+   - PC Frontend: http://localhost:5173
+   - Mobile H5: http://localhost:5174
    - Backend API: http://localhost:3001
 
 ---
@@ -101,8 +111,9 @@ A full-featured **Applicant Tracking System (ATS)** built with modern web techno
 
 2. **Build and start services**
    ```bash
-   # Build client first
+   # Build client and mobile first
    docker-compose --profile build run --rm client-build
+   docker-compose --profile build run --rm mobile-build
    
    # Start all services
    docker-compose up -d
@@ -114,7 +125,8 @@ A full-featured **Applicant Tracking System (ATS)** built with modern web techno
    ```
 
 4. **Access the application**
-   - Application: http://localhost
+   - PC Application: http://localhost
+   - Mobile H5: http://localhost/m/
    - API: http://localhost/api
 
 ### Stopping Services
@@ -132,10 +144,21 @@ docker-compose down -v
 
 ```
 recruitment-system/
-├── 📂 client/                 # Frontend (Vue 3 + TypeScript)
+├── 📂 client/                 # PC Frontend (Vue 3 + TypeScript + Element Plus)
 │   ├── src/
 │   │   ├── api/              # API client functions
 │   │   ├── components/       # Vue components
+│   │   ├── router/           # Vue Router configuration
+│   │   ├── stores/           # Pinia state management
+│   │   ├── views/            # Page components
+│   │   └── utils/            # Utility functions
+│   ├── package.json
+│   └── vite.config.ts
+│
+├── 📂 mobile/                 # Mobile H5 (Vue 3 + TypeScript + Vant 4)
+│   ├── src/
+│   │   ├── api/              # API client functions
+│   │   ├── components/       # Mobile components
 │   │   ├── router/           # Vue Router configuration
 │   │   ├── stores/           # Pinia state management
 │   │   ├── views/            # Page components
@@ -175,6 +198,9 @@ recruitment-system/
 | POST | `/api/auth/login` | User login |
 | POST | `/api/auth/logout` | User logout |
 | GET | `/api/auth/me` | Get current user |
+| POST | `/api/auth/feishu/login` | Feishu (Lark) SSO login |
+| POST | `/api/auth/bind-feishu` | Bind Feishu account |
+| POST | `/api/auth/change-password` | Change password |
 
 ### Jobs
 
@@ -215,9 +241,11 @@ recruitment-system/
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/api/stats/dashboard` | Dashboard KPI + trend |
 | GET | `/api/stats/workload` | Workload statistics |
 | GET | `/api/stats/channel` | Channel effectiveness |
 | GET | `/api/stats/jobs` | Job statistics |
+| GET | `/api/stats/funnel` | Recruitment funnel |
 
 ---
 
@@ -230,17 +258,30 @@ pnpm test
 
 # Run with coverage
 pnpm test:coverage
+
+# Run mobile tests
+cd ../mobile
+pnpm test:unit
 ```
 
 ---
 
 ## 🛠️ Tech Stack
 
-### Frontend
+### PC Frontend
 - **Vue 3** - Progressive JavaScript framework
 - **TypeScript** - Type-safe development
 - **Vite** - Fast build tool
 - **Element Plus** - UI component library
+- **Pinia** - State management
+- **Vue Router** - Client-side routing
+- **ECharts** - Data visualization
+
+### Mobile H5
+- **Vue 3** - Progressive JavaScript framework
+- **TypeScript** - Type-safe development
+- **Vite** - Fast build tool
+- **Vant 4** - Mobile UI component library
 - **Pinia** - State management
 - **Vue Router** - Client-side routing
 - **ECharts** - Data visualization
@@ -281,9 +322,10 @@ MIT License
 - 📊 **招聘流程**：可视化招聘阶段（入库→初筛→面试→Offer→入职）
 - 📈 **数据分析**：使用 ECharts 进行招聘数据可视化
 - 🔐 **权限管理**：管理员和普通成员两种角色
-- 📱 **响应式设计**：基于 Element Plus 的移动端友好界面
+- 📱 **移动端 H5**：独立的移动端界面（Vue 3 + Vant 4），随时随地跟进招聘
 - 🔍 **查重检测**：根据手机号/邮箱自动检测重复候选人
 - 📄 **简历上传**：支持 PDF 和 Word 文档
+- 🚀 **飞书集成**：支持飞书免登登录，企业用户一键接入
 
 ---
 
@@ -339,8 +381,17 @@ MIT License
    pnpm dev
    ```
 
-6. **访问应用**
-   - 前端：http://localhost:5173
+6. **启动移动端开发服务器（可选）**
+   ```bash
+   # 终端 3：启动移动端 H5
+   cd mobile
+   pnpm install
+   pnpm dev
+   ```
+
+7. **访问应用**
+   - PC 前端：http://localhost:5173
+   - 移动端 H5：http://localhost:5174
    - 后端 API：http://localhost:3001
 
 ---
@@ -357,8 +408,9 @@ MIT License
 
 2. **构建并启动服务**
    ```bash
-   # 先构建前端
+   # 先构建 PC 端和移动端
    docker-compose --profile build run --rm client-build
+   docker-compose --profile build run --rm mobile-build
    
    # 启动所有服务
    docker-compose up -d
@@ -370,7 +422,8 @@ MIT License
    ```
 
 4. **访问应用**
-   - 应用：http://localhost
+   - PC 端：http://localhost
+   - 移动端 H5：http://localhost/m/
    - API：http://localhost/api
 
 ### 停止服务
@@ -388,10 +441,21 @@ docker-compose down -v
 
 ```
 recruitment-system/
-├── 📂 client/                 # 前端（Vue 3 + TypeScript）
+├── 📂 client/                 # PC 前端（Vue 3 + TypeScript + Element Plus）
 │   ├── src/
 │   │   ├── api/              # API 接口函数
 │   │   ├── components/       # Vue 组件
+│   │   ├── router/           # 路由配置
+│   │   ├── stores/           # Pinia 状态管理
+│   │   ├── views/            # 页面组件
+│   │   └── utils/            # 工具函数
+│   ├── package.json
+│   └── vite.config.ts
+│
+├── 📂 mobile/                 # 移动端 H5（Vue 3 + TypeScript + Vant 4）
+│   ├── src/
+│   │   ├── api/              # API 接口函数
+│   │   ├── components/       # 移动端组件
 │   │   ├── router/           # 路由配置
 │   │   ├── stores/           # Pinia 状态管理
 │   │   ├── views/            # 页面组件
@@ -431,6 +495,9 @@ recruitment-system/
 | POST | `/api/auth/login` | 用户登录 |
 | POST | `/api/auth/logout` | 用户登出 |
 | GET | `/api/auth/me` | 获取当前用户信息 |
+| POST | `/api/auth/feishu/login` | 飞书免登登录 |
+| POST | `/api/auth/bind-feishu` | 绑定飞书账号 |
+| POST | `/api/auth/change-password` | 修改密码 |
 
 ### 职位
 
@@ -471,9 +538,11 @@ recruitment-system/
 
 | 方法 | 接口 | 说明 |
 |------|------|------|
+| GET | `/api/stats/dashboard` | 数据看板（KPI + 趋势） |
 | GET | `/api/stats/workload` | 工作量统计 |
 | GET | `/api/stats/channel` | 渠道效果分析 |
 | GET | `/api/stats/jobs` | 职位统计 |
+| GET | `/api/stats/funnel` | 招聘漏斗 |
 
 ---
 
@@ -486,17 +555,30 @@ pnpm test
 
 # 查看覆盖率
 pnpm test:coverage
+
+# 运行移动端测试
+cd ../mobile
+pnpm test:unit
 ```
 
 ---
 
 ## 🛠️ 技术栈
 
-### 前端
+### PC 前端
 - **Vue 3** - 渐进式 JavaScript 框架
 - **TypeScript** - 类型安全开发
 - **Vite** - 快速构建工具
 - **Element Plus** - UI 组件库
+- **Pinia** - 状态管理
+- **Vue Router** - 客户端路由
+- **ECharts** - 数据可视化
+
+### 移动端 H5
+- **Vue 3** - 渐进式 JavaScript 框架
+- **TypeScript** - 类型安全开发
+- **Vite** - 快速构建工具
+- **Vant 4** - 移动端 UI 组件库
 - **Pinia** - 状态管理
 - **Vue Router** - 客户端路由
 - **ECharts** - 数据可视化

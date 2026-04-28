@@ -116,6 +116,72 @@
                 <el-input v-model="formData.expectedSalary" placeholder="如：20k-30k" />
               </el-form-item>
             </div>
+
+            <!-- 工作经历 -->
+            <div class="form-section">
+              <h3 class="section-title">
+                工作经历
+                <el-button type="primary" link size="small" @click="addWorkHistory">
+                  <el-icon><Plus /></el-icon>添加经历
+                </el-button>
+              </h3>
+              
+              <div v-if="formData.workHistory?.length" class="work-history-list">
+                <div
+                  v-for="(item, index) in formData.workHistory"
+                  :key="index"
+                  class="work-history-item"
+                >
+                  <el-row :gutter="12">
+                    <el-col :span="10">
+                      <el-input v-model="item.company" placeholder="公司名称" size="small" />
+                    </el-col>
+                    <el-col :span="10">
+                      <el-input v-model="item.position" placeholder="职位" size="small" />
+                    </el-col>
+                    <el-col :span="4" style="text-align: right">
+                      <el-button type="danger" link size="small" @click="removeWorkHistory(index)">
+                        <el-icon><Delete /></el-icon>
+                      </el-button>
+                    </el-col>
+                  </el-row>
+                  <el-row :gutter="12" style="margin-top: 8px">
+                    <el-col :span="10">
+                      <el-date-picker
+                        v-model="item.startDate"
+                        type="month"
+                        placeholder="开始时间"
+                        size="small"
+                        style="width: 100%"
+                        value-format="YYYY-MM"
+                      />
+                    </el-col>
+                    <el-col :span="10">
+                      <el-date-picker
+                        v-model="item.endDate"
+                        type="month"
+                        placeholder="结束时间（未选表示至今）"
+                        size="small"
+                        style="width: 100%"
+                        value-format="YYYY-MM"
+                      />
+                    </el-col>
+                  </el-row>
+                  <el-row style="margin-top: 8px">
+                    <el-col :span="24">
+                      <el-input
+                        v-model="item.description"
+                        type="textarea"
+                        :rows="2"
+                        placeholder="工作描述"
+                        size="small"
+                      />
+                    </el-col>
+                  </el-row>
+                </div>
+              </div>
+              <el-empty v-else description="暂无工作经历" :image-size="60" />
+            </div>
           </el-col>
 
           <el-col :span="10">
@@ -159,6 +225,10 @@
               <el-form-item label="来源备注" prop="sourceNote">
                 <el-input v-model="formData.sourceNote" type="textarea" :rows="2" placeholder="选填，如内推人姓名等" />
               </el-form-item>
+
+              <el-form-item label="推荐人" prop="referrer">
+                <el-input v-model="formData.referrer" placeholder="选填，内部推荐时填写推荐人姓名/工号" />
+              </el-form-item>
             </div>
 
             <!-- 关联职位 -->
@@ -176,6 +246,52 @@
                     :key="job.id"
                     :label="job.title"
                     :value="job.id"
+                  />
+                </el-select>
+              </el-form-item>
+            </div>
+
+            <!-- 技能标签 -->
+            <div class="form-section">
+              <h3 class="section-title">技能标签</h3>
+              <el-form-item prop="skills" label-width="0">
+                <el-select
+                  v-model="formData.skills"
+                  multiple
+                  filterable
+                  allow-create
+                  default-first-option
+                  placeholder="请选择或输入技能"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="skill in dictionaryStore.skillOptions"
+                    :key="skill.code"
+                    :label="skill.name"
+                    :value="skill.name"
+                  />
+                </el-select>
+              </el-form-item>
+            </div>
+
+            <!-- 标签 -->
+            <div class="form-section">
+              <h3 class="section-title">标签</h3>
+              <el-form-item prop="tagIds" label-width="0">
+                <el-select
+                  v-model="formData.tagIds"
+                  multiple
+                  filterable
+                  allow-create
+                  default-first-option
+                  placeholder="请选择或输入标签"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="tag in tagOptions"
+                    :key="tag.id"
+                    :label="tag.name"
+                    :value="tag.id"
                   />
                 </el-select>
               </el-form-item>
@@ -216,21 +332,25 @@
 import { ref, reactive, onActivated, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
-import { ArrowLeft, Upload, Document, Delete } from '@element-plus/icons-vue';
+import { ArrowLeft, Upload, Document, Delete, Plus } from '@element-plus/icons-vue';
 import {
   createCandidate,
   updateCandidate,
   getCandidateById,
   type CreateCandidateParams,
   type UpdateCandidateParams,
+  type WorkHistory,
 } from '@/api/candidate';
 import { getJobList, type JobItem } from '@/api/job';
+import { getTags, type Tag } from '@/api/tag';
 import { uploadFile } from '@/utils/request';
 import { useDictionaryStore } from '@/stores/dictionary';
+import { useResumeParserStore } from '@/stores/resumeParser';
 
 const route = useRoute();
 const dictionaryStore = useDictionaryStore();
 const router = useRouter();
+const resumeParserStore = useResumeParserStore();
 
 const isEdit = computed(() => !!route.params.id);
 const candidateId = computed(() => route.params.id as string);
@@ -255,9 +375,15 @@ const formData = reactive<CreateCandidateParams>({
   resumeUrl: '',
   source: '',
   sourceNote: '',
+  referrer: '',
   intro: '',
   jobIds: [],
+  tagIds: [],
+  skills: [] as string[],
+  workHistory: [],
 });
+
+const tagOptions = ref<Tag[]>([]);
 
 const resumeFileName = computed(() => {
   if (!formData.resumeUrl) return '';
@@ -303,6 +429,17 @@ async function fetchJobList() {
   }
 }
 
+async function fetchTags() {
+  try {
+    const res = await getTags('candidate');
+    if (res.success) {
+      tagOptions.value = res.data;
+    }
+  } catch {
+    // 静默失败
+  }
+}
+
 async function fetchCandidateDetail() {
   if (!isEdit.value) return;
   loading.value = true;
@@ -325,8 +462,19 @@ async function fetchCandidateDetail() {
         resumeUrl: data.resumeUrl || '',
         source: data.source,
         sourceNote: data.sourceNote || '',
+        referrer: data.referrer || '',
         intro: data.intro || '',
         jobIds: data.candidateJobs?.map((j) => j.jobId) || [],
+        tagIds: data.tags?.map((t: Tag) => t.id) || [],
+        skills: data.skills || [],
+        workHistory: data.workHistories?.map((w: any) => ({
+          id: w.id,
+          company: w.company,
+          position: w.position,
+          startDate: w.startDate ? w.startDate.substring(0, 7) : undefined,
+          endDate: w.endDate ? w.endDate.substring(0, 7) : undefined,
+          description: w.description || '',
+        })) || [],
       });
     }
   } catch (error) {
@@ -394,17 +542,7 @@ async function handleSubmit() {
         router.back();
       }
     } else {
-      // 合并表单数据和工作经历
-      const submitData = { ...formData };
-      const workHistoryStr = sessionStorage.getItem('parsedWorkHistory');
-      if (workHistoryStr) {
-        try {
-          submitData.workHistory = JSON.parse(workHistoryStr);
-        } catch (e) {
-          console.error('解析工作经历数据失败:', e);
-        }
-      }
-      const res = await createCandidate(submitData);
+      const res = await createCandidate({ ...formData });
       if (res.success) {
         // 有查重警告时显示确认弹窗
         if (res.warning && res.duplicates && res.duplicates.length > 0) {
@@ -432,8 +570,8 @@ async function handleSubmit() {
             return;
           }
         }
-        // 清理工作经历数据
-        sessionStorage.removeItem('parsedWorkHistory');
+        // 清理简历解析临时数据
+        resumeParserStore.clearParsedData();
         ElMessage.success('创建成功');
         router.back();
       }
@@ -461,47 +599,66 @@ function resetForm() {
     resumeUrl: '',
     source: '',
     sourceNote: '',
+    referrer: '',
     intro: '',
     jobIds: [],
+    tagIds: [],
+    skills: [],
+    workHistory: [],
   });
 }
 
 function fillFromParsedResume() {
-  const parsedData = sessionStorage.getItem('parsedResume');
-  if (parsedData) {
-    try {
-      const data = JSON.parse(parsedData);
-      Object.assign(formData, {
-        name: data.name || '',
-        phone: data.phone || '',
-        email: data.email || '',
-        gender: data.gender === '男' || data.gender === '女' ? data.gender : '男',
-        age: data.age || undefined,
-        education: data.education || '',
-        school: data.school || '',
-        workYears: data.workYears || undefined,
-        currentCompany: data.currentCompany || '',
-        currentPosition: data.currentPosition || '',
-        expectedSalary: data.expectedSalary || '',
-        intro: data.skills?.length ? `技能：${data.skills.join(', ')}` : '',
-        resumeUrl: data.resumeUrl || '',
-      });
-      // 将工作经历也存储到 sessionStorage，供后续保存时使用
-      if (data.workHistory?.length) {
-        sessionStorage.setItem('parsedWorkHistory', JSON.stringify(data.workHistory));
-      }
-      sessionStorage.removeItem('parsedResume');
-      ElMessage.success('简历信息已填充，请确认并补充其他信息');
-    } catch (e) {
-      console.error('解析预填充数据失败:', e);
-    }
+  const data = resumeParserStore.parsedData;
+  if (data) {
+    Object.assign(formData, {
+      name: data.name || '',
+      phone: data.phone || '',
+      email: data.email || '',
+      gender: data.gender === '男' || data.gender === '女' ? data.gender : '男',
+      age: data.age || undefined,
+      education: data.education || '',
+      school: data.school || '',
+      workYears: data.workYears || undefined,
+      currentCompany: data.currentCompany || '',
+      currentPosition: data.currentPosition || '',
+      expectedSalary: data.expectedSalary || '',
+      skills: data.skills || [],
+      resumeUrl: data.resumeUrl || '',
+      workHistory: data.workHistory?.map((w: WorkHistory) => ({
+        company: w.company || '',
+        position: w.position || '',
+        startDate: w.startDate,
+        endDate: w.endDate,
+        description: w.description || '',
+      })) || [],
+    });
+    ElMessage.success('简历信息已填充，请确认并补充其他信息');
   }
+}
+
+function addWorkHistory() {
+  if (!formData.workHistory) {
+    formData.workHistory = [];
+  }
+  formData.workHistory.push({
+    company: '',
+    position: '',
+    startDate: undefined,
+    endDate: undefined,
+    description: '',
+  });
+}
+
+function removeWorkHistory(index: number) {
+  formData.workHistory?.splice(index, 1);
 }
 
 function init() {
   dictionaryStore.fetchDictionaries('education');
   dictionaryStore.fetchDictionaries('source');
   fetchJobList();
+  fetchTags();
   if (isEdit.value) {
     fetchCandidateDetail();
   } else {
@@ -585,6 +742,19 @@ onActivated(init);
     margin-top: 40px;
     padding-top: 20px;
     border-top: 1px solid #ebeef5;
+  }
+
+  .work-history-list {
+    .work-history-item {
+      padding: 16px;
+      background-color: #f5f7fa;
+      border-radius: 8px;
+      margin-bottom: 12px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
   }
 }
 </style>

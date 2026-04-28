@@ -86,7 +86,7 @@ const router = createRouter({
       path: '/stats',
       name: 'Stats',
       component: () => import('@/views/stats/index.vue'),
-      meta: { showTabBar: false, title: '数据看板' },
+      meta: { showTabBar: true, title: '数据看板' },
     },
     {
       path: '/messages',

@@ -41,6 +41,12 @@ vi.mock('../../src/lib/prisma', () => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    candidateTag: {
+      findMany: vi.fn(),
+      createMany: vi.fn(),
+      deleteMany: vi.fn(),
+      groupBy: vi.fn(),
+    },
   },
 }));
 
@@ -53,6 +59,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
   beforeEach(() => {
     service = new CandidateService();
     vi.clearAllMocks();
+    vi.mocked(prisma.candidateTag.findMany).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -151,6 +158,10 @@ describe('CandidateService - 候选人服务单元测试', () => {
         },
       ] as any);
       vi.mocked(prisma.candidate.count).mockResolvedValue(1);
+      vi.mocked(prisma.stageRecord.findMany).mockResolvedValue([
+        { candidateId: 'candidate-1', stage: '初筛', status: 'in_progress' },
+      ] as any);
+      vi.mocked(prisma.candidateJob.findMany).mockResolvedValue([] as any);
 
       const result = await service.getCandidates({ page: 1, pageSize: 10 });
 
@@ -168,6 +179,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
         interviewFeedbacks: [],
         offer: null,
         candidateJobs: [],
+        candidateTags: [],
         createdBy: { id: 'user-1', name: '管理员', email: 'admin@test.com' },
       } as any);
 
@@ -330,10 +342,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
           phone: '13800138000',
           email: 'old@test.com',
         } as any);
-      vi.mocked(prisma.candidate.findFirst).mockResolvedValueOnce({
-        id: 'candidate-2',
-        phone: '13999999999',
-      } as any);
+      vi.mocked(prisma.candidate.count).mockResolvedValueOnce(1);
 
       await expect(service.updateCandidate('candidate-1', { phone: '13999999999' })).rejects.toThrow('该手机号已被其他候选人使用');
     });
@@ -345,10 +354,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
           phone: '13800138000',
           email: 'old@test.com',
         } as any);
-      vi.mocked(prisma.candidate.findFirst).mockResolvedValueOnce({
-        id: 'candidate-2',
-        email: 'new@test.com',
-      } as any);
+      vi.mocked(prisma.candidate.count).mockResolvedValueOnce(1);
 
       await expect(service.updateCandidate('candidate-1', { email: 'new@test.com' })).rejects.toThrow('该邮箱已被其他候选人使用');
     });
@@ -375,6 +381,8 @@ describe('CandidateService - 候选人服务单元测试', () => {
     it('应支持来源筛选', async () => {
       vi.mocked(prisma.candidate.findMany).mockResolvedValue([] as any);
       vi.mocked(prisma.candidate.count).mockResolvedValue(0);
+      vi.mocked(prisma.stageRecord.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.candidateJob.findMany).mockResolvedValue([] as any);
 
       await service.getCandidates({ source: '招聘网站' });
 
@@ -390,6 +398,8 @@ describe('CandidateService - 候选人服务单元测试', () => {
     it('应支持学历筛选', async () => {
       vi.mocked(prisma.candidate.findMany).mockResolvedValue([] as any);
       vi.mocked(prisma.candidate.count).mockResolvedValue(0);
+      vi.mocked(prisma.stageRecord.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.candidateJob.findMany).mockResolvedValue([] as any);
 
       await service.getCandidates({ education: '本科' });
 
@@ -405,6 +415,8 @@ describe('CandidateService - 候选人服务单元测试', () => {
     it('应支持工作年限范围筛选', async () => {
       vi.mocked(prisma.candidate.findMany).mockResolvedValue([] as any);
       vi.mocked(prisma.candidate.count).mockResolvedValue(0);
+      vi.mocked(prisma.stageRecord.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.candidateJob.findMany).mockResolvedValue([] as any);
 
       await service.getCandidates({ workYearsMin: 3, workYearsMax: 5 });
 

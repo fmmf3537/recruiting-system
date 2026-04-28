@@ -52,6 +52,12 @@ export class CandidateController {
     next: NextFunction
   ): Promise<void> {
     try {
+      const tagIds = req.query.tagIds
+        ? (Array.isArray(req.query.tagIds)
+            ? req.query.tagIds
+            : [req.query.tagIds as string])
+        : undefined;
+
       const query = {
         page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
         pageSize: req.query.pageSize ? parseInt(req.query.pageSize as string, 10) : undefined,
@@ -63,6 +69,8 @@ export class CandidateController {
         workYearsMin: req.query.workYearsMin ? parseInt(req.query.workYearsMin as string, 10) : undefined,
         workYearsMax: req.query.workYearsMax ? parseInt(req.query.workYearsMax as string, 10) : undefined,
         jobId: req.query.jobId as string | undefined,
+        tagIds: tagIds as string[] | undefined,
+        hasNoJob: req.query.hasNoJob === 'true',
       };
 
       const result = await candidateService.getCandidates(query);
@@ -238,7 +246,7 @@ export class CandidateController {
 
       const { resumeParseQueue } = await import('../lib/queue');
       const job = await resumeParseQueue.add('parse', {
-        buffer: file.buffer,
+        filePath: file.path,
         mimetype: file.mimetype,
       });
 
@@ -247,11 +255,8 @@ export class CandidateController {
         data: { jobId: job.id },
       });
     } catch (error) {
-      const errorMsg = `【简历解析错误】${new Date().toISOString()}\n${error}`;
-      console.error(errorMsg);
-      // 写入文件以便查看
-      const fs = await import('fs/promises');
-      await fs.appendFile('resume-parse-error.log', errorMsg + '\n\n');
+      const errorMsg = `【简历解析错误】${new Date().toISOString()}`;
+      console.error(errorMsg, error);
       next(error);
     }
   }
@@ -371,6 +376,59 @@ export class CandidateController {
       res.json({
         success: true,
         message: '候选人删除成功',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/candidates/batch/advance
+   * 批量推进候选人阶段
+   */
+  async batchAdvanceStage(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { candidateIds, stage, status, rejectReason, note } = req.body;
+      const userId = req.user!.userId;
+
+      const result = await candidateService.batchAdvanceStage(
+        candidateIds,
+        { stage, status, rejectReason, note },
+        userId
+      );
+
+      res.json({
+        success: true,
+        message: `批量推进完成：成功 ${result.success} 人，失败 ${result.failed} 人`,
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/candidates/batch/tags
+   * 批量设置候选人标签
+   */
+  async batchSetTags(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { candidateIds, tagIds } = req.body;
+
+      const result = await candidateService.batchSetTags(candidateIds, tagIds || []);
+
+      res.json({
+        success: true,
+        message: `批量设置标签完成：成功 ${result.success} 人，失败 ${result.failed} 人`,
+        data: result,
       });
     } catch (error) {
       next(error);

@@ -62,6 +62,7 @@
 import { ref, watch } from 'vue';
 import { showToast } from 'vant';
 import { advanceStage, type CandidateStage, type StageStatus } from '@/api/candidates';
+import { STAGE_ORDER, STAGE_STATUS, STAGE_STATUS_MAP } from '@/constants';
 
 const props = defineProps<{
   show: boolean;
@@ -78,21 +79,9 @@ const submitting = ref(false);
 const showStagePicker = ref(false);
 const showStatusPicker = ref(false);
 
-const stageColumns = [
-  { text: '入库', value: '入库' },
-  { text: '初筛', value: '初筛' },
-  { text: '复试', value: '复试' },
-  { text: '终面', value: '终面' },
-  { text: '拟录用', value: '拟录用' },
-  { text: 'Offer', value: 'Offer' },
-  { text: '入职', value: '入职' },
-];
+const stageColumns = STAGE_ORDER.map((s) => ({ text: s, value: s }));
 
-const statusColumns = [
-  { text: '进行中', value: 'in_progress' },
-  { text: '已通过', value: 'passed' },
-  { text: '已淘汰', value: 'rejected' },
-];
+const statusColumns = STAGE_STATUS.map((s) => ({ text: STAGE_STATUS_MAP[s], value: s }));
 
 const form = ref({
   stage: '' as CandidateStage | '',

@@ -61,6 +61,9 @@ model Job {
   // 关系：一个 Job 有多个 Candidate（通过关联表）
   candidateJobs CandidateJob[]
 
+  // 关系：一个 Job 有多个标签（通过关联表）
+  jobTags JobTag[]
+
   @@index([title])
   @@index([status])
   @@index([type])
@@ -90,7 +93,9 @@ model Candidate {
   resumeUrl       String?
   source          String   // 渠道
   sourceNote      String?
+  referrer        String?  // 推荐人（内部推荐时使用）
   intro           String?  @db.Text  // 候选人说明
+  skills          Json? // 技能标签（从简历解析或手动维护）
   
   createdById     String
   createdBy       User     @relation("CreatedCandidates", fields: [createdById], references: [id])
@@ -100,7 +105,10 @@ model Candidate {
 
   // 关系：一个 Candidate 关联多个 Job（通过关联表）
   candidateJobs CandidateJob[]
-  
+
+  // 关系：一个 Candidate 有多个标签（通过关联表）
+  candidateTags CandidateTag[]
+
   // 关系：一个 Candidate 有多个 StageRecord
   stageRecords  StageRecord[]
   
@@ -112,6 +120,12 @@ model Candidate {
 
   // 关系：一个 Candidate 有多个工作经历
   workHistories WorkHistory[]
+
+  // 关系：一个 Candidate 收到多封邮件
+  emailLogs EmailLog[]
+
+  // 关系：一个 Candidate 有多个入职任务
+  onboardingTasks OnboardingTask[]
 
   @@index([name])
   @@index([email])
@@ -264,6 +278,75 @@ model OperationLog {
   @@map("operation_log")
 }
 
+// ==================== 标签表 ====================
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   // 标签名
+  color     String   @default("#409EFF") // 标签颜色
+  category  String   @default("custom") // 系统预设 / 自定义
+  createdById String?
+  createdAt DateTime @default(now())
+
+  candidateTags CandidateTag[]
+  jobTags       JobTag[]
+
+  @@unique([name])
+  @@index([category])
+  @@map("tag")
+}
+
+// ==================== 候选人与标签关联表 ====================
+model CandidateTag {
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  tagId       String
+  tag         Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([candidateId, tagId])
+  @@index([candidateId])
+  @@index([tagId])
+  @@map("candidate_tag")
+}
+
+// ==================== 职位与标签关联表 ====================
+model JobTag {
+  id          String    @id @default(cuid())
+  jobId       String
+  job         Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  tagId       String
+  tag         Tag       @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([jobId, tagId])
+  @@index([jobId])
+  @@index([tagId])
+  @@map("job_tag")
+}
+
+// ==================== 入职任务清单表 ====================
+model OnboardingTask {
+  id          String   @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  title       String   // 任务名称：收集身份证复印件、邮箱开通、工位安排...
+  category    String   // 材料收集 / IT准备 / 行政安排 / 培训
+  assigneeId  String?  // 负责人（HR/IT/行政）
+  status      String   @default("pending") // pending/in_progress/completed
+  dueDate     DateTime? // 截止日期
+  note        String?  @db.Text
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+  @@index([category])
+  @@map("onboarding_task")
+}
+
 // ==================== 字典表（系统配置） ====================
 model Dictionary {
   id          String   @id @default(cuid())
@@ -280,4 +363,45 @@ model Dictionary {
   @@index([category, enabled])
   @@index([category, sortOrder])
   @@map("dictionary")
+}
+
+// ==================== 邮件模板表 ====================
+model EmailTemplate {
+  id        String   @id @default(cuid())
+  name      String   // 模板名称，如：面试邀请、Offer通知
+  subject   String   // 邮件主题（支持 {{变量}}）
+  body      String   @db.Text // 邮件正文（支持 {{变量}}）
+  variables Json     // 预设变量列表，如 ["candidateName", "jobTitle", "interviewTime"]
+  createdById String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  emailLogs EmailLog[] @relation("TemplateEmailLogs")
+
+  @@index([name])
+  @@index([createdById])
+  @@map("email_template")
+}
+
+// ==================== 邮件发送日志表 ====================
+model EmailLog {
+  id           String   @id @default(cuid())
+  templateId   String?
+  template     EmailTemplate? @relation("TemplateEmailLogs", fields: [templateId], references: [id])
+  candidateId  String?
+  candidate    Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  toEmail      String   // 收件人邮箱
+  subject      String   // 实际发送的主题
+  body         String   @db.Text // 实际发送的正文
+  status       String   // sent, failed
+  errorMessage String?
+  sentAt       DateTime @default(now())
+  createdById  String
+
+  @@index([templateId])
+  @@index([candidateId])
+  @@index([toEmail])
+  @@index([status])
+  @@index([sentAt])
+  @@map("email_log")
 }

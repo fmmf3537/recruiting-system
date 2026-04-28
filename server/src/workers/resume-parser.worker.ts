@@ -1,13 +1,19 @@
 import { Worker } from 'bullmq';
+import fs from 'fs/promises';
 import { redis } from '../lib/redis';
 import { parseResume } from '../services/resume-parser.service';
 
 export const resumeParseWorker = new Worker(
   'resume-parse',
   async (job) => {
-    const { buffer, mimetype } = job.data;
-    const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer.data);
-    return parseResume(buf, mimetype);
+    const { filePath, mimetype } = job.data;
+    const buf = await fs.readFile(filePath);
+    const result = await parseResume(buf, mimetype);
+    // 解析完成后删除临时文件
+    await fs.unlink(filePath).catch((err) => {
+      console.error(`删除临时简历文件失败: ${filePath}`, err);
+    });
+    return result;
   },
   { connection: redis }
 );

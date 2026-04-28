@@ -120,6 +120,7 @@ import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import { createCandidate, updateCandidate, getCandidateById, type Gender, type CreateCandidateParams } from '@/api/candidates';
+import { GENDER_OPTIONS } from '@/constants';
 
 const route = useRoute();
 const router = useRouter();
@@ -128,10 +129,7 @@ const candidateId = ref((route.query.id as string) || '');
 const submitting = ref(false);
 const showGenderPicker = ref(false);
 
-const genderColumns = [
-  { text: '男', value: '男' },
-  { text: '女', value: '女' },
-];
+const genderColumns = GENDER_OPTIONS.map((g) => ({ text: g, value: g }));
 
 const form = ref({
   name: '',

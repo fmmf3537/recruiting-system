@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mock prisma before importing the service
 vi.mock('../../src/lib/prisma', () => ({
   default: {
+    $queryRaw: vi.fn(),
     user: {
       findMany: vi.fn(),
     },
@@ -12,6 +13,7 @@ vi.mock('../../src/lib/prisma', () => ({
     },
     stageRecord: {
       count: vi.fn(),
+      groupBy: vi.fn(),
     },
     interviewFeedback: {
       count: vi.fn(),
@@ -25,10 +27,6 @@ vi.mock('../../src/lib/prisma', () => ({
     },
     candidateJob: {
       findMany: vi.fn(),
-    },
-    stageRecord: {
-      count: vi.fn(),
-      groupBy: vi.fn(),
     },
   },
 }));

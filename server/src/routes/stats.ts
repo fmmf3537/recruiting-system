@@ -208,6 +208,18 @@ router.get(
 );
 
 /**
+ * GET /api/stats/referral
+ * 内推统计
+ * 权限：登录用户
+ */
+router.get(
+  '/referral',
+  authenticate,
+  validate(dateRangeQuerySchema, 'query'),
+  statsController.getReferralStats
+);
+
+/**
  * GET /api/stats/funnel
  * 招聘漏斗统计
  * 权限：登录用户

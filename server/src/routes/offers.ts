@@ -1,5 +1,6 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
+import { OFFER_RESULTS } from '../constants';
 import { offerController } from '../controllers/offer.controller';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
@@ -22,7 +23,7 @@ const updateOfferSchema = z.object({
   salary: z.string().optional(),
   offerDate: z.string().datetime('无效的日期格式').optional(),
   expectedJoinDate: z.string().datetime('无效的日期格式').optional(),
-  result: z.enum(['pending', 'accepted', 'rejected'], {
+  result: z.enum([...OFFER_RESULTS] as [string, ...string[]], {
     errorMap: () => ({ message: '结果必须是：pending, accepted 或 rejected' }),
   }).optional(),
   note: z.string().optional(),
@@ -30,7 +31,7 @@ const updateOfferSchema = z.object({
 
 // 更新 Offer 结果验证 Schema
 const updateResultSchema = z.object({
-  result: z.enum(['pending', 'accepted', 'rejected'], {
+  result: z.enum([...OFFER_RESULTS] as [string, ...string[]], {
     errorMap: () => ({ message: '结果必须是：pending, accepted 或 rejected' }),
   }),
 });
@@ -49,7 +50,7 @@ const candidateIdParamSchema = z.object({
 const listOffersQuerySchema = z.object({
   page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
   pageSize: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 10)),
-  result: z.enum(['pending', 'accepted', 'rejected']).optional(),
+  result: z.enum([...OFFER_RESULTS] as [string, ...string[]]).optional(),
 });
 
 // ============ 路由定义 ============

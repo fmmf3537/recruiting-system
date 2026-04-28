@@ -1,5 +1,6 @@
 import { Router, type Router as RouterType } from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
@@ -8,6 +9,19 @@ import { authenticate } from '../middleware/auth';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 
 const router: RouterType = Router();
+
+// 文件上传接口限流：15 分钟内最多 30 次
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: '上传次数过于频繁，请稍后再试',
+    code: 429,
+  },
+});
 
 // 确保上传目录存在
 const uploadDir = path.resolve(process.cwd(), env.UPLOAD_DIR);
@@ -63,6 +77,7 @@ const upload = multer({
 router.post(
   '/',
   authenticate,
+  uploadLimiter,
   upload.single('file'),
   asyncHandler(async (req, res) => {
     if (!req.file) {
@@ -93,6 +108,7 @@ router.post(
 router.post(
   '/batch',
   authenticate,
+  uploadLimiter,
   upload.array('files', 5), // 最多5个文件
   asyncHandler(async (req, res) => {
     if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {

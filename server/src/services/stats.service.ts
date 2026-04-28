@@ -464,6 +464,55 @@ export class StatsService {
       filename: `职位维度统计_${new Date().toISOString().split('T')[0]}.xlsx`,
     };
   }
+
+  /**
+   * 内推统计
+   */
+  async getReferralStats(dateRange?: DateRange): Promise<{
+    totalReferrals: number;
+    hiredReferrals: number;
+    hireRate: number;
+    topReferrers: Array<{ referrer: string; count: number; hired: number }>;
+  }> {
+    const where: any = {};
+    if (dateRange) {
+      where.createdAt = {
+        gte: dateRange.startDate,
+        lte: dateRange.endDate,
+      };
+    }
+
+    // 所有有推荐人的候选人
+    const referrals = await prisma.candidate.findMany({
+      where: { ...where, referrer: { not: null } },
+      select: { referrer: true, stageRecords: { select: { stage: true, status: true } } },
+    });
+
+    const totalReferrals = referrals.length;
+    const hiredReferrals = referrals.filter((r) =>
+      r.stageRecords.some((s) => s.stage === '入职' && s.status === 'passed')
+    ).length;
+    const hireRate = totalReferrals > 0 ? Math.round((hiredReferrals / totalReferrals) * 100) : 0;
+
+    // 推荐人排行
+    const referrerMap = new Map<string, { count: number; hired: number }>();
+    for (const r of referrals) {
+      const name = r.referrer!;
+      const entry = referrerMap.get(name) || { count: 0, hired: 0 };
+      entry.count++;
+      if (r.stageRecords.some((s) => s.stage === '入职' && s.status === 'passed')) {
+        entry.hired++;
+      }
+      referrerMap.set(name, entry);
+    }
+
+    const topReferrers = Array.from(referrerMap.entries())
+      .map(([referrer, data]) => ({ referrer, ...data }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 20);
+
+    return { totalReferrals, hiredReferrals, hireRate, topReferrers };
+  }
 }
 
 // 导出单例实例

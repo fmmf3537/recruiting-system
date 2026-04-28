@@ -1,15 +1,40 @@
 import { Router, type Router as RouterType } from 'express';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { candidateController } from '../controllers/candidate.controller';
+import { tagController } from '../controllers/tag.controller';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
+import { STAGE_ORDER, STAGE_STATUS, INTERVIEW_ROUNDS } from '../constants';
 
 const router: RouterType = Router();
 
-// 配置 multer（内存存储）
+// 简历解析接口限流：1 小时内最多 20 次
+const parseResumeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: '简历解析次数已达上限，请 1 小时后再试',
+    code: 429,
+  },
+});
+
+// 配置 multer（磁盘存储，临时目录）
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, path.resolve(process.cwd(), 'uploads', 'temp'));
+    },
+    filename: (_req, file, cb) => {
+      cb(null, `${uuidv4()}${path.extname(file.originalname)}`);
+    },
+  }),
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB
   },
@@ -33,7 +58,10 @@ const updateCandidateSchema = z.object({
   resumeUrl: z.string().url().optional(),
   source: z.string().optional(),
   sourceNote: z.string().optional(),
+  referrer: z.string().optional(),
   intro: z.string().optional(),
+  tagIds: z.array(z.string()).max(20, '最多设置20个标签').optional(),
+  skills: z.array(z.string()).max(50, '最多设置50个技能').optional(),
 });
 
 // 列表查询验证 Schema
@@ -43,7 +71,7 @@ const listCandidatesQuerySchema = z.object({
   keyword: z.string().optional(),
   source: z.string().optional(),
   stage: z.string().optional(),
-  status: z.enum(['in_progress', 'passed', 'rejected']).optional(),
+  status: z.enum([...STAGE_STATUS] as [string, ...string[]]).optional(),
   education: z.string().optional(),
   workYearsMin: z.string().optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
   workYearsMax: z.string().optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
@@ -57,10 +85,10 @@ const candidateIdParamSchema = z.object({
 
 // 推进阶段验证 Schema
 const advanceStageSchema = z.object({
-  stage: z.enum(['入库', '初筛', '复试', '终面', '拟录用', 'Offer', '入职'], {
+  stage: z.enum([...STAGE_ORDER] as [string, ...string[]], {
     errorMap: () => ({ message: '无效的阶段' }),
   }),
-  status: z.enum(['in_progress', 'passed', 'rejected'], {
+  status: z.enum([...STAGE_STATUS] as [string, ...string[]], {
     errorMap: () => ({ message: '状态必须是：in_progress, passed 或 rejected' }),
   }),
   rejectReason: z.string().optional(),
@@ -70,7 +98,7 @@ const advanceStageSchema = z.object({
 
 // 面试反馈验证 Schema
 const interviewFeedbackSchema = z.object({
-  round: z.enum(['初试', '复试', '终面'], {
+  round: z.enum([...INTERVIEW_ROUNDS] as [string, ...string[]], {
     errorMap: () => ({ message: '轮次必须是：初试, 复试 或 终面' }),
   }),
   interviewerName: z.string().min(1, '面试官姓名不能为空'),
@@ -91,6 +119,25 @@ const listInterviewsQuerySchema = z.object({
   conclusion: z.string().optional(),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
+});
+
+// 批量推进阶段验证 Schema
+const batchAdvanceSchema = z.object({
+  candidateIds: z.array(z.string().cuid('无效的候选人ID')).min(1, '至少选择一个候选人'),
+  stage: z.enum([...STAGE_ORDER] as [string, ...string[]], {
+    errorMap: () => ({ message: '无效的阶段' }),
+  }),
+  status: z.enum([...STAGE_STATUS] as [string, ...string[]], {
+    errorMap: () => ({ message: '状态必须是：in_progress, passed 或 rejected' }),
+  }),
+  rejectReason: z.string().optional(),
+  note: z.string().optional(),
+});
+
+// 批量设置标签验证 Schema
+const batchSetTagsSchema = z.object({
+  candidateIds: z.array(z.string().cuid('无效的候选人ID')).min(1, '至少选择一个候选人'),
+  tagIds: z.array(z.string()).max(20, '最多设置20个标签'),
 });
 
 /**
@@ -147,6 +194,7 @@ router.get(
 router.post(
   '/parse-resume',
   authenticate,
+  parseResumeLimiter,
   upload.single('file'),
   candidateController.parseResume
 );
@@ -236,6 +284,59 @@ router.delete(
   authenticate,
   validate(candidateIdParamSchema, 'params'),
   candidateController.deleteCandidate
+);
+
+// ============ 候选人标签 ============
+
+const setTagsSchema = z.object({
+  tagIds: z.array(z.string()).max(20, '最多设置20个标签'),
+});
+
+/**
+ * GET /api/candidates/:id/tags
+ * 获取候选人的标签
+ */
+router.get(
+  '/:id/tags',
+  authenticate,
+  validate(candidateIdParamSchema, 'params'),
+  tagController.getCandidateTags
+);
+
+/**
+ * PUT /api/candidates/:id/tags
+ * 设置候选人的标签
+ */
+router.put(
+  '/:id/tags',
+  authenticate,
+  validate(candidateIdParamSchema, 'params'),
+  validate(setTagsSchema),
+  tagController.setCandidateTags
+);
+
+// ============ 批量操作 ============
+
+/**
+ * POST /api/candidates/batch/advance
+ * 批量推进候选人阶段
+ */
+router.post(
+  '/batch/advance',
+  authenticate,
+  validate(batchAdvanceSchema),
+  candidateController.batchAdvanceStage
+);
+
+/**
+ * POST /api/candidates/batch/tags
+ * 批量设置候选人标签
+ */
+router.post(
+  '/batch/tags',
+  authenticate,
+  validate(batchSetTagsSchema),
+  candidateController.batchSetTags
 );
 
 export default router;

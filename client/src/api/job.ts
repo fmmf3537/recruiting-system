@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import type { Tag } from './tag';
 
 // 职位类型
 export type JobType = '社招' | '校招' | '实习生';
@@ -26,6 +27,7 @@ export interface CreateJobParams {
   description: string;
   requirements: string;
   status?: JobStatus;
+  tagIds?: string[];
 }
 
 // 更新职位参数
@@ -39,6 +41,7 @@ export interface UpdateJobParams {
   description?: string;
   requirements?: string;
   status?: JobStatus;
+  tagIds?: string[];
 }
 
 // 职位列表项
@@ -59,6 +62,7 @@ export interface JobItem {
   _count?: {
     candidateJobs: number;
   };
+  tags?: Tag[];
 }
 
 // 职位详情（包含创建者信息）
@@ -68,6 +72,7 @@ export interface JobDetail extends JobItem {
     name: string;
     email: string;
   };
+  tags?: Tag[];
 }
 
 // 职位列表响应
@@ -132,8 +137,11 @@ export function updateJob(id: string, data: UpdateJobParams): Promise<OperationR
  * 关闭职位
  * @param id 职位ID
  */
-export function closeJob(id: string): Promise<OperationResult> {
-  return request.post(`/jobs/${id}/close`) as Promise<OperationResult>;
+export function closeJob(
+  id: string,
+  config?: { signal?: AbortSignal }
+): Promise<OperationResult> {
+  return request.post(`/jobs/${id}/close`, undefined, config) as Promise<OperationResult>;
 }
 
 /**
@@ -148,6 +156,9 @@ export function duplicateJob(id: string): Promise<OperationResult> {
  * 删除职位
  * @param id 职位ID
  */
-export function deleteJob(id: string): Promise<OperationResult> {
-  return request.delete(`/jobs/${id}`) as Promise<OperationResult>;
+export function deleteJob(
+  id: string,
+  config?: { signal?: AbortSignal }
+): Promise<OperationResult> {
+  return request.delete(`/jobs/${id}`, config) as Promise<OperationResult>;
 }

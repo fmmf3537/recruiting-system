@@ -54,6 +54,21 @@
         <div class="info-section">
           <h3 class="section-title">基本信息</h3>
           <el-descriptions :column="3" border>
+            <el-descriptions-item label="标签">
+              <div class="custom-tags">
+                <el-tag
+                  v-for="tag in jobInfo.tags"
+                  :key="tag.id"
+                  size="small"
+                  :color="tag.color"
+                  effect="light"
+                  class="custom-tag"
+                >
+                  {{ tag.name }}
+                </el-tag>
+                <span v-if="!jobInfo.tags?.length" class="no-tag">-</span>
+              </div>
+            </el-descriptions-item>
             <el-descriptions-item label="所属部门">
               <el-tag
                 v-for="dept in jobInfo.departments"
@@ -125,6 +140,36 @@
         <div class="requirements-section">
           <h3 class="section-title">任职要求</h3>
           <div class="rich-text" v-html="jobInfo.requirements"></div>
+        </div>
+
+        <!-- AI 推荐候选人 -->
+        <div class="ai-match-section">
+          <div class="section-title" style="display: flex; justify-content: space-between; align-items: center">
+            <span>AI 推荐候选人</span>
+            <el-button type="primary" link :loading="aiMatchLoading" @click="fetchAiRecommendations">
+              <el-icon><Star /></el-icon>开始推荐
+            </el-button>
+          </div>
+          <el-empty v-if="!aiRecommendations.length && !aiMatchLoading" description="点击上方按钮获取 AI 推荐" :image-size="60" />
+          <div v-else-if="aiRecommendations.length" class="recommendation-list">
+            <div
+              v-for="item in aiRecommendations"
+              :key="item.candidateId"
+              class="recommendation-item"
+            >
+              <div class="rec-header">
+                <span class="rec-name">{{ getCandidateName(item.candidateId) }}</span>
+                <el-tag :type="item.matchScore >= 80 ? 'success' : item.matchScore >= 60 ? 'warning' : 'info'" size="small">
+                  匹配度 {{ item.matchScore }}%
+                </el-tag>
+              </div>
+              <el-progress :percentage="item.matchScore" :color="matchColor" :show-text="false" :stroke-width="6" />
+              <p class="rec-reason">{{ item.reason }}</p>
+              <div class="rec-actions">
+                <el-button type="primary" link size="small" @click="goToCandidate(item.candidateId)">查看详情</el-button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </el-card>
@@ -216,6 +261,7 @@ import {
   Location,
   ArrowRight,
   UserFilled,
+  Star,
 } from '@element-plus/icons-vue';
 import {
   getJobById,
@@ -226,6 +272,8 @@ import {
   type JobType,
 } from '@/api/job';
 import { getCandidateList, type CandidateItem } from '@/api/candidate';
+import type { Tag } from '@/api/tag';
+import { getRecommendations, type MatchResult } from '@/api/ai-matcher';
 
 const route = useRoute();
 const router = useRouter();
@@ -250,6 +298,42 @@ const candidateStats = reactive({
   offer: 0,
   hired: 0,
 });
+
+// AI 推荐
+const aiMatchLoading = ref(false);
+const aiRecommendations = ref<MatchResult[]>([]);
+const matchColor = [
+  { color: '#f56c6c', percentage: 40 },
+  { color: '#e6a23c', percentage: 70 },
+  { color: '#67c23a', percentage: 100 },
+];
+
+async function fetchAiRecommendations() {
+  aiMatchLoading.value = true;
+  try {
+    const res = await getRecommendations(jobId, 5);
+    if (res.success) {
+      aiRecommendations.value = res.data;
+      if (res.data.length === 0) {
+        ElMessage.info('暂无人库候选人可推荐');
+      }
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '推荐失败');
+  } finally {
+    aiMatchLoading.value = false;
+  }
+}
+
+function goToCandidate(candidateId: string) {
+  router.push(`/candidates/${candidateId}`);
+}
+
+function getCandidateName(candidateId: string): string {
+  // AI 推荐仅返回 candidateId，需要在人才库中查找名称
+  // 由于推荐接口未返回名称，此处简化处理
+  return '候选人';
+}
 
 // 获取职位详情
 async function fetchJobDetail() {
@@ -388,6 +472,7 @@ async function handleDuplicate() {
 async function handleClose() {
   if (!jobInfo.value) return;
 
+  const abortCtrl = new AbortController();
   try {
     await ElMessageBox.confirm(
       `确定要关闭职位 "${jobInfo.value.title}" 吗？`,
@@ -399,14 +484,21 @@ async function handleClose() {
       }
     );
 
-    const res = await closeJob(jobId);
+    console.log('[JobClose] sending request for', jobId);
+    const res = await closeJob(jobId, { signal: abortCtrl.signal });
+    console.log('[JobClose] received', res);
     if (res.success) {
       ElMessage.success('职位已关闭');
       fetchJobDetail();
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '关闭失败');
+      console.error('[JobClose] error', error);
+      if (error.name === 'CanceledError' || error.name === 'AbortError') {
+        ElMessage.warning('请求已取消');
+      } else {
+        ElMessage.error(error.message || '关闭失败');
+      }
     }
   }
 }
@@ -472,6 +564,21 @@ onActivated(init);
         gap: 10px;
         flex-wrap: wrap;
       }
+
+.custom-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  .custom-tag {
+    color: #fff;
+    border: none;
+  }
+
+  .no-tag {
+    color: #909399;
+  }
+}
     }
 
     .action-buttons {
@@ -494,8 +601,46 @@ onActivated(init);
   .info-section,
   .stats-section,
   .description-section,
-  .requirements-section {
+  .requirements-section,
+  .ai-match-section {
     margin-bottom: 30px;
+  }
+
+  .ai-match-section {
+    .recommendation-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+
+      .recommendation-item {
+        padding: 16px;
+        background-color: #f5f7fa;
+        border-radius: 8px;
+
+        .rec-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+
+          .rec-name {
+            font-weight: 500;
+            font-size: 15px;
+          }
+        }
+
+        .rec-reason {
+          margin: 8px 0 0;
+          font-size: 13px;
+          color: #606266;
+          line-height: 1.6;
+        }
+
+        .rec-actions {
+          margin-top: 8px;
+        }
+      }
+    }
   }
 
   .stats-section {

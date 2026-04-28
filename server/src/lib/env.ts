@@ -29,6 +29,14 @@ const envSchema = z.object({
 
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
+
+  // SMTP 邮件配置（可选）
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 587)),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
+  SMTP_SECURE: z.string().optional().transform((val) => val === 'true'),
 });
 
 // 验证环境变量

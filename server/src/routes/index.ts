@@ -7,6 +7,10 @@ import offerRoutes from './offers';
 import statsRoutes from './stats';
 import uploadRoutes from './upload';
 import dictionaryRoutes from './dictionaries';
+import tagRoutes from './tags';
+import emailRoutes from './email';
+import aiMatcherRoutes from './ai-matcher';
+import onboardingTaskRoutes from './onboarding-task';
 
 const router: RouterType = Router();
 
@@ -31,5 +35,9 @@ router.use('/offers', offerRoutes);
 router.use('/stats', statsRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/dictionaries', dictionaryRoutes);
+router.use('/tags', tagRoutes);
+router.use('/email', emailRoutes);
+router.use('/ai-matcher', aiMatcherRoutes);
+router.use('/onboarding-tasks', onboardingTaskRoutes);
 
 export default router;

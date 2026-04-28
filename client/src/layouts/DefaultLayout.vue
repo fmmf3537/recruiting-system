@@ -123,6 +123,7 @@ const menuItems = computed(() => {
   if (authStore.isAdmin) {
     items.push({ path: '/users', title: '成员管理', icon: User });
     items.push({ path: '/settings/dictionary', title: '字典管理', icon: Setting });
+    items.push({ path: '/settings/tags', title: '标签管理', icon: Setting });
   }
   
   return items;

@@ -115,6 +115,25 @@
                   />
                 </el-select>
               </el-form-item>
+
+              <el-form-item label="标签" prop="tagIds">
+                <el-select
+                  v-model="formData.tagIds"
+                  multiple
+                  filterable
+                  allow-create
+                  default-first-option
+                  placeholder="请选择或输入标签"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="tag in tagOptions"
+                    :key="tag.id"
+                    :label="tag.name"
+                    :value="tag.id"
+                  />
+                </el-select>
+              </el-form-item>
             </div>
 
             <!-- 职位描述 -->
@@ -226,6 +245,7 @@ import {
   type JobStatus,
   type JobType,
 } from '@/api/job';
+import { getTags, type Tag } from '@/api/tag';
 import { useDictionaryStore } from '@/stores/dictionary';
 
 const route = useRoute();
@@ -254,7 +274,10 @@ const formData = reactive<CreateJobParams>({
   description: '',
   requirements: '',
   status: 'open' as JobStatus,
+  tagIds: [],
 });
+
+const tagOptions = ref<Tag[]>([]);
 
 // 编辑器配置
 const editorOptions = {
@@ -315,6 +338,7 @@ function resetForm() {
     description: '',
     requirements: '',
     status: 'open' as JobStatus,
+    tagIds: [],
   });
 }
 
@@ -336,6 +360,7 @@ async function fetchJobDetail() {
       formData.description = data.description;
       formData.requirements = data.requirements;
       formData.status = data.status;
+      formData.tagIds = data.tags?.map((t: Tag) => t.id) || [];
     }
   } catch (error) {
     console.error('获取职位详情失败:', error);
@@ -345,11 +370,21 @@ async function fetchJobDetail() {
   }
 }
 
+async function fetchTagOptions() {
+  try {
+    const res = await getTags('job');
+    if (res.success) tagOptions.value = res.data;
+  } catch {
+    // 静默失败
+  }
+}
+
 function init() {
   dictionaryStore.fetchDictionaries('department');
   dictionaryStore.fetchDictionaries('location');
   dictionaryStore.fetchDictionaries('job_type');
   dictionaryStore.fetchDictionaries('skills');
+  fetchTagOptions();
   if (isEdit.value) {
     fetchJobDetail();
   } else {

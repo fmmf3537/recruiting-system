@@ -14,6 +14,9 @@ vi.mock('../../src/lib/prisma', () => ({
     candidateJob: {
       count: vi.fn(),
     },
+    jobTag: {
+      findMany: vi.fn(),
+    },
     user: {
       findUnique: vi.fn(),
     },
@@ -30,6 +33,7 @@ describe('JobService - 职位服务单元测试', () => {
   beforeEach(() => {
     service = new JobService();
     vi.clearAllMocks();
+    vi.mocked(prisma.jobTag.findMany).mockResolvedValue([]);
   });
 
   afterEach(() => {

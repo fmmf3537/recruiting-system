@@ -78,24 +78,64 @@
           </el-select>
         </el-form-item>
 
+        <el-form-item label="标签">
+          <el-select
+            v-model="filterForm.tagIds"
+            placeholder="全部标签"
+            clearable
+            multiple
+            collapse-tags
+            style="width: 180px"
+            @change="handleSearch"
+          >
+            <el-option
+              v-for="item in tagOptions"
+              :key="item.id"
+              :label="item.name"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
             <el-icon><Search /></el-icon>搜索
           </el-button>
           <el-button @click="handleReset">重置</el-button>
+          <el-button
+            :type="filterForm.hasNoJob ? 'warning' : 'default'"
+            @click="filterForm.hasNoJob = !filterForm.hasNoJob; handleSearch()"
+          >
+            {{ filterForm.hasNoJob ? '✓ 人才库' : '人才库' }}
+          </el-button>
         </el-form-item>
       </el-form>
     </el-card>
 
+    <!-- 批量操作栏 -->
+    <div v-if="selectedCandidates.length > 0" class="batch-bar">
+      <span class="batch-info">已选择 {{ selectedCandidates.length }} 位候选人</span>
+      <el-button type="primary" size="small" @click="showBatchAdvance">
+        <el-icon><Promotion /></el-icon>批量推进
+      </el-button>
+      <el-button type="warning" size="small" @click="showBatchTag">
+        <el-icon><CollectionTag /></el-icon>批量打标签
+      </el-button>
+      <el-button size="small" @click="clearSelection">取消选择</el-button>
+    </div>
+
     <!-- 数据表格 -->
     <el-card class="table-card" shadow="never" v-loading="loading">
       <el-table
+        ref="tableRef"
         :data="candidateList"
         stripe
         style="width: 100%"
         @row-click="handleRowClick"
+        @selection-change="handleSelectionChange"
         highlight-current-row
       >
+        <el-table-column type="selection" width="50" align="center" />
         <el-table-column type="index" label="序号" width="70" align="center" />
 
         <el-table-column prop="name" label="候选人" min-width="150">
@@ -139,6 +179,24 @@
                 {{ job.job?.title || '未知职位' }}
               </el-tag>
               <span v-if="!row.candidateJobs?.length" class="no-job">-</span>
+            </div>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="tags" label="标签" min-width="120">
+          <template #default="{ row }">
+            <div class="tag-list">
+              <el-tag
+                v-for="tag in row.tags?.slice(0, 3)"
+                :key="tag.id"
+                size="small"
+                :color="tag.color"
+                effect="light"
+                class="candidate-tag"
+              >
+                {{ tag.name }}
+              </el-tag>
+              <span v-if="!row.tags?.length" class="no-tag">-</span>
             </div>
           </template>
         </el-table-column>
@@ -239,6 +297,69 @@
       </template>
     </el-dialog>
 
+    <!-- 批量推进对话框 -->
+    <el-dialog v-model="batchAdvanceVisible" title="批量推进候选人" width="500px">
+      <p style="margin-bottom: 16px">即将对 <strong>{{ selectedCandidates.length }}</strong> 位候选人进行阶段推进</p>
+      <el-form ref="batchAdvanceFormRef" :model="batchAdvanceForm" :rules="advanceRules" label-width="100px">
+        <el-form-item label="目标阶段" prop="stage">
+          <el-select v-model="batchAdvanceForm.stage" placeholder="请选择目标阶段" style="width: 100%">
+            <el-option v-for="stage in stageOrder" :key="stage" :label="stage" :value="stage" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="阶段结果" prop="status">
+          <el-radio-group v-model="batchAdvanceForm.status">
+            <el-radio-button label="in_progress">进行中</el-radio-button>
+            <el-radio-button label="passed">通过</el-radio-button>
+            <el-radio-button label="rejected">淘汰</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item label="淘汰原因" prop="rejectReason" v-if="batchAdvanceForm.status === 'rejected'">
+          <el-input v-model="batchAdvanceForm.rejectReason" type="textarea" :rows="3" placeholder="请填写淘汰原因" />
+        </el-form-item>
+
+        <el-form-item label="备注" prop="note">
+          <el-input v-model="batchAdvanceForm.note" type="textarea" :rows="2" placeholder="选填" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="batchAdvanceVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleBatchAdvanceSubmit" :loading="batchAdvanceSubmitting">确认推进</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量打标签对话框 -->
+    <el-dialog v-model="batchTagVisible" title="批量打标签" width="500px">
+      <p style="margin-bottom: 16px">即将对 <strong>{{ selectedCandidates.length }}</strong> 位候选人设置标签</p>
+      <el-form label-width="80px">
+        <el-form-item label="选择标签">
+          <el-select
+            v-model="batchTagIds"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            placeholder="请选择或输入标签"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="tag in tagOptions"
+              :key="tag.id"
+              :label="tag.name"
+              :value="tag.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="batchTagVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleBatchTagSubmit" :loading="batchTagSubmitting">确认设置</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 简历上传对话框 -->
     <ResumeUpload v-model="showResumeUpload" @confirm="handleResumeParsed" />
   </div>
@@ -248,17 +369,21 @@
 import { ref, reactive, onMounted, onActivated, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { Plus, Search, UserFilled, Upload } from '@element-plus/icons-vue';
+import { Plus, Search, UserFilled, Upload, Promotion, CollectionTag } from '@element-plus/icons-vue';
 import {
   getCandidateList,
   advanceStage,
   deleteCandidate,
+  batchAdvanceStage,
+  batchSetTags,
   type CandidateItem,
   type AdvanceStageParams,
   type ResumeParseResult,
 } from '@/api/candidate';
+import { getTags, type Tag } from '@/api/tag';
 import { useAuthStore } from '@/stores/auth';
 import { useDictionaryStore } from '@/stores/dictionary';
+import { useResumeParserStore } from '@/stores/resumeParser';
 import ResumeUpload from './ResumeUpload.vue';
 
 const router = useRouter();
@@ -269,7 +394,28 @@ const dictionaryStore = useDictionaryStore();
 const loading = ref(false);
 const candidateList = ref<CandidateItem[]>([]);
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
-const filterForm = reactive({ keyword: '', stage: '', status: '', source: '' });
+const filterForm = reactive({ keyword: '', stage: '', status: '', source: '', tagIds: [] as string[], hasNoJob: false });
+const tagOptions = ref<Tag[]>([]);
+
+// 表格引用与多选
+const tableRef = ref<any>();
+const selectedCandidates = ref<CandidateItem[]>([]);
+
+// ============ 批量推进 ============
+const batchAdvanceVisible = ref(false);
+const batchAdvanceSubmitting = ref(false);
+const batchAdvanceFormRef = ref<FormInstance>();
+const batchAdvanceForm = reactive<AdvanceStageParams>({
+  stage: '' as any,
+  status: 'passed',
+  rejectReason: '',
+  note: '',
+});
+
+// ============ 批量打标签 ============
+const batchTagVisible = ref(false);
+const batchTagSubmitting = ref(false);
+const batchTagIds = ref<string[]>([]);
 
 // ============ 推进流程 ============
 const advanceDialogVisible = ref(false);
@@ -315,9 +461,11 @@ const rejectRules: FormRules = { rejectReason: [{ required: true, message: '请�
 // ============ 简历上传 ============
 const showResumeUpload = ref(false);
 
+const resumeParserStore = useResumeParserStore();
+
 function handleResumeParsed(data: ResumeParseResult) {
-  // 将解析结果存储到 sessionStorage，跳转到创建页面
-  sessionStorage.setItem('parsedResume', JSON.stringify(data));
+  // 将解析结果存储到 Pinia Store，跳转到创建页面
+  resumeParserStore.setParsedData(data);
   router.push('/candidates/create');
 }
 
@@ -332,6 +480,8 @@ async function fetchCandidateList() {
       stage: filterForm.stage || undefined,
       status: filterForm.status || undefined,
       source: filterForm.source || undefined,
+      tagIds: filterForm.tagIds.length > 0 ? filterForm.tagIds : undefined,
+      hasNoJob: filterForm.hasNoJob || undefined,
     });
     if (res.success) {
       candidateList.value = res.data;
@@ -342,12 +492,25 @@ async function fetchCandidateList() {
   }
 }
 
+async function fetchTags() {
+  try {
+    const res = await getTags();
+    if (res.success) {
+      tagOptions.value = res.data;
+    }
+  } catch {
+    // 静默失败
+  }
+}
+
 function handleSearch() { pagination.page = 1; fetchCandidateList(); }
 function handleReset() {
   filterForm.keyword = '';
   filterForm.stage = '';
   filterForm.status = '';
   filterForm.source = '';
+  filterForm.tagIds = [];
+  filterForm.hasNoJob = false;
   handleSearch();
 }
 function handlePageChange(page: number) { pagination.page = page; fetchCandidateList(); }
@@ -453,6 +616,71 @@ async function handleRejectSubmit() {
   }
 }
 
+// ============ 批量操作 ============
+function handleSelectionChange(val: CandidateItem[]) {
+  selectedCandidates.value = val;
+}
+
+function clearSelection() {
+  tableRef.value?.clearSelection();
+  selectedCandidates.value = [];
+}
+
+function showBatchAdvance() {
+  batchAdvanceForm.stage = '' as any;
+  batchAdvanceForm.status = 'passed';
+  batchAdvanceForm.rejectReason = '';
+  batchAdvanceForm.note = '';
+  batchAdvanceVisible.value = true;
+}
+
+async function handleBatchAdvanceSubmit() {
+  const valid = await batchAdvanceFormRef.value?.validate().catch(() => false);
+  if (!valid) return;
+  batchAdvanceSubmitting.value = true;
+  try {
+    const res = await batchAdvanceStage({
+      candidateIds: selectedCandidates.value.map((c) => c.id),
+      ...batchAdvanceForm,
+    });
+    if (res.success) {
+      ElMessage.success(res.message || '批量推进完成');
+      batchAdvanceVisible.value = false;
+      clearSelection();
+      fetchCandidateList();
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '批量推进失败');
+  } finally {
+    batchAdvanceSubmitting.value = false;
+  }
+}
+
+function showBatchTag() {
+  batchTagIds.value = [];
+  batchTagVisible.value = true;
+}
+
+async function handleBatchTagSubmit() {
+  batchTagSubmitting.value = true;
+  try {
+    const res = await batchSetTags({
+      candidateIds: selectedCandidates.value.map((c) => c.id),
+      tagIds: batchTagIds.value,
+    });
+    if (res.success) {
+      ElMessage.success(res.message || '批量设置标签完成');
+      batchTagVisible.value = false;
+      clearSelection();
+      fetchCandidateList();
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '批量设置标签失败');
+  } finally {
+    batchTagSubmitting.value = false;
+  }
+}
+
 onMounted(() => {
   dictionaryStore.fetchDictionaries('source');
   fetchCandidateList();
@@ -470,6 +698,23 @@ onActivated(() => { fetchCandidateList(); });
 .filter-card { margin-bottom: 20px;
   .filter-form { display: flex; flex-wrap: wrap; gap: 10px; :deep(.el-form-item) { margin-bottom: 0; } }
 }
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 16px;
+  background-color: #f0f9ff;
+  border: 1px solid #b3e0ff;
+  border-radius: 6px;
+
+  .batch-info {
+    font-size: 14px;
+    color: #303133;
+    font-weight: 500;
+    margin-right: auto;
+  }
+}
 .table-card {
   .candidate-info { display: flex; align-items: center; gap: 12px;
     .candidate-detail { .candidate-name { font-weight: 500; color: #303133; margin-bottom: 4px; }
@@ -478,6 +723,7 @@ onActivated(() => { fetchCandidateList(); });
   }
   .stage-tag { min-width: 60px; text-align: center; }
   .job-tags { display: flex; flex-wrap: wrap; gap: 6px; .job-tag { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .no-job { color: #909399; } }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 4px; .candidate-tag { color: #fff; border: none; } .no-tag { color: #909399; } }
   .pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 20px; padding-top: 20px; border-top: 1px solid #ebeef5; }
 }
 </style>

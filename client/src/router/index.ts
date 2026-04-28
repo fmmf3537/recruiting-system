@@ -175,6 +175,28 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: '/settings/email-templates',
+        name: 'EmailTemplates',
+        component: () => import('@/views/settings/EmailTemplates.vue'),
+        meta: {
+          title: '邮件模板',
+          icon: Setting,
+          requireAdmin: true,
+          hidden: true,
+        },
+      },
+      {
+        path: '/settings/tags',
+        name: 'TagManagement',
+        component: () => import('@/views/settings/TagManagement.vue'),
+        meta: {
+          title: '标签管理',
+          icon: Setting,
+          requireAdmin: true,
+          hidden: true,
+        },
+      },
+      {
         path: '/profile',
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),

@@ -1,9 +1,17 @@
+import fs from 'fs/promises';
+import path from 'path';
 import app from './app';
 import { env } from './lib/env';
 import { redis } from './lib/redis';
 import './workers/resume-parser.worker';
 
 const PORT = env.PORT;
+
+// 确保上传临时目录存在
+const tempDir = path.resolve(process.cwd(), 'uploads', 'temp');
+fs.mkdir(tempDir, { recursive: true }).catch((err) => {
+  console.error('创建上传临时目录失败:', err);
+});
 
 // 启动服务器
 const server = app.listen(PORT, () => {

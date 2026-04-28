@@ -29,6 +29,7 @@
 import { useRouter } from 'vue-router';
 import ListPage from '@/components/ListPage.vue';
 import { getOfferList, type OfferItem, type OfferResult } from '@/api/offers';
+import { getOfferResultType } from '@/constants';
 
 const router = useRouter();
 
@@ -41,9 +42,7 @@ function goDetail(candidateId: string) {
 }
 
 function getResultType(result: OfferResult) {
-  if (result === 'accepted') return 'success';
-  if (result === 'rejected') return 'danger';
-  return 'warning';
+  return getOfferResultType(result);
 }
 </script>
 

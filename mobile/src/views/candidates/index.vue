@@ -47,6 +47,7 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import ListPage from '@/components/ListPage.vue';
 import { getCandidateList, type CandidateItem } from '@/api/candidates';
+import { STAGE_ORDER, getStageStatusType } from '@/constants';
 
 const router = useRouter();
 const listRef = ref<InstanceType<typeof ListPage> | null>(null);
@@ -55,13 +56,7 @@ const stage = ref('');
 
 const stageOptions = [
   { text: '全部阶段', value: '' },
-  { text: '入库', value: '入库' },
-  { text: '初筛', value: '初筛' },
-  { text: '复试', value: '复试' },
-  { text: '终面', value: '终面' },
-  { text: '拟录用', value: '拟录用' },
-  { text: 'Offer', value: 'Offer' },
-  { text: '入职', value: '入职' },
+  ...STAGE_ORDER.map((s) => ({ text: s, value: s })),
 ];
 
 function fetchApi(params: { page: number; pageSize: number }) {
@@ -89,9 +84,7 @@ function goCreate() {
 }
 
 function getStageType(status: string) {
-  if (status === 'rejected') return 'danger';
-  if (status === 'passed') return 'success';
-  return 'primary';
+  return getStageStatusType(status);
 }
 </script>
 

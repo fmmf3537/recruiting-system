@@ -2,6 +2,7 @@ import type { Job, Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
+import { sanitizeHtml } from '../utils/sanitize';
 
 // 职位列表查询参数类型
 export interface JobListQuery {
@@ -26,6 +27,7 @@ export interface CreateJobInput {
   description: string;
   requirements: string;
   status?: string;
+  tagIds?: string[];
 }
 
 // 更新职位参数类型
@@ -39,6 +41,7 @@ export interface UpdateJobInput {
   description?: string;
   requirements?: string;
   status?: string;
+  tagIds?: string[];
 }
 
 // 职位列表返回类型
@@ -68,8 +71,8 @@ export class JobService {
         location: data.location,
         type: data.type,
         status: data.status || 'open',
-        description: data.description,
-        requirements: data.requirements,
+        description: sanitizeHtml(data.description),
+        requirements: sanitizeHtml(data.requirements),
         createdById,
       },
       select: {
@@ -88,6 +91,14 @@ export class JobService {
         updatedAt: true,
       },
     });
+
+    // 如果有标签，创建标签关联
+    if (data.tagIds && data.tagIds.length > 0) {
+      await prisma.jobTag.createMany({
+        data: data.tagIds.map((tagId) => ({ jobId: job.id, tagId })),
+        skipDuplicates: true,
+      });
+    }
 
     await clearListCache('jobs:list:*');
     return job;
@@ -190,8 +201,27 @@ export class JobService {
       prisma.job.count({ where }),
     ]);
 
+    // 批量查询职位标签
+    const jobIds = jobs.map((j) => j.id);
+    const jobTags = await prisma.jobTag.findMany({
+      where: { jobId: { in: jobIds } },
+      include: { tag: true },
+    });
+    const tagsMap = new Map<string, typeof jobTags>();
+    for (const jt of jobTags) {
+      if (!tagsMap.has(jt.jobId)) {
+        tagsMap.set(jt.jobId, []);
+      }
+      tagsMap.get(jt.jobId)!.push(jt);
+    }
+
+    const jobsWithTags = jobs.map((job) => ({
+      ...job,
+      tags: tagsMap.get(job.id)?.map((jt) => jt.tag) || [],
+    }));
+
     const result = {
-      jobs: jobs as unknown as Job[],
+      jobs: jobsWithTags as unknown as Job[],
       total,
       page,
       pageSize,
@@ -246,7 +276,15 @@ export class JobService {
       throw new AppError('没有权限查看此职位', 403);
     }
 
-    return job as unknown as Job & { _count?: { candidateJobs: number } };
+    const jobTags = await prisma.jobTag.findMany({
+      where: { jobId: id },
+      include: { tag: true },
+    });
+
+    return {
+      ...job,
+      tags: jobTags.map((jt) => jt.tag),
+    } as unknown as Job & { _count?: { candidateJobs: number }; tags: Array<{ id: string; name: string; color: string }> };
   }
 
   /**
@@ -286,8 +324,8 @@ export class JobService {
     if (data.skills !== undefined) updateData.skills = data.skills;
     if (data.location !== undefined) updateData.location = data.location;
     if (data.type !== undefined) updateData.type = data.type;
-    if (data.description !== undefined) updateData.description = data.description;
-    if (data.requirements !== undefined) updateData.requirements = data.requirements;
+    if (data.description !== undefined) updateData.description = sanitizeHtml(data.description);
+    if (data.requirements !== undefined) updateData.requirements = sanitizeHtml(data.requirements);
     if (data.status !== undefined) updateData.status = data.status;
 
     const job = await prisma.job.update({
@@ -309,6 +347,17 @@ export class JobService {
         updatedAt: true,
       },
     });
+
+    // 如果传了标签，更新标签关联
+    if (data.tagIds !== undefined) {
+      await prisma.jobTag.deleteMany({ where: { jobId: id } });
+      if (data.tagIds.length > 0) {
+        await prisma.jobTag.createMany({
+          data: data.tagIds.map((tagId) => ({ jobId: id, tagId })),
+          skipDuplicates: true,
+        });
+      }
+    }
 
     await clearListCache('jobs:list:*');
     return job;

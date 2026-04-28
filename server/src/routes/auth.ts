@@ -1,4 +1,5 @@
 import { Router, type Router as RouterType } from 'express';
+import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
@@ -9,6 +10,19 @@ import { validate } from '../middleware/validate';
 import { asyncHandler } from '../middleware/errorHandler';
 
 const router: RouterType = Router();
+
+// 登录接口限流：5 分钟内最多 10 次
+const loginLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: '登录尝试次数过多，请 5 分钟后再试',
+    code: 429,
+  },
+});
 
 // 登录请求验证 schema
 const loginSchema = z.object({
@@ -36,6 +50,7 @@ const changePasswordSchema = z.object({
  */
 router.post(
   '/login',
+  loginLimiter,
   validate(loginSchema),
   asyncHandler(async (req, res) => {
     const { email, password } = req.body;

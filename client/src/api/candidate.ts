@@ -45,8 +45,11 @@ export interface CreateCandidateParams {
   resumeUrl?: string;
   source: string;
   sourceNote?: string;
+  referrer?: string;
   intro?: string;
   jobIds?: string[];
+  tagIds?: string[];
+  skills?: string[];
   workHistory?: WorkHistory[];
 }
 
@@ -66,7 +69,10 @@ export interface UpdateCandidateParams {
   resumeUrl?: string;
   source?: string;
   sourceNote?: string;
+  referrer?: string;
   intro?: string;
+  tagIds?: string[];
+  skills?: string[];
 }
 
 // 推进阶段参数
@@ -160,6 +166,7 @@ export interface CandidateItem {
   resumeUrl: string | null;
   source: string;
   sourceNote: string | null;
+  referrer: string | null;
   intro: string | null;
   createdById: string;
   createdAt: string;
@@ -171,6 +178,8 @@ export interface CandidateItem {
   candidateJobs: CandidateJob[];
   currentStage: string;
   stageStatus: string;
+  tags?: Tag[];
+  skills?: string[];
 }
 
 // 候选人详情
@@ -360,6 +369,31 @@ export function getInterviewFeedbacks(id: string): Promise<InterviewFeedbackList
  */
 export function deleteCandidate(id: string): Promise<OperationResult> {
   return request.delete(`/candidates/${id}`) as Promise<OperationResult>;
+}
+
+/**
+ * 批量推进候选人阶段
+ * @param data 批量推进数据
+ */
+export function batchAdvanceStage(data: {
+  candidateIds: string[];
+  stage: CandidateStage;
+  status: StageStatus;
+  rejectReason?: string;
+  note?: string;
+}): Promise<OperationResult & { data?: { success: number; failed: number } }> {
+  return request.post('/candidates/batch/advance', data) as Promise<OperationResult & { data?: { success: number; failed: number } }>;
+}
+
+/**
+ * 批量设置候选人标签
+ * @param data 批量设置标签数据
+ */
+export function batchSetTags(data: {
+  candidateIds: string[];
+  tagIds: string[];
+}): Promise<OperationResult & { data?: { success: number; failed: number } }> {
+  return request.post('/candidates/batch/tags', data) as Promise<OperationResult & { data?: { success: number; failed: number } }>;
 }
 
 /**

@@ -138,6 +138,24 @@
           </template>
         </el-table-column>
 
+        <el-table-column prop="tags" label="标签" min-width="120">
+          <template #default="{ row }">
+            <div class="tag-list">
+              <el-tag
+                v-for="tag in row.tags?.slice(0, 3)"
+                :key="tag.id"
+                size="small"
+                :color="tag.color"
+                effect="light"
+                class="job-tag-item"
+              >
+                {{ tag.name }}
+              </el-tag>
+              <span v-if="!row.tags?.length" class="no-tag">-</span>
+            </div>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="_count" label="候选人" width="100" align="center">
           <template #default="{ row }">
             <el-button
@@ -394,6 +412,7 @@ function goToCandidates(row: JobItem) {
 // 关闭职位
 async function handleClose(row: JobItem & { loading?: boolean }) {
   row.loading = true;
+  const abortCtrl = new AbortController();
   try {
     await ElMessageBox.confirm(
       `确定要关闭职位 "${row.title}" 吗？关闭后无法继续投递。`,
@@ -405,14 +424,21 @@ async function handleClose(row: JobItem & { loading?: boolean }) {
       }
     );
 
-    const res = await closeJob(row.id);
+    console.log('[JobClose] sending request for', row.id);
+    const res = await closeJob(row.id, { signal: abortCtrl.signal });
+    console.log('[JobClose] received', res);
     if (res.success) {
       ElMessage.success('职位已关闭');
       fetchJobList();
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '关闭失败');
+      console.error('[JobClose] error', error);
+      if (error.name === 'CanceledError' || error.name === 'AbortError') {
+        ElMessage.warning('请求已取消');
+      } else {
+        ElMessage.error(error.message || '关闭失败');
+      }
     }
   } finally {
     row.loading = false;
@@ -438,6 +464,7 @@ async function handleDuplicate(row: JobItem & { duplicateLoading?: boolean }) {
 // 删除职位
 async function handleDelete(row: JobItem & { deleteLoading?: boolean }) {
   row.deleteLoading = true;
+  const abortCtrl = new AbortController();
   try {
     const candidateCount = row._count?.candidateJobs || 0;
     let confirmMessage = `确定要删除职位 "${row.title}" 吗？删除后不可恢复。`;
@@ -456,14 +483,21 @@ async function handleDelete(row: JobItem & { deleteLoading?: boolean }) {
       }
     );
 
-    const res = await deleteJob(row.id);
+    console.log('[JobDelete] sending request for', row.id);
+    const res = await deleteJob(row.id, { signal: abortCtrl.signal });
+    console.log('[JobDelete] received', res);
     if (res.success) {
       ElMessage.success('删除成功');
       fetchJobList();
     }
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '删除失败');
+      console.error('[JobDelete] error', error);
+      if (error.name === 'CanceledError' || error.name === 'AbortError') {
+        ElMessage.warning('请求已取消');
+      } else {
+        ElMessage.error(error.message || '删除失败');
+      }
     }
   } finally {
     row.deleteLoading = false;
@@ -541,6 +575,21 @@ onActivated(() => {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+  }
+
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+
+    .job-tag-item {
+      color: #fff;
+      border: none;
+    }
+
+    .no-tag {
+      color: #909399;
     }
   }
 

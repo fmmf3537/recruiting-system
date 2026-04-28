@@ -3,10 +3,14 @@ import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
-
-// 阶段顺序定义
-const STAGE_ORDER = ['入库', '初筛', '复试', '终面', '拟录用', 'Offer', '入职'] as const;
-type Stage = (typeof STAGE_ORDER)[number];
+import { sanitizeHtml } from '../utils/sanitize';
+import {
+  STAGE_ORDER,
+  DEFAULT_STAGE,
+  DEFAULT_STAGE_STATUS,
+} from '../constants';
+import type { Stage } from '../constants';
+import { checkDuplicate, isPhoneUsed, isEmailUsed } from './duplicate-checker.service';
 
 // 候选人列表查询参数类型
 export interface CandidateListQuery {
@@ -20,6 +24,8 @@ export interface CandidateListQuery {
   workYearsMin?: number;
   workYearsMax?: number;
   jobId?: string;
+  tagIds?: string[];
+  hasNoJob?: boolean;
 }
 
 // 创建候选人参数类型
@@ -38,8 +44,11 @@ export interface CreateCandidateInput {
   resumeUrl?: string;
   source: string;
   sourceNote?: string;
+  referrer?: string;
   intro?: string;
   jobIds?: string[];
+  tagIds?: string[];
+  skills?: string[];
   workHistory?: Array<{
     company: string;
     position: string;
@@ -65,7 +74,10 @@ export interface UpdateCandidateInput {
   resumeUrl?: string;
   source?: string;
   sourceNote?: string;
+  referrer?: string;
   intro?: string;
+  tagIds?: string[];
+  skills?: string[];
 }
 
 // 推进阶段参数类型
@@ -127,56 +139,7 @@ export class CandidateService {
     createdById: string
   ): Promise<CreateCandidateResult> {
     // 查重：检查手机号或邮箱是否已存在
-    const duplicates: DuplicateCandidate[] = [];
-
-    const existingByPhone = await prisma.candidate.findFirst({
-      where: { phone: data.phone },
-      include: {
-        stageRecords: {
-          orderBy: { enteredAt: 'desc' },
-          take: 1,
-          select: { stage: true, status: true },
-        },
-      },
-    });
-
-    const existingByEmail = await prisma.candidate.findFirst({
-      where: { email: data.email },
-      include: {
-        stageRecords: {
-          orderBy: { enteredAt: 'desc' },
-          take: 1,
-          select: { stage: true, status: true },
-        },
-      },
-    });
-
-    // 收集重复信息
-    const seenIds = new Set<string>();
-    if (existingByPhone && !seenIds.has(existingByPhone.id)) {
-      duplicates.push({
-        id: existingByPhone.id,
-        name: existingByPhone.name,
-        phone: existingByPhone.phone,
-        email: existingByPhone.email,
-        currentStage: existingByPhone.stageRecords[0]?.stage || '入库',
-        status: existingByPhone.stageRecords[0]?.status || 'in_progress',
-        createdAt: existingByPhone.createdAt,
-      });
-      seenIds.add(existingByPhone.id);
-    }
-
-    if (existingByEmail && !seenIds.has(existingByEmail.id)) {
-      duplicates.push({
-        id: existingByEmail.id,
-        name: existingByEmail.name,
-        phone: existingByEmail.phone,
-        email: existingByEmail.email,
-        currentStage: existingByEmail.stageRecords[0]?.stage || '入库',
-        status: existingByEmail.stageRecords[0]?.status || 'in_progress',
-        createdAt: existingByEmail.createdAt,
-      });
-    }
+    const { duplicates } = await checkDuplicate(data.phone, data.email);
 
     // 创建候选人
     const candidate = await prisma.candidate.create({
@@ -195,7 +158,9 @@ export class CandidateService {
         resumeUrl: data.resumeUrl,
         source: data.source,
         sourceNote: data.sourceNote,
+        referrer: data.referrer,
         intro: data.intro,
+        skills: data.skills || [],
         createdById,
       },
     });
@@ -210,11 +175,22 @@ export class CandidateService {
       });
     }
 
+    // 如果有标签，创建标签关联
+    if (data.tagIds && data.tagIds.length > 0) {
+      await prisma.candidateTag.createMany({
+        data: data.tagIds.map((tagId) => ({
+          candidateId: candidate.id,
+          tagId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
     // 创建初始阶段记录（入库）
     await prisma.stageRecord.create({
       data: {
         candidateId: candidate.id,
-        stage: '入库',
+        stage: DEFAULT_STAGE,
         status: 'passed',
         enteredAt: new Date(),
         completedAt: new Date(),
@@ -282,6 +258,8 @@ export class CandidateService {
       workYearsMin,
       workYearsMax,
       jobId,
+      tagIds,
+      hasNoJob,
     } = query;
 
     const skip = (page - 1) * pageSize;
@@ -328,6 +306,58 @@ export class CandidateService {
       });
       candidateIdsByJob = candidateJobs.map((cj) => cj.candidateId);
       where.id = { in: candidateIdsByJob };
+    }
+
+    // 人才库筛选（未关联职位的候选人）
+    if (hasNoJob) {
+      const candidatesWithJobs = await prisma.candidateJob.findMany({
+        select: { candidateId: true },
+        distinct: ['candidateId'],
+      });
+      const candidatesWithJobIds = candidatesWithJobs.map((cj) => cj.candidateId);
+      where.id = {
+        ...((where.id as Prisma.StringFilter) || {}),
+        notIn: candidatesWithJobIds,
+      };
+    }
+
+    // 标签筛选（候选人必须拥有所有指定标签）
+    let candidateIdsByTags: string[] | undefined;
+    if (tagIds && tagIds.length > 0) {
+      const candidateTags = await prisma.candidateTag.groupBy({
+        by: ['candidateId'],
+        where: { tagId: { in: tagIds } },
+        _count: { tagId: true },
+        having: { tagId: { _count: { equals: tagIds.length } } },
+      });
+      candidateIdsByTags = candidateTags.map((ct) => ct.candidateId);
+
+      if (candidateIdsByTags.length === 0) {
+        return {
+          candidates: [],
+          total: 0,
+          page,
+          pageSize,
+          totalPages: 0,
+        };
+      }
+
+      const existingFilter = (where.id as Prisma.StringFilter)?.in as string[] | undefined;
+      if (existingFilter) {
+        const intersection = existingFilter.filter((id) => candidateIdsByTags!.includes(id));
+        if (intersection.length === 0) {
+          return {
+            candidates: [],
+            total: 0,
+            page,
+            pageSize,
+            totalPages: 0,
+          };
+        }
+        where.id = { in: intersection };
+      } else {
+        where.id = { in: candidateIdsByTags };
+      }
     }
 
     // 阶段/状态筛选（基于最新阶段记录，下推到数据库）
@@ -385,8 +415,8 @@ export class CandidateService {
 
     const candidateIds = candidates.map((c) => c.id);
 
-    // 批量查询最新阶段记录和关联职位（避免 Prisma 嵌套 JOIN 性能问题）
-    const [stageRecords, candidateJobs] = await Promise.all([
+    // 批量查询最新阶段记录、关联职位和标签（避免 Prisma 嵌套 JOIN 性能问题）
+    const [stageRecords, candidateJobs, candidateTags] = await Promise.all([
       prisma.stageRecord.findMany({
         where: { candidateId: { in: candidateIds } },
         orderBy: { enteredAt: 'desc' },
@@ -399,6 +429,10 @@ export class CandidateService {
             select: { id: true, title: true },
           },
         },
+      }),
+      prisma.candidateTag.findMany({
+        where: { candidateId: { in: candidateIds } },
+        include: { tag: true },
       }),
     ]);
 
@@ -417,12 +451,21 @@ export class CandidateService {
       jobsMap.get(cj.candidateId)!.push(cj);
     }
 
+    const tagsMap = new Map<string, typeof candidateTags>();
+    for (const ct of candidateTags) {
+      if (!tagsMap.has(ct.candidateId)) {
+        tagsMap.set(ct.candidateId, []);
+      }
+      tagsMap.get(ct.candidateId)!.push(ct);
+    }
+
     // 格式化返回数据
     const formattedCandidates = candidates.map((candidate) => ({
       ...candidate,
       currentStage: stageMap.get(candidate.id)?.stage || '入库',
       stageStatus: stageMap.get(candidate.id)?.status || 'in_progress',
       candidateJobs: jobsMap.get(candidate.id) || [],
+      tags: tagsMap.get(candidate.id)?.map((ct) => ct.tag) || [],
     }));
 
     const result = {
@@ -512,6 +555,9 @@ export class CandidateService {
         workHistories: {
           orderBy: { startDate: 'desc' },
         },
+        candidateTags: {
+          include: { tag: true },
+        },
       },
     });
 
@@ -521,9 +567,10 @@ export class CandidateService {
 
     return {
       ...candidate,
-      currentStage: candidate.stageRecords[0]?.stage || '入库',
-      stageStatus: candidate.stageRecords[0]?.status || 'in_progress',
+      currentStage: candidate.stageRecords[0]?.stage || DEFAULT_STAGE,
+      stageStatus: candidate.stageRecords[0]?.status || DEFAULT_STAGE_STATUS,
       jobs: candidate.candidateJobs.map((cj) => cj.job),
+      tags: candidate.candidateTags.map((ct) => ct.tag),
     } as unknown as Candidate & {
       stageRecords: Array<{
         id: string;
@@ -585,19 +632,15 @@ export class CandidateService {
 
     // 如果修改手机号或邮箱，检查是否与其他候选人冲突
     if (data.phone && data.phone !== existingCandidate.phone) {
-      const existingByPhone = await prisma.candidate.findFirst({
-        where: { phone: data.phone, NOT: { id } },
-      });
-      if (existingByPhone) {
+      const phoneUsed = await isPhoneUsed(data.phone, id);
+      if (phoneUsed) {
         throw new AppError('该手机号已被其他候选人使用', 400);
       }
     }
 
     if (data.email && data.email !== existingCandidate.email) {
-      const existingByEmail = await prisma.candidate.findFirst({
-        where: { email: data.email, NOT: { id } },
-      });
-      if (existingByEmail) {
+      const emailUsed = await isEmailUsed(data.email, id);
+      if (emailUsed) {
         throw new AppError('该邮箱已被其他候选人使用', 400);
       }
     }
@@ -621,12 +664,25 @@ export class CandidateService {
     if (data.resumeUrl !== undefined) updateData.resumeUrl = data.resumeUrl;
     if (data.source !== undefined) updateData.source = data.source;
     if (data.sourceNote !== undefined) updateData.sourceNote = data.sourceNote;
+    if (data.referrer !== undefined) updateData.referrer = data.referrer;
     if (data.intro !== undefined) updateData.intro = data.intro;
+    if (data.skills !== undefined) updateData.skills = data.skills;
 
     const candidate = await prisma.candidate.update({
       where: { id },
       data: updateData,
     });
+
+    // 如果传了标签，更新标签关联
+    if (data.tagIds !== undefined) {
+      await prisma.candidateTag.deleteMany({ where: { candidateId: id } });
+      if (data.tagIds.length > 0) {
+        await prisma.candidateTag.createMany({
+          data: data.tagIds.map((tagId) => ({ candidateId: id, tagId })),
+          skipDuplicates: true,
+        });
+      }
+    }
 
     await clearListCache('candidates:list:*');
     return candidate;
@@ -665,9 +721,9 @@ export class CandidateService {
 
     // 获取当前阶段
     const currentStage =
-      candidate.stageRecords[0]?.stage || ('入库' as Stage);
+      candidate.stageRecords[0]?.stage || (DEFAULT_STAGE as Stage);
     const currentStageIndex = STAGE_ORDER.indexOf(currentStage as Stage);
-    const currentStatus = candidate.stageRecords[0]?.status || 'in_progress';
+    const currentStatus = candidate.stageRecords[0]?.status || DEFAULT_STAGE_STATUS;
 
     // 检查是否为 admin
     const user = await prisma.user.findUnique({ where: { id: operatedById } });
@@ -819,7 +875,7 @@ export class CandidateService {
         interviewerName: data.interviewerName,
         interviewTime: new Date(data.interviewTime),
         conclusion: data.conclusion,
-        feedbackContent: data.feedbackContent,
+        feedbackContent: sanitizeHtml(data.feedbackContent),
         rejectReason: data.rejectReason || null,
         createdById,
       },
@@ -1193,6 +1249,61 @@ export class CandidateService {
     allActivities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
     console.log('[getRecentActivities] total returned:', allActivities.slice(0, limit).length);
     return allActivities.slice(0, limit);
+  }
+
+  /**
+   * 批量推进候选人阶段
+   */
+  async batchAdvanceStage(
+    candidateIds: string[],
+    data: AdvanceStageInput,
+    operatedById: string
+  ): Promise<{ success: number; failed: number }> {
+    let success = 0;
+    let failed = 0;
+
+    for (const id of candidateIds) {
+      try {
+        await this.advanceStage(id, data, operatedById);
+        success++;
+      } catch (error) {
+        console.error(`[BatchAdvance] 候选人 ${id} 推进失败:`, error);
+        failed++;
+      }
+    }
+
+    return { success, failed };
+  }
+
+  /**
+   * 批量设置候选人标签
+   */
+  async batchSetTags(
+    candidateIds: string[],
+    tagIds: string[]
+  ): Promise<{ success: number; failed: number }> {
+    let success = 0;
+    let failed = 0;
+
+    for (const candidateId of candidateIds) {
+      try {
+        // 先删除旧标签，再创建新标签
+        await prisma.candidateTag.deleteMany({ where: { candidateId } });
+        if (tagIds.length > 0) {
+          await prisma.candidateTag.createMany({
+            data: tagIds.map((tagId) => ({ candidateId, tagId })),
+            skipDuplicates: true,
+          });
+        }
+        success++;
+      } catch (error) {
+        console.error(`[BatchSetTags] 候选人 ${candidateId} 设置标签失败:`, error);
+        failed++;
+      }
+    }
+
+    await clearListCache('candidates:list:*');
+    return { success, failed };
   }
 }
 

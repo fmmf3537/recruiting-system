@@ -15,6 +15,9 @@
             <div class="card-header">
               <span>基本信息</span>
               <div class="header-actions">
+                <el-button type="warning" link @click="showResumeUpload = true">
+                  <el-icon><Upload /></el-icon>重新解析
+                </el-button>
                 <el-button v-if="canDelete" type="danger" link @click="handleDelete">
                   <el-icon><Delete /></el-icon>删除
                 </el-button>
@@ -45,6 +48,7 @@
             <el-descriptions-item label="当前职位">{{ candidate.currentPosition || '-' }}</el-descriptions-item>
             <el-descriptions-item label="期望薪资">{{ candidate.expectedSalary || '-' }}</el-descriptions-item>
             <el-descriptions-item label="来源渠道">{{ candidate.source }}</el-descriptions-item>
+            <el-descriptions-item label="推荐人">{{ candidate.referrer || '-' }}</el-descriptions-item>
             <el-descriptions-item label="简历附件">
               <el-link v-if="candidate.resumeUrl" :href="candidate.resumeUrl" target="_blank" type="primary">
                 下载简历
@@ -52,6 +56,55 @@
               <span v-else>-</span>
             </el-descriptions-item>
           </el-descriptions>
+
+          <div class="tags-section">
+            <h4>标签</h4>
+            <div class="tag-editor">
+              <el-tag
+                v-for="tag in candidate.tags || []"
+                :key="tag.id"
+                size="small"
+                :color="tag.color"
+                effect="light"
+                class="detail-tag"
+                closable
+                @close="handleRemoveTag(tag.id)"
+              >
+                {{ tag.name }}
+              </el-tag>
+              <el-select
+                v-model="tagSelectValue"
+                placeholder="+ 添加标签"
+                size="small"
+                clearable
+                style="width: 120px"
+                @change="handleAddTag"
+              >
+                <el-option
+                  v-for="tag in availableTags"
+                  :key="tag.id"
+                  :label="tag.name"
+                  :value="tag.id"
+                />
+              </el-select>
+            </div>
+          </div>
+
+          <div v-if="candidate.skills?.length" class="skills-section">
+            <h4>技能标签</h4>
+            <div class="skills-wrapper">
+              <el-tag
+                v-for="skill in candidate.skills"
+                :key="skill"
+                size="small"
+                type="primary"
+                effect="light"
+                class="skill-tag"
+              >
+                {{ skill }}
+              </el-tag>
+            </div>
+          </div>
 
           <div v-if="candidate.intro" class="intro-section">
             <h4>候选人说明</h4>
@@ -141,6 +194,14 @@
             >
               <el-icon><View /></el-icon>查看 Offer
             </el-button>
+            <el-button
+              type="default"
+              size="large"
+              @click="showSendEmail"
+              style="width: 100%"
+            >
+              <el-icon><Message /></el-icon>发送邮件
+            </el-button>
           </div>
         </el-card>
 
@@ -164,6 +225,34 @@
               </el-tag>
             </el-descriptions-item>
           </el-descriptions>
+        </el-card>
+
+        <!-- 入职任务清单 -->
+        <el-card v-if="candidate.offer?.result === 'accepted' || candidate.offer?.joined" shadow="never" class="onboarding-card">
+          <template #header>
+            <div class="card-header">
+              <span>入职任务清单</span>
+              <el-button v-if="!onboardingTasks.length" type="primary" link size="small" @click="generateOnboardingTasks">
+                生成标准任务
+              </el-button>
+            </div>
+          </template>
+          <el-empty v-if="!onboardingTasks.length" description="暂无入职任务" :image-size="60" />
+          <div v-else class="task-list">
+            <div
+              v-for="task in onboardingTasks"
+              :key="task.id"
+              class="task-item"
+            >
+              <el-checkbox
+                :model-value="task.status === 'completed'"
+                @change="(val: boolean) => toggleTaskStatus(task.id, val)"
+              >
+                <span :class="{ 'task-completed': task.status === 'completed' }">{{ task.title }}</span>
+              </el-checkbox>
+              <el-tag size="small" type="info">{{ task.category }}</el-tag>
+            </div>
+          </div>
         </el-card>
 
         <!-- 面试反馈 -->
@@ -203,6 +292,43 @@
     <el-empty v-else-if="notFound" description="候选人不存在或已被删除">
       <el-button type="primary" @click="goToList">返回列表</el-button>
     </el-empty>
+
+    <!-- 发送邮件对话框 -->
+    <el-dialog v-model="emailDialogVisible" title="发送邮件" width="600px">
+      <el-form label-width="100px">
+        <el-form-item label="收件人">
+          <el-input :model-value="candidate?.email" disabled />
+        </el-form-item>
+        <el-form-item label="选择模板">
+          <el-select v-model="selectedTemplateId" placeholder="可选" clearable style="width: 100%" @change="handleTemplateChange">
+            <el-option
+              v-for="tpl in emailTemplates"
+              :key="tpl.id"
+              :label="tpl.name"
+              :value="tpl.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="邮件主题">
+          <el-input v-model="emailSubject" placeholder="请输入邮件主题" />
+        </el-form-item>
+        <el-form-item label="邮件正文">
+          <el-input
+            v-model="emailBody"
+            type="textarea"
+            :rows="8"
+            placeholder="支持 HTML 语法"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="emailDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleSendEmail" :loading="emailSubmitting">发送</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 重新上传简历对话框 -->
+    <ResumeUpload v-model="showResumeUpload" @confirm="handleResumeReParsed" />
 
     <!-- 推进流程对话框 -->
     <el-dialog v-model="advanceDialogVisible" title="推进候选人流程" width="500px">
@@ -277,7 +403,7 @@
 import { ref, computed, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { ArrowLeft, Edit, Delete, UserFilled, Promotion, ChatDotRound, Document, View } from '@element-plus/icons-vue';
+import { ArrowLeft, Edit, Delete, UserFilled, Promotion, ChatDotRound, Document, View, Upload, Message } from '@element-plus/icons-vue';
 import {
   getCandidateById,
   advanceStage,
@@ -286,17 +412,39 @@ import {
   type CandidateDetail,
   type AdvanceStageParams,
   type InterviewFeedbackParams,
+  type ResumeParseResult,
 } from '@/api/candidate';
+import { getTags, setCandidateTags, type Tag } from '@/api/tag';
+import { getEmailTemplates, sendEmail, type EmailTemplate } from '@/api/email';
+import { getTasksByCandidate, updateTask, generateDefaultTasks, type OnboardingTask } from '@/api/onboarding-task';
 import { useAuthStore } from '@/stores/auth';
+import { useResumeParserStore } from '@/stores/resumeParser';
+import ResumeUpload from './ResumeUpload.vue';
 
 const route = useRoute();
 const router = useRouter();
 const candidateId = route.params.id as string;
 const authStore = useAuthStore();
+const resumeParserStore = useResumeParserStore();
 
 const candidate = ref<CandidateDetail | null>(null);
 const loading = ref(false);
 const notFound = ref(false);
+const showResumeUpload = ref(false);
+const tagOptions = ref<Tag[]>([]);
+const onboardingTasks = ref<OnboardingTask[]>([]);
+const tagSelectValue = ref('');
+
+const availableTags = computed(() => {
+  const currentTagIds = new Set((candidate.value?.tags || []).map((t) => t.id));
+  return tagOptions.value.filter((t) => !currentTagIds.has(t.id));
+});
+
+function handleResumeReParsed(data: ResumeParseResult) {
+  // 将解析结果存入 Store，跳转到编辑页面
+  resumeParserStore.setParsedData(data);
+  router.push(`/candidates/${candidateId}/edit`);
+}
 
 // 计算是否可推进
 const canAdvance = computed(() => {
@@ -405,6 +553,51 @@ async function fetchCandidateDetail() {
     }
   } finally {
     loading.value = false;
+  }
+}
+
+async function fetchTags() {
+  try {
+    const res = await getTags();
+    if (res.success) {
+      tagOptions.value = res.data;
+    }
+  } catch {
+    // 静默失败
+  }
+}
+
+async function handleAddTag(tagId: string) {
+  if (!tagId || !candidate.value) return;
+  const currentTagIds = (candidate.value.tags || []).map((t) => t.id);
+  if (currentTagIds.includes(tagId)) return;
+  try {
+    const res = await setCandidateTags(candidateId, { tagIds: [...currentTagIds, tagId] });
+    if (res.success) {
+      candidate.value.tags = res.data;
+      ElMessage.success('标签添加成功');
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '添加标签失败');
+  } finally {
+    tagSelectValue.value = '';
+  }
+}
+
+async function handleRemoveTag(tagId: string) {
+  if (!candidate.value) return;
+  const currentTagIds = (candidate.value.tags || []).map((t) => t.id);
+  try {
+    const res = await setCandidateTags(
+      candidateId,
+      { tagIds: currentTagIds.filter((id) => id !== tagId) }
+    );
+    if (res.success) {
+      candidate.value.tags = res.data;
+      ElMessage.success('标签移除成功');
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '移除标签失败');
   }
 }
 
@@ -518,12 +711,111 @@ function handleViewOffer() {
   }
 }
 
+// ============ 发送邮件 ============
+const emailDialogVisible = ref(false);
+const emailTemplates = ref<EmailTemplate[]>([]);
+const selectedTemplateId = ref('');
+const emailSubject = ref('');
+const emailBody = ref('');
+const emailSubmitting = ref(false);
+
+function showSendEmail() {
+  selectedTemplateId.value = '';
+  emailSubject.value = '';
+  emailBody.value = '';
+  fetchEmailTemplates();
+  emailDialogVisible.value = true;
+}
+
+async function fetchEmailTemplates() {
+  try {
+    const res = await getEmailTemplates();
+    if (res.success) emailTemplates.value = res.data;
+  } catch {
+    // 静默失败
+  }
+}
+
+function handleTemplateChange(id: string) {
+  const tpl = emailTemplates.value.find((t) => t.id === id);
+  if (tpl && candidate.value) {
+    const vars: Record<string, string> = {
+      candidateName: candidate.value.name,
+      currentStage: candidate.value.currentStage,
+    };
+    emailSubject.value = tpl.subject.replace(/\{\{(\w+)\}\}/g, (_m, k) => vars[k] || `{{${k}}}`);
+    emailBody.value = tpl.body.replace(/\{\{(\w+)\}\}/g, (_m, k) => vars[k] || `{{${k}}}`);
+  }
+}
+
+async function handleSendEmail() {
+  if (!candidate.value) return;
+  if (!emailSubject.value || !emailBody.value) {
+    ElMessage.warning('请填写邮件主题和正文');
+    return;
+  }
+  emailSubmitting.value = true;
+  try {
+    const res = await sendEmail({
+      to: candidate.value.email,
+      subject: emailSubject.value,
+      body: emailBody.value,
+      candidateId: candidate.value.id,
+      templateId: selectedTemplateId.value || undefined,
+    });
+    if (res.success) {
+      ElMessage.success('邮件发送成功');
+      emailDialogVisible.value = false;
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '发送失败');
+  } finally {
+    emailSubmitting.value = false;
+  }
+}
+
+async function fetchOnboardingTasks() {
+  try {
+    const res = await getTasksByCandidate(candidateId);
+    if (res.success) onboardingTasks.value = res.data;
+  } catch {
+    // 静默失败
+  }
+}
+
+async function generateOnboardingTasks() {
+  try {
+    const res = await generateDefaultTasks(candidateId);
+    if (res.success) {
+      ElMessage.success('标准任务已生成');
+      onboardingTasks.value = res.data;
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '生成失败');
+  }
+}
+
+async function toggleTaskStatus(taskId: string, completed: boolean) {
+  try {
+    const res = await updateTask(taskId, { status: completed ? 'completed' : 'pending' });
+    if (res.success) {
+      const idx = onboardingTasks.value.findIndex((t) => t.id === taskId);
+      if (idx !== -1) onboardingTasks.value[idx] = res.data;
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '更新失败');
+  }
+}
+
 onMounted(() => {
+  fetchTags();
   fetchCandidateDetail();
+  fetchOnboardingTasks();
 });
 
 onActivated(() => {
   fetchCandidateDetail();
+  fetchOnboardingTasks();
 });
 </script>
 
@@ -581,6 +873,52 @@ onActivated(() => {
 
     .info-desc {
       margin-top: 20px;
+    }
+
+    .tags-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #ebeef5;
+
+      h4 {
+        margin: 0 0 10px;
+        font-size: 14px;
+        color: #606266;
+      }
+
+      .tag-editor {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .detail-tag {
+        color: #fff;
+        border: none;
+      }
+    }
+
+    .skills-section {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #ebeef5;
+
+      h4 {
+        margin: 0 0 10px;
+        font-size: 14px;
+        color: #606266;
+      }
+
+      .skills-wrapper {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .skill-tag {
+        margin: 0;
+      }
     }
 
     .intro-section {
@@ -647,6 +985,28 @@ onActivated(() => {
   .offer-card {
     :deep(.el-descriptions__label) {
       width: 100px;
+    }
+  }
+
+  .onboarding-card {
+    .task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+
+      .task-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background-color: #f5f7fa;
+        border-radius: 6px;
+
+        .task-completed {
+          text-decoration: line-through;
+          color: #909399;
+        }
+      }
     }
   }
 

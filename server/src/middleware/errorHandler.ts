@@ -13,6 +13,13 @@ export class AppError extends Error {
   }
 }
 
+/**
+ * 快速创建操作错误（兼容旧版 createError 用法）
+ */
+export const createError = (message: string, statusCode: number = 500): AppError => {
+  return new AppError(message, statusCode);
+};
+
 // Prisma 错误码映射
 const prismaErrorMap: Record<string, { message: string; statusCode: number }> = {
   P2002: { message: '记录已存在', statusCode: 409 },

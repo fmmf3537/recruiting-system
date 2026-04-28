@@ -30,7 +30,7 @@ import { useRouter } from 'vue-router';
 import { showToast } from 'vant';
 import ListPage from '@/components/ListPage.vue';
 import { getInterviewList, type InterviewListItem } from '@/api/interviews';
-import type { InterviewConclusion } from '@/api/candidates';
+import { getConclusionType } from '@/constants';
 
 const router = useRouter();
 
@@ -46,11 +46,7 @@ function goDetail(item: InterviewListItem) {
   router.push(`/interviews/form?candidateId=${item.candidateId}&round=${item.round}`);
 }
 
-function getConclusionType(conclusion: InterviewConclusion | null) {
-  if (conclusion === 'pass') return 'success';
-  if (conclusion === 'reject') return 'danger';
-  return 'warning';
-}
+
 </script>
 
 <style scoped>
