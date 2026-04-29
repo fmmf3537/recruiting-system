@@ -30,6 +30,18 @@ export type OfferResult = (typeof OFFER_RESULTS)[number];
 export const GENDERS = ['男', '女'] as const;
 export type Gender = (typeof GENDERS)[number];
 
+// ==================== 面试类型 ====================
+export const INTERVIEW_TYPES = ['电话', '视频', '现场'] as const;
+export type InterviewType = (typeof INTERVIEW_TYPES)[number];
+
+// ==================== 面试安排状态 ====================
+export const INTERVIEW_STATUS = ['scheduled', 'completed', 'cancelled', 'no_show'] as const;
+export type InterviewStatus = (typeof INTERVIEW_STATUS)[number];
+
+// ==================== 沟通方式 ====================
+export const COMMUNICATION_TYPES = ['电话', '邮件', '微信', '短信', '面谈'] as const;
+export type CommunicationType = (typeof COMMUNICATION_TYPES)[number];
+
 // ==================== 默认阶段与状态（用于兜底显示）====================
 export const DEFAULT_STAGE = '入库' as const;
 export const DEFAULT_STAGE_STATUS = 'in_progress' as const;

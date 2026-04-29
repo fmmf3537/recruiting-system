@@ -2,6 +2,8 @@ import type { Offer, Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
+import { autoSendEmailOnStageTransition } from './email-auto-sender.service';
+import * as notificationService from './notification.service';
 
 // Offer 列表查询参数类型
 export interface OfferListQuery {
@@ -272,7 +274,23 @@ export class OfferService {
             note: 'Offer 已接受，自动推进到入职',
           },
         });
+
+        // 异步触发入职邮件
+        void autoSendEmailOnStageTransition(candidateId, '入职', 'passed', 'system');
       }
+    }
+
+    // 异步发送 Offer 状态变更通知
+    if (data.result) {
+      const resultLabel = data.result === 'accepted' ? '已接受' : data.result === 'rejected' ? '已拒绝' : '待确认';
+      void notificationService.createNotification({
+        recipientId: candidate.createdById,
+        title: `Offer 状态变更：${candidate.name}`,
+        content: `${candidate.name} 的 Offer 状态变更为：${resultLabel}`,
+        type: 'offer_status',
+        businessId: candidateId,
+        businessType: 'offer',
+      }).catch((e) => console.error('[Notification] Offer通知发送失败:', e));
     }
 
     await clearStatsCache();

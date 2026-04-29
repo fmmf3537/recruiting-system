@@ -27,6 +27,8 @@ export interface CandidateListParams {
   workYearsMin?: number;
   workYearsMax?: number;
   jobId?: string;
+  tagIds?: string[];
+  hasNoJob?: boolean;
 }
 
 // 创建候选人参数

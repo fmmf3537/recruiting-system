@@ -41,6 +41,10 @@ export default defineConfig({
         changeOrigin: true,
         // 不要 rewrite，保持 /api 前缀
       },
+      '/uploads': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
     },
   },
   build: {

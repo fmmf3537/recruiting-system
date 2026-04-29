@@ -136,5 +136,6 @@ test.describe('候选人表单模块', () => {
 
   test('取消按钮可点击', async () => {
     await page.click('text=取消');
+    await page.waitForTimeout(500);
   });
 });

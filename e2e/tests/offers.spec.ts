@@ -89,7 +89,8 @@ test.describe('Offer详情模块', () => {
       await page.goto(`/offers/${candidateId}`);
       await page.waitForTimeout(1000);
 
-      await expect(page.locator('.el-empty, text=暂无 Offer')).toBeVisible();
+      await expect(page.locator('.el-empty')).toBeVisible();
+      await expect(page.locator('.el-empty')).toContainText('该候选人暂无 Offer');
     }
   });
 

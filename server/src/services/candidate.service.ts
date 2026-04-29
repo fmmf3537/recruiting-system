@@ -4,6 +4,8 @@ import prisma from '../lib/prisma';
 import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 import { sanitizeHtml } from '../utils/sanitize';
+import { autoSendEmailOnStageTransition } from './email-auto-sender.service';
+import * as notificationService from './notification.service';
 import {
   STAGE_ORDER,
   DEFAULT_STAGE,
@@ -840,6 +842,20 @@ export class CandidateService {
         });
       }
     }
+
+    // 异步触发自动化邮件（发后即忘，失败不阻塞流程）
+    void autoSendEmailOnStageTransition(id, stage, status, operatedById);
+
+    // 异步发送阶段推进通知
+    const statusLabel = status === 'passed' ? '通过' : status === 'rejected' ? '淘汰' : '进行中';
+    void notificationService.createNotification({
+      recipientId: candidate.createdById,
+      title: `候选人「${candidate.name}」已进入${stage}阶段`,
+      content: `当前状态：${statusLabel}` + (rejectReason ? `，淘汰原因：${rejectReason}` : ''),
+      type: 'stage_advance',
+      businessId: id,
+      businessType: 'candidate',
+    }).catch((e) => console.error('[Notification] 阶段通知发送失败:', e));
 
     await clearStatsCache();
     await clearListCache('candidates:list:*');

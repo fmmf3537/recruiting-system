@@ -6,6 +6,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { candidateController } from '../controllers/candidate.controller';
 import { tagController } from '../controllers/tag.controller';
+import { interviewController } from '../controllers/interview.controller';
+import { communicationController } from '../controllers/communication.controller';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { STAGE_ORDER, STAGE_STATUS, INTERVIEW_ROUNDS } from '../constants';
@@ -76,6 +78,12 @@ const listCandidatesQuerySchema = z.object({
   workYearsMin: z.string().optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
   workYearsMax: z.string().optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
   jobId: z.string().optional(),
+  tagIds: z.union([z.string(), z.array(z.string())]).optional()
+    .transform((val) => {
+      if (!val) return undefined;
+      return Array.isArray(val) ? val : [val];
+    }),
+  hasNoJob: z.string().optional().transform((val) => val === 'true'),
 });
 
 // 候选人 ID 参数验证
@@ -313,6 +321,30 @@ router.put(
   validate(candidateIdParamSchema, 'params'),
   validate(setTagsSchema),
   tagController.setCandidateTags
+);
+
+// ============ 候选人的面试安排 ============
+
+/**
+ * GET /api/candidates/:id/interviews
+ * 获取候选人的面试安排列表
+ */
+router.get(
+  '/:id/interviews',
+  authenticate,
+  validate(candidateIdParamSchema, 'params'),
+  interviewController.getInterviewsByCandidate
+);
+
+/**
+ * GET /api/candidates/:id/communications
+ * 获取候选人的沟通记录
+ */
+router.get(
+  '/:id/communications',
+  authenticate,
+  validate(candidateIdParamSchema, 'params'),
+  communicationController.getCommunicationsByCandidate
 );
 
 // ============ 批量操作 ============

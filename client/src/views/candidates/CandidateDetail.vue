@@ -255,6 +255,44 @@
           </div>
         </el-card>
 
+        <!-- 面试安排 -->
+        <el-card shadow="never" class="interview-card">
+          <template #header>
+            <div class="card-header">
+              <span>面试安排</span>
+              <el-button type="primary" link size="small" @click="handleScheduleInterview">
+                + 安排面试
+              </el-button>
+            </div>
+          </template>
+          <div v-if="candidateInterviews.length" class="interview-list">
+            <div v-for="iv in candidateInterviews" :key="iv.id" class="interview-item">
+              <div class="interview-header">
+                <el-tag size="small">{{ iv.round }}</el-tag>
+                <el-tag size="small" :type="getInterviewStatusType(iv.status)">
+                  {{ getInterviewStatusText(iv.status) }}
+                </el-tag>
+              </div>
+              <div class="interview-detail">
+                <div class="detail-row">
+                  <el-icon><Clock /></el-icon>
+                  <span>{{ formatDateTime(iv.scheduledAt) }}（{{ iv.duration }}分钟）</span>
+                </div>
+                <div class="detail-row">
+                  <el-icon><User /></el-icon>
+                  <span>{{ iv.interviewers?.map((i: any) => i.name).join('、') }}</span>
+                </div>
+                <div v-if="iv.location" class="detail-row">
+                  <el-icon><Location /></el-icon>
+                  <span>{{ iv.location }}</span>
+                </div>
+              </div>
+              <div v-if="iv.notes" class="interview-notes">{{ iv.notes }}</div>
+            </div>
+          </div>
+          <el-empty v-else description="暂无面试安排" :image-size="50" />
+        </el-card>
+
         <!-- 面试反馈 -->
         <el-card shadow="never" class="feedback-card">
           <template #header>
@@ -285,6 +323,33 @@
             </div>
           </div>
           <el-empty v-else description="暂无面试反馈" />
+        </el-card>
+
+        <!-- 沟通记录 -->
+        <el-card shadow="never" class="communication-card">
+          <template #header>
+            <div class="card-header">
+              <span>沟通记录</span>
+              <el-button type="primary" link size="small" @click="handleAddCommunication">
+                + 添加记录
+              </el-button>
+            </div>
+          </template>
+          <div v-if="candidateCommunications.length" class="communication-list">
+            <div v-for="log in candidateCommunications" :key="log.id" class="communication-item">
+              <div class="comm-header">
+                <el-tag size="small" type="info">{{ log.type }}</el-tag>
+                <span class="comm-time">{{ formatDateTime(log.createdAt) }}</span>
+                <span class="comm-author">{{ log.createdBy?.name || '—' }}</span>
+              </div>
+              <div class="comm-content">{{ log.content }}</div>
+              <div v-if="log.result" class="comm-result">结果：{{ log.result }}</div>
+              <div v-if="log.followUpAt" class="comm-followup">
+                <el-icon><Clock /></el-icon> 跟进提醒：{{ formatDateTime(log.followUpAt) }}
+              </div>
+            </div>
+          </div>
+          <el-empty v-else description="暂无沟通记录" :image-size="50" />
         </el-card>
       </div>
     </div>
@@ -396,14 +461,48 @@
         <el-button type="primary" @click="handleFeedbackSubmit" :loading="feedbackSubmitting">确认添加</el-button>
       </template>
     </el-dialog>
+
+    <!-- 添加沟通记录对话框 -->
+    <el-dialog v-model="commDialogVisible" title="添加沟通记录" width="500px" destroy-on-close>
+      <el-form ref="commFormRef" :model="commForm" :rules="commRules" label-width="80px">
+        <el-form-item label="沟通方式" prop="type">
+          <el-select v-model="commForm.type" style="width: 100%">
+            <el-option label="电话" value="电话" />
+            <el-option label="邮件" value="邮件" />
+            <el-option label="微信" value="微信" />
+            <el-option label="短信" value="短信" />
+            <el-option label="面谈" value="面谈" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="沟通内容" prop="content">
+          <el-input v-model="commForm.content" type="textarea" :rows="4" placeholder="请记录沟通内容摘要" />
+        </el-form-item>
+        <el-form-item label="沟通结果">
+          <el-input v-model="commForm.result" placeholder="沟通结果（可选）" />
+        </el-form-item>
+        <el-form-item label="跟进提醒">
+          <el-date-picker
+            v-model="commForm.followUpAt"
+            type="datetime"
+            placeholder="设置下次跟进时间（可选）"
+            value-format="YYYY-MM-DD HH:mm:ss"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="commDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleCommSubmit" :loading="commSubmitting">确认添加</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated } from 'vue';
+import { ref, reactive, computed, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { ArrowLeft, Edit, Delete, UserFilled, Promotion, ChatDotRound, Document, View, Upload, Message } from '@element-plus/icons-vue';
+import { ArrowLeft, Edit, Delete, UserFilled, Promotion, ChatDotRound, Document, View, Upload, Message, Clock, User, Location } from '@element-plus/icons-vue';
 import {
   getCandidateById,
   advanceStage,
@@ -417,6 +516,8 @@ import {
 import { getTags, setCandidateTags, type Tag } from '@/api/tag';
 import { getEmailTemplates, sendEmail, type EmailTemplate } from '@/api/email';
 import { getTasksByCandidate, updateTask, generateDefaultTasks, type OnboardingTask } from '@/api/onboarding-task';
+import { getCandidateInterviews, type InterviewItem } from '@/api/interview';
+import { getCandidateCommunications, createCommunication, type CommunicationItem } from '@/api/communication';
 import { useAuthStore } from '@/stores/auth';
 import { useResumeParserStore } from '@/stores/resumeParser';
 import ResumeUpload from './ResumeUpload.vue';
@@ -434,6 +535,25 @@ const showResumeUpload = ref(false);
 const tagOptions = ref<Tag[]>([]);
 const onboardingTasks = ref<OnboardingTask[]>([]);
 const tagSelectValue = ref('');
+
+// 面试安排
+const candidateInterviews = ref<InterviewItem[]>([]);
+
+// 沟通记录
+const candidateCommunications = ref<CommunicationItem[]>([]);
+const commDialogVisible = ref(false);
+const commSubmitting = ref(false);
+const commFormRef = ref<FormInstance>();
+const commForm = reactive({
+  type: '电话' as string,
+  content: '',
+  result: '',
+  followUpAt: '',
+});
+const commRules: FormRules = {
+  type: [{ required: true, message: '请选择沟通方式', trigger: 'change' }],
+  content: [{ required: true, message: '请填写沟通内容', trigger: 'blur' }],
+};
 
 const availableTags = computed(() => {
   const currentTagIds = new Set((candidate.value?.tags || []).map((t) => t.id));
@@ -604,6 +724,11 @@ async function handleRemoveTag(tagId: string) {
 // 方法
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDateTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function getStatusType(status: string): string {
@@ -807,15 +932,86 @@ async function toggleTaskStatus(taskId: string, completed: boolean) {
   }
 }
 
+// 获取候选人的面试安排
+async function fetchCandidateInterviews() {
+  if (!candidateId) return;
+  try {
+    const res = await getCandidateInterviews(candidateId) as any;
+    if (res.success) {
+      candidateInterviews.value = res.data || [];
+    }
+  } catch { /* ignore */ }
+}
+
+// 获取候选人的沟通记录
+async function fetchCandidateCommunications() {
+  if (!candidateId) return;
+  try {
+    const res = await getCandidateCommunications(candidateId) as any;
+    if (res.success) {
+      candidateCommunications.value = res.data || [];
+    }
+  } catch { /* ignore */ }
+}
+
+// 添加沟通记录
+function handleAddCommunication() {
+  commForm.type = '电话';
+  commForm.content = '';
+  commForm.result = '';
+  commForm.followUpAt = '';
+  commDialogVisible.value = true;
+}
+
+async function handleCommSubmit() {
+  const valid = await commFormRef.value?.validate().catch(() => false);
+  if (!valid) return;
+
+  commSubmitting.value = true;
+  try {
+    await createCommunication({
+      candidateId: candidateId!,
+      type: commForm.type,
+      content: commForm.content,
+      result: commForm.result || undefined,
+      followUpAt: commForm.followUpAt || undefined,
+    });
+    ElMessage.success('沟通记录已添加');
+    commDialogVisible.value = false;
+    fetchCandidateCommunications();
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || error.message || '添加失败');
+  } finally {
+    commSubmitting.value = false;
+  }
+}
+
+// 安排面试（跳转到面试管理页面）
+function handleScheduleInterview() {
+  router.push('/interviews');
+}
+
+function getInterviewStatusType(status: string): string {
+  return { 'scheduled': 'primary', 'completed': 'success', 'cancelled': 'info', 'no_show': 'danger' }[status] || 'info';
+}
+
+function getInterviewStatusText(status: string): string {
+  return { 'scheduled': '待进行', 'completed': '已完成', 'cancelled': '已取消', 'no_show': '未到' }[status] || status;
+}
+
 onMounted(() => {
   fetchTags();
   fetchCandidateDetail();
   fetchOnboardingTasks();
+  fetchCandidateInterviews();
+  fetchCandidateCommunications();
 });
 
 onActivated(() => {
   fetchCandidateDetail();
   fetchOnboardingTasks();
+  fetchCandidateInterviews();
+  fetchCandidateCommunications();
 });
 </script>
 
@@ -1050,6 +1246,77 @@ onActivated(() => {
           margin-top: 8px;
           color: #f56c6c;
           font-size: 13px;
+        }
+      }
+    }
+  }
+
+  .interview-card {
+    margin-top: 16px;
+    .interview-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      .interview-item {
+        padding: 12px;
+        background: #f5f7fa;
+        border-radius: 8px;
+        .interview-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 8px;
+        }
+        .interview-detail {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          font-size: 13px;
+          color: #606266;
+          .detail-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+        }
+        .interview-notes {
+          margin-top: 8px;
+          font-size: 13px;
+          color: #909399;
+          border-top: 1px dashed #dcdfe6;
+          padding-top: 8px;
+        }
+      }
+    }
+  }
+
+  .communication-card {
+    margin-top: 16px;
+    .communication-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      .communication-item {
+        padding: 12px;
+        background: #f5f7fa;
+        border-radius: 8px;
+        .comm-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 6px;
+          .comm-time { font-size: 12px; color: #909399; }
+          .comm-author { font-size: 12px; color: #909399; margin-left: auto; }
+        }
+        .comm-content { color: #303133; line-height: 1.6; }
+        .comm-result { margin-top: 4px; font-size: 13px; color: #67c23a; }
+        .comm-followup {
+          margin-top: 4px;
+          font-size: 13px;
+          color: #e6a23c;
+          display: flex;
+          align-items: center;
+          gap: 4px;
         }
       }
     }

@@ -3,19 +3,19 @@ version: '3.8'
 services:
   # PostgreSQL 数据库
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: ats_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USER:-ats_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-ats_password}
-      POSTGRES_DB: ${DB_NAME:-ats_db}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-5213537}
+      POSTGRES_DB: ${DB_NAME:-recruitment_system}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     ports:
       - "${DB_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-ats_user} -d ${DB_NAME:-ats_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-recruitment_system}"]
       interval: 10s
       timeout: 5s
       retries: 5

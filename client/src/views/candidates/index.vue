@@ -125,7 +125,7 @@
     </div>
 
     <!-- 数据表格 -->
-    <el-card class="table-card" shadow="never" v-loading="loading">
+    <el-card v-if="!error" class="table-card" shadow="never" v-loading="loading">
       <el-table
         ref="tableRef"
         :data="candidateList"
@@ -246,6 +246,15 @@
         />
       </div>
     </el-card>
+
+    <!-- 加载错误状态 -->
+    <div v-if="error && !loading && candidateList.length === 0" class="error-state">
+      <el-result icon="error" title="加载失败" sub-title="无法加载候选人列表，请检查网络连接后重试">
+        <template #extra>
+          <el-button type="primary" @click="fetchCandidateList">重新加载</el-button>
+        </template>
+      </el-result>
+    </div>
 
     <!-- 推进流程对话框 -->
     <el-dialog v-model="advanceDialogVisible" title="推进候选人流程" width="500px">
@@ -392,6 +401,7 @@ const dictionaryStore = useDictionaryStore();
 
 // ============ 数据 ============
 const loading = ref(false);
+const error = ref(false);
 const candidateList = ref<CandidateItem[]>([]);
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const filterForm = reactive({ keyword: '', stage: '', status: '', source: '', tagIds: [] as string[], hasNoJob: false });
@@ -472,6 +482,7 @@ function handleResumeParsed(data: ResumeParseResult) {
 // ============ 方法 ============
 async function fetchCandidateList() {
   loading.value = true;
+  error.value = false;
   try {
     const res = await getCandidateList({
       page: pagination.page,
@@ -487,6 +498,10 @@ async function fetchCandidateList() {
       candidateList.value = res.data;
       pagination.total = res.pagination.total;
     }
+  } catch (err: any) {
+    error.value = true;
+    // axios 拦截器已显示 toast，此处仅记录状态用于展示重试 UI
+    console.error('获取候选人列表失败:', err);
   } finally {
     loading.value = false;
   }
@@ -516,7 +531,14 @@ function handleReset() {
 function handlePageChange(page: number) { pagination.page = page; fetchCandidateList(); }
 function handleSizeChange(size: number) { pagination.pageSize = size; pagination.page = 1; fetchCandidateList(); }
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  if (!dateStr) return '-';
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return '-';
+    return date.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '-';
+  }
 }
 function getStageType(stage: string): string {
   const map: Record<string, string> = { '入库': 'info', '初筛': '', '复试': 'warning', '终面': 'warning', '拟录用': 'success', 'Offer': 'success', '入职': 'danger' };
@@ -725,5 +747,10 @@ onActivated(() => { fetchCandidateList(); });
   .job-tags { display: flex; flex-wrap: wrap; gap: 6px; .job-tag { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .no-job { color: #909399; } }
   .tag-list { display: flex; flex-wrap: wrap; gap: 4px; .candidate-tag { color: #fff; border: none; } .no-tag { color: #909399; } }
   .pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 20px; padding-top: 20px; border-top: 1px solid #ebeef5; }
+}
+.error-state {
+  display: flex;
+  justify-content: center;
+  padding: 60px 0;
 }
 </style>

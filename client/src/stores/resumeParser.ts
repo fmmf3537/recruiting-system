@@ -16,9 +16,9 @@ export const useResumeParserStore = defineStore('resumeParser', () => {
   // 工作经历列表
   const workHistory = computed<WorkHistory[]>(() => parsedData.value?.workHistory || []);
 
-  // 设置解析结果
+  // 设置解析结果（深拷贝防止外部修改影响 store）
   function setParsedData(data: ResumeParseResult) {
-    parsedData.value = data;
+    parsedData.value = JSON.parse(JSON.stringify(data));
   }
 
   // 清空解析结果（表单提交成功或取消时调用）

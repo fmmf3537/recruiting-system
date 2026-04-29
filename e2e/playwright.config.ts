@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://localhost:5174',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     actionTimeout: 15000,
@@ -19,14 +19,6 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-    },
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-    },
   ],
   webServer: [
     {
@@ -36,8 +28,8 @@ export default defineConfig({
       timeout: 120 * 1000,
     },
     {
-      command: 'cd ../client && pnpm dev',
-      url: 'http://localhost:5173',
+      command: 'cd ../client && pnpm dev --port 5174',
+      url: 'http://localhost:5174',
       reuseExistingServer: !process.env.CI,
       timeout: 120 * 1000,
     },

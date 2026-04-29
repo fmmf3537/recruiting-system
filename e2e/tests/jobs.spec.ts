@@ -62,7 +62,7 @@ test.describe('职位管理模块', () => {
     if (await closeButton.isVisible({ timeout: 1000 })) {
       await closeButton.click();
       await page.click('text=确定');
-      await expect(page.locator('.el-message')).toContainText('关闭成功');
+      await expect(page.locator('.el-message')).toContainText('职位已关闭');
     }
   });
 
@@ -70,7 +70,7 @@ test.describe('职位管理模块', () => {
     const duplicateButton = page.locator('button:has-text("复制")').first();
     if (await duplicateButton.isVisible({ timeout: 1000 })) {
       await duplicateButton.click();
-      await expect(page.locator('.el-message')).toContainText('复制成功');
+      await expect(page.locator('.el-message')).toContainText('职位复制成功');
     }
   });
 });

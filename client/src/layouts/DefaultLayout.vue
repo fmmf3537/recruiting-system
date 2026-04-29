@@ -45,6 +45,44 @@
         </div>
         
         <div class="header-right">
+          <!-- 通知铃铛 -->
+          <el-badge
+            :value="notificationStore.unreadCount"
+            :hidden="notificationStore.unreadCount === 0"
+            :max="99"
+            class="notification-badge"
+          >
+            <el-icon class="notification-bell" @click="toggleNotificationPanel">
+              <Bell />
+            </el-icon>
+          </el-badge>
+
+          <!-- 通知下拉面板 -->
+          <transition name="el-zoom-in-top">
+            <div v-if="showNotificationPanel" class="notification-dropdown">
+              <div class="notification-panel-header">
+                <span>消息通知</span>
+                <el-button text size="small" @click="handleMarkAllRead">全部已读</el-button>
+              </div>
+              <div class="notification-panel-list">
+                <div
+                  v-for="item in recentNotifications"
+                  :key="item.id"
+                  class="notification-panel-item"
+                  :class="{ unread: !item.isRead }"
+                  @click="handleNotificationClick(item)"
+                >
+                  <div class="notif-item-title">{{ item.title }}</div>
+                  <div class="notif-item-time">{{ formatRelativeTime(item.createdAt) }}</div>
+                </div>
+                <el-empty v-if="!recentNotifications.length" description="暂无消息" />
+              </div>
+              <div class="notification-panel-footer">
+                <el-button text size="small" @click="goToNotifications">查看全部</el-button>
+              </div>
+            </div>
+          </transition>
+
           <el-dropdown @command="handleCommand">
             <span class="user-info">
               {{ authStore.userName }}
@@ -79,10 +117,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useAppStore } from '@/stores/app';
+import { useNotificationStore } from '@/stores/notification';
+import type { NotificationItem } from '@/api/notification';
 import {
   Odometer,
   Briefcase,
@@ -95,6 +135,7 @@ import {
   Expand,
   ArrowDown,
   SwitchButton,
+  Bell,
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -102,6 +143,28 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const appStore = useAppStore();
+const notificationStore = useNotificationStore();
+
+// 通知面板
+const showNotificationPanel = ref(false);
+
+function toggleNotificationPanel() {
+  showNotificationPanel.value = !showNotificationPanel.value;
+  if (showNotificationPanel.value) {
+    notificationStore.fetchNotifications(1, 5);
+  }
+}
+
+// 最近通知（最多5条）
+const recentNotifications = computed(() => notificationStore.notifications.slice(0, 5));
+
+// 关闭通知面板的点击外部处理
+function handleClickOutside(e: MouseEvent) {
+  const target = e.target as HTMLElement;
+  if (!target.closest('.notification-dropdown') && !target.closest('.notification-bell')) {
+    showNotificationPanel.value = false;
+  }
+}
 
 // 侧边栏宽度
 const sidebarWidth = computed(() => appStore.sidebarCollapsed ? '64px' : '210px');
@@ -119,11 +182,15 @@ const menuItems = computed(() => {
     { path: '/stats', title: '数据统计', icon: TrendCharts },
   ];
   
+  // 消息通知对所有用户可见
+  items.push({ path: '/notifications', title: '消息通知', icon: Bell });
+
   // 仅管理员可见成员管理和字典管理
   if (authStore.isAdmin) {
     items.push({ path: '/users', title: '成员管理', icon: User });
     items.push({ path: '/settings/dictionary', title: '字典管理', icon: Setting });
     items.push({ path: '/settings/tags', title: '标签管理', icon: Setting });
+    items.push({ path: '/settings/automation-rules', title: '自动化邮件', icon: Setting });
   }
   
   return items;
@@ -150,13 +217,60 @@ async function handleCommand(command: string) {
       break;
   }
 }
+
+// 通知面板相关方法
+function handleNotificationClick(item: NotificationItem) {
+  showNotificationPanel.value = false;
+  notificationStore.readOne(item.id);
+
+  // 跳转到关联页面
+  if (item.businessId) {
+    if (item.businessType === 'candidate') {
+      router.push(`/candidates/${item.businessId}`);
+    } else if (item.businessType === 'offer') {
+      router.push(`/offers/${item.businessId}`);
+    } else if (item.businessType === 'interview') {
+      router.push(`/candidates/${item.businessId}`);
+    }
+  }
+}
+
+async function handleMarkAllRead() {
+  await notificationStore.readAll();
+  ElMessage.success('全部已读');
+}
+
+function goToNotifications() {
+  showNotificationPanel.value = false;
+  router.push('/notifications');
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const now = Date.now();
+  const date = new Date(dateStr).getTime();
+  const diff = now - date;
+  if (diff < 60000) return '刚刚';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`;
+  return new Date(dateStr).toLocaleDateString('zh-CN');
+}
+
+onMounted(() => {
+  notificationStore.startPolling();
+  document.addEventListener('click', handleClickOutside);
+});
+
+onUnmounted(() => {
+  notificationStore.stopPolling();
+  document.removeEventListener('click', handleClickOutside);
+});
 </script>
 
 <style scoped lang="scss">
 .layout-container {
   height: 100vh;
   width: 100vw;
-  overflow: hidden;
+  /* overflow 由 .main-content 控制，避免裁剪 MessageBox 等 fixed 弹窗 */
 }
 
 .sidebar {
@@ -220,6 +334,90 @@ async function handleCommand(command: string) {
   }
   
   .header-right {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+
+    .notification-badge {
+      :deep(.el-badge__content) {
+        top: 6px;
+        right: 4px;
+      }
+    }
+
+    .notification-bell {
+      font-size: 20px;
+      cursor: pointer;
+      color: #606266;
+
+      &:hover {
+        color: #409EFF;
+      }
+    }
+
+    .notification-dropdown {
+      position: absolute;
+      top: 100%;
+      right: 80px;
+      width: 360px;
+      max-height: 480px;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      margin-top: 8px;
+
+      .notification-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid #ebeef5;
+        font-weight: 500;
+      }
+
+      .notification-panel-list {
+        flex: 1;
+        overflow-y: auto;
+        max-height: 380px;
+
+        .notification-panel-item {
+          padding: 12px 16px;
+          cursor: pointer;
+          border-bottom: 1px solid #f5f5f5;
+
+          &.unread {
+            background-color: #f0f9ff;
+          }
+
+          &:hover {
+            background-color: #f5f7fa;
+          }
+
+          .notif-item-title {
+            font-size: 14px;
+            color: #303133;
+            margin-bottom: 4px;
+          }
+
+          .notif-item-time {
+            font-size: 12px;
+            color: #909399;
+          }
+        }
+      }
+
+      .notification-panel-footer {
+        padding: 10px 16px;
+        text-align: center;
+        border-top: 1px solid #ebeef5;
+      }
+    }
+
     .user-info {
       cursor: pointer;
       display: flex;
@@ -235,6 +433,7 @@ async function handleCommand(command: string) {
 
 .main-content {
   padding: 20px;
+  overflow: hidden;
   overflow-y: auto;
 }
 

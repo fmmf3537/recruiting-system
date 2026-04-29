@@ -83,12 +83,13 @@ test.describe('导航模块', () => {
   });
 
   test('侧边栏菜单正确显示', async ({ page }) => {
-    await expect(page.locator('.sidebar')).toBeVisible();
+    await expect(page.locator('.sidebar-container')).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("仪表盘")')).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("职位管理")')).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("候选人管理")')).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("Offer管理")')).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("数据统计")')).toBeVisible();
+    await expect(page.locator('.el-menu-item:has-text("消息通知")')).toBeVisible();
   });
 
   test('点击职位管理跳转正确', async ({ page }) => {
@@ -107,5 +108,16 @@ test.describe('导航模块', () => {
     await page.click('.el-menu-item:has-text("数据统计")');
     await expect(page).toHaveURL(/\/stats/);
     await expect(page.locator('.page-title').first()).toContainText('数据统计');
+  });
+
+  test('点击消息通知跳转正确', async ({ page }) => {
+    await page.click('.el-menu-item:has-text("消息通知")');
+    await expect(page).toHaveURL(/\/notifications/);
+    await expect(page.locator('.page-title').first()).toContainText('消息通知');
+  });
+
+  test('顶部通知铃铛可见', async ({ page }) => {
+    const bell = page.locator('.notification-bell');
+    await expect(bell).toBeVisible();
   });
 });

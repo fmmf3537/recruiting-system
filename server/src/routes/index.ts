@@ -11,6 +11,10 @@ import tagRoutes from './tags';
 import emailRoutes from './email';
 import aiMatcherRoutes from './ai-matcher';
 import onboardingTaskRoutes from './onboarding-task';
+import interviewRoutes from './interviews';
+import communicationRoutes from './communications';
+import automationRuleRoutes from './automation-rule';
+import notificationRoutes from './notification';
 
 const router: RouterType = Router();
 
@@ -39,5 +43,9 @@ router.use('/tags', tagRoutes);
 router.use('/email', emailRoutes);
 router.use('/ai-matcher', aiMatcherRoutes);
 router.use('/onboarding-tasks', onboardingTaskRoutes);
+router.use('/interviews', interviewRoutes);
+router.use('/communications', communicationRoutes);
+router.use('/automation-rules', automationRuleRoutes);
+router.use('/notifications', notificationRoutes);
 
 export default router;

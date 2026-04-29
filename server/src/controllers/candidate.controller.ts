@@ -59,18 +59,18 @@ export class CandidateController {
         : undefined;
 
       const query = {
-        page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
-        pageSize: req.query.pageSize ? parseInt(req.query.pageSize as string, 10) : undefined,
+        page: req.query.page as number | undefined,
+        pageSize: req.query.pageSize as number | undefined,
         keyword: req.query.keyword as string | undefined,
         source: req.query.source as string | undefined,
         stage: req.query.stage as string | undefined,
         status: req.query.status as string | undefined,
         education: req.query.education as string | undefined,
-        workYearsMin: req.query.workYearsMin ? parseInt(req.query.workYearsMin as string, 10) : undefined,
-        workYearsMax: req.query.workYearsMax ? parseInt(req.query.workYearsMax as string, 10) : undefined,
+        workYearsMin: req.query.workYearsMin as number | undefined,
+        workYearsMax: req.query.workYearsMax as number | undefined,
         jobId: req.query.jobId as string | undefined,
         tagIds: tagIds as string[] | undefined,
-        hasNoJob: req.query.hasNoJob === 'true',
+        hasNoJob: req.query.hasNoJob as boolean | undefined,
       };
 
       const result = await candidateService.getCandidates(query);

@@ -329,7 +329,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onActivated, computed } from 'vue';
+import { ref, reactive, onActivated, onMounted, nextTick, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { ArrowLeft, Upload, Document, Delete, Plus } from '@element-plus/icons-vue';
@@ -611,28 +611,28 @@ function resetForm() {
 function fillFromParsedResume() {
   const data = resumeParserStore.parsedData;
   if (data) {
-    Object.assign(formData, {
-      name: data.name || '',
-      phone: data.phone || '',
-      email: data.email || '',
-      gender: data.gender === '男' || data.gender === '女' ? data.gender : '男',
-      age: data.age || undefined,
-      education: data.education || '',
-      school: data.school || '',
-      workYears: data.workYears || undefined,
-      currentCompany: data.currentCompany || '',
-      currentPosition: data.currentPosition || '',
-      expectedSalary: data.expectedSalary || '',
-      skills: data.skills || [],
-      resumeUrl: data.resumeUrl || '',
-      workHistory: data.workHistory?.map((w: WorkHistory) => ({
-        company: w.company || '',
-        position: w.position || '',
-        startDate: w.startDate,
-        endDate: w.endDate,
-        description: w.description || '',
-      })) || [],
-    });
+    // 使用 splice 逐字段写入，确保 Vue 响应式系统正确追踪
+    formData.name = data.name || '';
+    formData.phone = data.phone || '';
+    formData.email = data.email || '';
+    formData.gender = (data.gender === '男' || data.gender === '女') ? data.gender : '男';
+    formData.age = data.age || undefined;
+    formData.education = data.education || '';
+    formData.school = data.school || '';
+    formData.workYears = data.workYears || undefined;
+    formData.currentCompany = data.currentCompany || '';
+    formData.currentPosition = data.currentPosition || '';
+    formData.expectedSalary = data.expectedSalary || '';
+    formData.skills = data.skills ? [...data.skills] : [];
+    formData.resumeUrl = data.resumeUrl || '';
+    // 深拷贝工作经历，确保响应式追踪
+    formData.workHistory = data.workHistory?.map((w: WorkHistory) => ({
+      company: w.company || '',
+      position: w.position || '',
+      startDate: w.startDate,
+      endDate: w.endDate,
+      description: w.description || '',
+    })) || [];
     ElMessage.success('简历信息已填充，请确认并补充其他信息');
   }
 }
@@ -654,7 +654,7 @@ function removeWorkHistory(index: number) {
   formData.workHistory?.splice(index, 1);
 }
 
-function init() {
+async function init() {
   dictionaryStore.fetchDictionaries('education');
   dictionaryStore.fetchDictionaries('source');
   fetchJobList();
@@ -663,10 +663,13 @@ function init() {
     fetchCandidateDetail();
   } else {
     resetForm();
+    // 等待 DOM 更新后再从 store 读取简历解析数据，确保 resetForm 的响应式变更已完成
+    await nextTick();
     fillFromParsedResume();
   }
 }
 
+onMounted(init);
 onActivated(init);
 </script>
 

@@ -9,6 +9,7 @@ import {
   TrendCharts,
   User,
   Setting,
+  Bell,
 } from '@element-plus/icons-vue';
 
 // 路由配置
@@ -145,6 +146,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: '/notifications',
+        name: 'Notifications',
+        component: () => import('@/views/notifications/index.vue'),
+        meta: {
+          title: '消息通知',
+          icon: Bell,
+        },
+      },
+      {
         path: '/stats',
         name: 'Stats',
         component: () => import('@/views/stats/index.vue'),
@@ -180,6 +190,17 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/settings/EmailTemplates.vue'),
         meta: {
           title: '邮件模板',
+          icon: Setting,
+          requireAdmin: true,
+          hidden: true,
+        },
+      },
+      {
+        path: '/settings/automation-rules',
+        name: 'AutomationRules',
+        component: () => import('@/views/settings/AutomationRules.vue'),
+        meta: {
+          title: '自动化邮件',
           icon: Setting,
           requireAdmin: true,
           hidden: true,

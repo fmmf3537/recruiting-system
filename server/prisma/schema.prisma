@@ -29,7 +29,16 @@ model User {
   
   // 关系：一个 User 创建多个 InterviewFeedback
   createdFeedbacks  InterviewFeedback[] @relation("CreatedFeedbacks")
-  
+
+  // 关系：一个 User 创建多个 Interview（面试安排）
+  createdInterviews Interview[] @relation("CreatedInterviews")
+
+  // 关系：一个 User 创建多个 CommunicationLog
+  createdCommunicationLogs CommunicationLog[] @relation("CreatedCommunicationLogs")
+
+  // 关系：一个 User 接收多条通知
+  notifications  Notification[]
+
   // 关系：一个 User 产生多个操作日志
   operationLogs     OperationLog[] @relation("UserOperationLogs")
 
@@ -63,6 +72,9 @@ model Job {
 
   // 关系：一个 Job 有多个标签（通过关联表）
   jobTags JobTag[]
+
+  // 关系：一个 Job 有多个面试安排
+  interviews Interview[]
 
   @@index([title])
   @@index([status])
@@ -114,7 +126,10 @@ model Candidate {
   
   // 关系：一个 Candidate 有多个 InterviewFeedback
   interviewFeedbacks InterviewFeedback[]
-  
+
+  // 关系：一个 Candidate 有多个 Interview（面试安排）
+  interviews Interview[]
+
   // 关系：一个 Candidate 有一个 Offer
   offer Offer?
 
@@ -123,6 +138,9 @@ model Candidate {
 
   // 关系：一个 Candidate 收到多封邮件
   emailLogs EmailLog[]
+
+  // 关系：一个 Candidate 有多个沟通记录
+  communicationLogs CommunicationLog[]
 
   // 关系：一个 Candidate 有多个入职任务
   onboardingTasks OnboardingTask[]
@@ -230,6 +248,38 @@ model InterviewFeedback {
   @@index([createdById])
   @@index([createdAt])
   @@map("interview_feedback")
+}
+
+// ==================== 面试安排表 ====================
+model Interview {
+  id            String    @id @default(cuid())
+  candidateId   String
+  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobId         String?
+  job           Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  round         String    // 初试, 复试, 终面
+  type          String    // 电话, 视频, 现场
+  interviewers  Json      // JSON 数组 [{id, name}]
+  scheduledAt   DateTime  // 计划面试时间
+  duration      Int       @default(60) // 面试时长（分钟）
+  location      String?   // 面试地点或会议链接
+  notes         String?   @db.Text // 面试备注/准备事项
+  status        String    @default("scheduled") // scheduled, completed, cancelled, no_show
+
+  createdById   String
+  createdBy     User      @relation("CreatedInterviews", fields: [createdById], references: [id])
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([candidateId])
+  @@index([jobId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@index([createdById])
+  @@index([scheduledAt, status])
+  @@map("interview")
 }
 
 // ==================== Offer记录表 ====================
@@ -376,7 +426,8 @@ model EmailTemplate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  emailLogs EmailLog[] @relation("TemplateEmailLogs")
+  emailLogs       EmailLog[]        @relation("TemplateEmailLogs")
+  automationRules AutomationRule[]
 
   @@index([name])
   @@index([createdById])
@@ -404,4 +455,64 @@ model EmailLog {
   @@index([status])
   @@index([sentAt])
   @@map("email_log")
+}
+
+// ==================== 自动化邮件规则表 ====================
+model AutomationRule {
+  id            String        @id @default(cuid())
+  triggerStage  String        // 初筛 | Offer | 入职
+  triggerStatus String        // passed
+  templateId    String
+  template      EmailTemplate @relation(fields: [templateId], references: [id])
+  enabled       Boolean       @default(true)
+  description   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([triggerStage, triggerStatus])
+  @@index([enabled])
+  @@map("automation_rule")
+}
+
+// ==================== 候选人沟通记录表 ====================
+model CommunicationLog {
+  id          String   @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  type        String   // 电话, 邮件, 微信, 短信, 面谈
+  content     String   @db.Text // 沟通内容摘要
+  result      String?  // 沟通结果
+  followUpAt  DateTime? // 下次跟进提醒时间
+
+  createdById String
+  createdBy   User     @relation("CreatedCommunicationLogs", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([candidateId, createdAt])
+  @@index([type])
+  @@index([followUpAt])
+  @@map("communication_log")
+}
+
+// ==================== 系统通知表 ====================
+model Notification {
+  id           String   @id @default(cuid())
+  recipientId  String
+  recipient    User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  title        String   // 通知标题
+  content      String   @db.Text // 通知内容
+  type         String   // stage_advance | interview_scheduled | offer_status | onboarding_reminder
+  businessId   String?  // 关联业务ID
+  businessType String?  // candidate | interview | offer
+  isRead       Boolean  @default(false)
+  readAt       DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([recipientId, isRead])
+  @@index([recipientId, createdAt])
+  @@map("notification")
 }
