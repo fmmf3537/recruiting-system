@@ -83,7 +83,7 @@ router.post(
 
     // 生成 JWT
     const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: user.id, email: user.email, department: user.department || null, role: user.role },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
     );
@@ -97,6 +97,7 @@ router.post(
         email: user.email,
         name: user.name,
         role: user.role,
+        department: user.department || null,
         createdAt: user.createdAt,
       },
     });
@@ -159,6 +160,7 @@ router.post(
         email: user.email,
         name: user.name,
         role: user.role,
+        department: user.department || null,
         createdAt: user.createdAt,
       },
     });
@@ -180,6 +182,7 @@ router.get(
         email: true,
         name: true,
         role: true,
+        department: true,
         createdAt: true,
       },
     });
@@ -286,7 +289,7 @@ router.post(
 
     // 3. 签发 JWT
     const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: user.id, email: user.email, department: user.department || null, role: user.role },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
     );
@@ -300,6 +303,7 @@ router.post(
         email: user.email,
         name: user.name,
         role: user.role,
+        department: user.department || null,
       },
     });
   })
@@ -439,7 +443,7 @@ router.post(
 
     // 4. 签发 JWT
     const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.role },
+      { userId: user.id, email: user.email, department: user.department || null, role: user.role },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
     );
@@ -453,6 +457,7 @@ router.post(
         email: user.email,
         name: user.name,
         role: user.role,
+        department: user.department || null,
         createdAt: user.createdAt,
       },
     });

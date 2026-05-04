@@ -51,6 +51,26 @@ export interface FunnelStat {
   count: number;
 }
 
+// 招聘周期统计项
+export interface CycleStat {
+  stage: string;
+  avgDays: number;
+  maxDays: number;
+  minDays: number;
+  totalCount: number;
+}
+
+// 职位时间指标
+export interface JobTimeStat {
+  jobId: string;
+  jobTitle: string;
+  department: string;
+  candidateCount: number;
+  hiredCount: number;
+  ttfDays: number | null;
+  tthDays: number | null;
+}
+
 // 导出数据类型
 export interface ExportData {
   headers: string[];
@@ -99,6 +119,7 @@ export class StatsService {
       joinedThisMonth: number;
     };
     trend: Array<{ date: string; count: number }>;
+    hcStats: { totalApproved: number; totalFilled: number; fulfillmentRate: number; openRequests: number };
   }> {
     await connectRedis();
     const cacheKey = 'stats:dashboard';
@@ -135,6 +156,13 @@ export class StatsService {
       },
     });
 
+    // 编制统计
+    const [hcTotalApproved, hcTotalFilled, hcOpenRequests] = await Promise.all([
+      prisma.hCRequest.count({ where: { status: { in: ['approved', 'fulfilled'] } } }),
+      prisma.hCRequest.count({ where: { status: 'fulfilled' } }),
+      prisma.hCRequest.count({ where: { status: 'submitted' } }),
+    ]);
+
     // 近 7 天新增候选人趋势
     const trend: Array<{ date: string; count: number }> = [];
     for (let i = 6; i >= 0; i -= 1) {
@@ -158,6 +186,12 @@ export class StatsService {
         joinedThisMonth,
       },
       trend,
+      hcStats: {
+        totalApproved: hcTotalApproved,
+        totalFilled: hcTotalFilled,
+        fulfillmentRate: hcTotalApproved > 0 ? Math.round((hcTotalFilled / hcTotalApproved) * 100) : 0,
+        openRequests: hcOpenRequests,
+      },
     };
 
     await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
@@ -512,6 +546,101 @@ export class StatsService {
       .slice(0, 20);
 
     return { totalReferrals, hiredReferrals, hireRate, topReferrers };
+  }
+
+  /**
+   * 招聘周期统计 — 各阶段平均/最长/最短停留天数
+   */
+  async getCycleStats(dateRange?: DateRange): Promise<CycleStat[]> {
+    await connectRedis();
+    const cacheKey = getCacheKey('cycle', dateRange);
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    const range = dateRange || this.getDefaultDateRange();
+
+    const result = await prisma.$queryRaw<CycleStat[]>`
+      SELECT stage,
+        ROUND(AVG(EXTRACT(EPOCH FROM ("completedAt" - "enteredAt")) / 86400)::numeric, 1) as "avgDays",
+        ROUND(MAX(EXTRACT(EPOCH FROM ("completedAt" - "enteredAt")) / 86400)::numeric, 1) as "maxDays",
+        ROUND(MIN(EXTRACT(EPOCH FROM ("completedAt" - "enteredAt")) / 86400)::numeric, 1) as "minDays",
+        COUNT(*)::int as "totalCount"
+      FROM stage_record
+      WHERE "completedAt" IS NOT NULL
+        AND "enteredAt" >= ${range.startDate} AND "enteredAt" <= ${range.endDate}
+      GROUP BY stage
+      ORDER BY
+        CASE stage
+          WHEN '入库' THEN 1 WHEN '初筛' THEN 2 WHEN '复试' THEN 3
+          WHEN '终面' THEN 4 WHEN '拟录用' THEN 5 WHEN 'Offer' THEN 6
+          WHEN '入职' THEN 7
+        END
+    `;
+
+    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+    return result;
+  }
+
+  /**
+   * 职位时间指标 — 每个职位的 TTF（发布到接受Offer）和 TTH（入库到入职）
+   */
+  async getJobTimeStats(dateRange?: DateRange): Promise<JobTimeStat[]> {
+    await connectRedis();
+    const cacheKey = getCacheKey('jobtime', dateRange);
+    const cached = await redis.get(cacheKey);
+    if (cached) return JSON.parse(cached);
+
+    const range = dateRange || this.getDefaultDateRange();
+
+    const result = await prisma.$queryRaw<JobTimeStat[]>`
+      SELECT
+        j.id as "jobId",
+        j.title as "jobTitle",
+        COALESCE(j.departments->>0, '') as "department",
+        COUNT(DISTINCT cj."candidateId")::int as "candidateCount",
+        COUNT(DISTINCT CASE WHEN o.joined = true THEN o."candidateId" END)::int as "hiredCount",
+        ROUND(EXTRACT(EPOCH FROM (
+          MIN(CASE WHEN o.result = 'accepted' THEN o."offerDate" END) - j."createdAt"
+        )) / 86400)::int as "ttfDays",
+        ROUND(EXTRACT(EPOCH FROM (
+          MIN(CASE WHEN o.joined = true THEN o."actualJoinDate" END) - MIN(c."createdAt")
+        )) / 86400)::int as "tthDays"
+      FROM job j
+      LEFT JOIN candidate_job cj ON cj."jobId" = j.id
+      LEFT JOIN candidate c ON c.id = cj."candidateId"
+      LEFT JOIN offer o ON o."candidateId" = c.id
+      WHERE j."createdAt" >= ${range.startDate} AND j."createdAt" <= ${range.endDate}
+      GROUP BY j.id, j.title, j.departments
+      HAVING COUNT(DISTINCT cj."candidateId") > 0
+      ORDER BY j."createdAt" DESC
+    `;
+
+    await redis.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+    return result;
+  }
+
+  /**
+   * 导出漏斗统计数据
+   */
+  async exportFunnelStats(dateRange?: DateRange): Promise<ExportData> {
+    const stats = await this.getFunnelStats(dateRange);
+    return {
+      headers: ['阶段', '人数'],
+      rows: stats.map((s) => [s.stage, s.count]),
+      filename: `招聘漏斗_${new Date().toISOString().split('T')[0]}.csv`,
+    };
+  }
+
+  /**
+   * 导出周期统计数据
+   */
+  async exportCycleStats(dateRange?: DateRange): Promise<ExportData> {
+    const stats = await this.getCycleStats(dateRange);
+    return {
+      headers: ['阶段', '平均天数', '最长天数', '最短天数', '总人数'],
+      rows: stats.map((s) => [s.stage, s.avgDays, s.maxDays, s.minDays, s.totalCount]),
+      filename: `招聘周期_${new Date().toISOString().split('T')[0]}.csv`,
+    };
   }
 }
 

@@ -1,18 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-
-const TEST_EMAIL = 'admin@example.com';
-const TEST_PASSWORD = 'admin123';
-
-async function login(page: Page) {
-  await page.context().clearCookies();
-  await page.goto('/login');
-  await page.waitForLoadState('networkidle');
-  await page.locator('.el-input input').first().fill(TEST_EMAIL);
-  await page.locator('.el-input input[type="password"]').fill(TEST_PASSWORD);
-  await page.click('.login-button');
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000 });
-  await page.waitForLoadState('networkidle');
-}
+import { login } from './helpers';
 
 test.describe('通知中心模块', () => {
   test.beforeEach(async ({ page }) => {
@@ -23,27 +10,25 @@ test.describe('通知中心模块', () => {
     await page.goto('/notifications');
     await page.waitForLoadState('networkidle');
     await expect(page.locator('.page-title').first()).toContainText('消息通知');
-    // 页面应显示筛选器
     await expect(page.locator('.el-radio-group')).toBeVisible();
     await expect(page.locator('.el-radio-button:has-text("全部")')).toBeVisible();
     await expect(page.locator('.el-radio-button:has-text("阶段变动")')).toBeVisible();
     await expect(page.locator('.el-radio-button:has-text("面试提醒")')).toBeVisible();
     await expect(page.locator('.el-radio-button:has-text("Offer")')).toBeVisible();
+    await expect(page.locator('.el-radio-button:has-text("编制审批")')).toBeVisible();
   });
 
   test('类型筛选可正常切换', async ({ page }) => {
     await page.goto('/notifications');
     await page.waitForLoadState('networkidle');
-
-    // 点击"阶段变动"筛选
     await page.click('.el-radio-button:has-text("阶段变动")');
     await page.waitForTimeout(300);
-
-    // 点击"面试提醒"筛选
     await page.click('.el-radio-button:has-text("面试提醒")');
     await page.waitForTimeout(300);
-
-    // 切换回全部
+    await page.click('.el-radio-button:has-text("Offer")');
+    await page.waitForTimeout(300);
+    await page.click('.el-radio-button:has-text("编制审批")');
+    await page.waitForTimeout(300);
     await page.click('.el-radio-button:has-text("全部")');
     await page.waitForTimeout(300);
   });
@@ -52,21 +37,30 @@ test.describe('通知中心模块', () => {
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 
-    // 点击铃铛
     const bell = page.locator('.notification-bell');
     await bell.click();
     await page.waitForTimeout(300);
 
-    // 下拉面板应显示
     const dropdown = page.locator('.notification-dropdown');
     await expect(dropdown).toBeVisible();
     await expect(dropdown.locator('text=消息通知')).toBeVisible();
+    await expect(dropdown.locator('text=查看全部')).toBeVisible();
+  });
+
+  test('下拉面板"查看全部"可跳转到通知页', async ({ page }) => {
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+
+    const bell = page.locator('.notification-bell');
+    await bell.click();
+    await page.waitForTimeout(300);
+    await page.click('text=查看全部');
+    await expect(page).toHaveURL(/\/notifications/);
   });
 
   test('全部已读按钮可见', async ({ page }) => {
     await page.goto('/notifications');
     await page.waitForLoadState('networkidle');
-
     const markAllBtn = page.locator('button:has-text("全部已读")');
     await expect(markAllBtn).toBeVisible();
   });
@@ -74,12 +68,16 @@ test.describe('通知中心模块', () => {
   test('空通知列表显示占位提示', async ({ page }) => {
     await page.goto('/notifications');
     await page.waitForLoadState('networkidle');
-
-    // 如果无通知，应显示空状态
     const empty = page.locator('.el-empty');
     const list = page.locator('.notification-list');
     const hasEmpty = await empty.isVisible({ timeout: 2000 });
     const hasList = await list.isVisible({ timeout: 2000 });
     expect(hasEmpty || hasList).toBeTruthy();
+  });
+
+  test('侧边栏消息通知菜单可跳转', async ({ page }) => {
+    await page.click('.el-menu-item:has-text("消息通知")');
+    await expect(page).toHaveURL(/\/notifications/);
+    await expect(page.locator('.page-title').first()).toContainText('消息通知');
   });
 });

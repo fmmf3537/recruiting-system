@@ -42,6 +42,18 @@ export type InterviewStatus = (typeof INTERVIEW_STATUS)[number];
 export const COMMUNICATION_TYPES = ['电话', '邮件', '微信', '短信', '面谈'] as const;
 export type CommunicationType = (typeof COMMUNICATION_TYPES)[number];
 
+// ==================== HC编制状态 ====================
+export const HC_STATUS = ['draft', 'submitted', 'approved', 'rejected', 'fulfilled'] as const;
+export type HCStatus = (typeof HC_STATUS)[number];
+
+// ==================== HC紧急程度 ====================
+export const HC_URGENCY = ['urgent', 'normal', 'low'] as const;
+export type HCUrgency = (typeof HC_URGENCY)[number];
+
+// ==================== HC需求原因 ====================
+export const HC_REASONS = ['new', 'replacement', 'expansion'] as const;
+export type HCReason = (typeof HC_REASONS)[number];
+
 // ==================== 默认阶段与状态（用于兜底显示）====================
 export const DEFAULT_STAGE = '入库' as const;
 export const DEFAULT_STAGE_STATUS = 'in_progress' as const;

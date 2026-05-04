@@ -15,6 +15,7 @@ import interviewRoutes from './interviews';
 import communicationRoutes from './communications';
 import automationRuleRoutes from './automation-rule';
 import notificationRoutes from './notification';
+import hcRequestRoutes from './hc-requests';
 
 const router: RouterType = Router();
 
@@ -47,5 +48,6 @@ router.use('/interviews', interviewRoutes);
 router.use('/communications', communicationRoutes);
 router.use('/automation-rules', automationRuleRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/hc-requests', hcRequestRoutes);
 
 export default router;

@@ -15,6 +15,7 @@ const updateUserSchema = z.object({
   email: z.string().email().optional(),
   password: z.string().min(6).optional(),
   role: z.enum(['admin', 'member']).optional(),
+  department: z.string().optional().nullable(),
 });
 
 // 分页查询验证 schema
@@ -66,6 +67,7 @@ router.get(
           email: true,
           name: true,
           role: true,
+          department: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -139,7 +141,7 @@ router.put(
   validate(updateUserSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, department } = req.body;
 
     // 非管理员只能修改自己的信息
     if (req.user?.role !== 'admin' && req.user?.userId !== id) {
@@ -176,6 +178,7 @@ router.put(
     if (name) updateData.name = name;
     if (email) updateData.email = email;
     if (role) updateData.role = role;
+    if (department !== undefined) updateData.department = department;
     if (password) {
       updateData.password = await bcrypt.hash(password, 10);
     }
@@ -188,6 +191,7 @@ router.put(
         email: true,
         name: true,
         role: true,
+        department: true,
         createdAt: true,
         updatedAt: true,
       },

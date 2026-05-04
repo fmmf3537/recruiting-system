@@ -283,6 +283,36 @@ export class StatsController {
     
     return [headerLine, ...rowLines].join('\n');
   }
+
+  /**
+   * GET /api/stats/cycle — 招聘周期统计
+   */
+  async getCycleStats(req: Request, res: Response, next: NextFunction) {
+    try {
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      const dateRange = (startDate && endDate) ? statsService.parseDateRange(startDate, endDate) : undefined;
+      const data = await statsService.getCycleStats(dateRange);
+      res.json({ success: true, data, dateRange: dateRange || statsService.parseDateRange() });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/stats/job-time — 职位时间指标
+   */
+  async getJobTimeStats(req: Request, res: Response, next: NextFunction) {
+    try {
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      const dateRange = (startDate && endDate) ? statsService.parseDateRange(startDate, endDate) : undefined;
+      const data = await statsService.getJobTimeStats(dateRange);
+      res.json({ success: true, data, dateRange: dateRange || statsService.parseDateRange() });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 // 导出单例实例

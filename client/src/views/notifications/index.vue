@@ -18,6 +18,7 @@
         <el-radio-button label="stage_advance">阶段变动</el-radio-button>
         <el-radio-button label="interview_scheduled">面试提醒</el-radio-button>
         <el-radio-button label="offer_status">Offer</el-radio-button>
+        <el-radio-button label="hc_request">编制审批</el-radio-button>
       </el-radio-group>
     </el-card>
 
@@ -82,7 +83,7 @@ async function fetchList() {
     const params: any = { page: pagination.page, pageSize: pagination.pageSize };
     if (filterType.value) params.type = filterType.value;
 
-    const res = await notificationStore.fetchNotifications(params.page, params.pageSize);
+    const res = await notificationStore.fetchNotifications(params.page, params.pageSize, params.type);
     if (res) {
       list.value = notificationStore.notifications;
       Object.assign(pagination, res);
@@ -109,6 +110,8 @@ function handleItemClick(item: NotificationItem) {
       router.push(`/offers/${item.businessId}`);
     } else if (item.businessType === 'interview') {
       router.push(`/candidates/${item.businessId}`);
+    } else if (item.businessType === 'hc_request') {
+      router.push(`/hc-requests/${item.businessId}`);
     }
   }
 }
@@ -125,6 +128,7 @@ function getTypeLabel(type: string): string {
     interview_scheduled: '面试提醒',
     offer_status: 'Offer',
     onboarding_reminder: '入职提醒',
+    hc_request: '编制审批',
   };
   return map[type] || type;
 }
@@ -135,6 +139,7 @@ function getTypeTag(type: string): string {
     interview_scheduled: 'primary',
     offer_status: 'success',
     onboarding_reminder: 'warning',
+    hc_request: 'danger',
   };
   return map[type] || 'info';
 }

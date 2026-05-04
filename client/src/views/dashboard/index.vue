@@ -53,6 +53,21 @@
           </div>
         </el-card>
       </el-col>
+
+      <el-col :xs="24" :sm="12" :lg="8">
+        <el-card shadow="hover" class="stat-card" @click="goTo('/hc-requests')">
+          <div class="stat-content">
+            <div class="stat-icon purple">
+              <el-icon :size="40"><Tickets /></el-icon>
+            </div>
+            <div class="stat-info">
+              <div class="stat-value">{{ stats.hcApproved }}</div>
+              <div class="stat-title">已批准编制</div>
+              <div class="stat-desc" v-if="stats.hcPending > 0">{{ stats.hcPending }} 条待审批</div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
     </el-row>
 
     <!-- 快捷操作 -->
@@ -146,6 +161,7 @@ import {
   Plus,
   TrendCharts,
   UserFilled,
+  Tickets,
 } from '@element-plus/icons-vue';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -159,6 +175,7 @@ import { getFunnelStats } from '@/api/stats';
 import { getCandidateList, getRecentActivities } from '@/api/candidate';
 import { getJobList } from '@/api/job';
 import { getOfferList } from '@/api/offer';
+import { getHCRequests } from '@/api/hc-request';
 
 const router = useRouter();
 
@@ -168,6 +185,8 @@ const stats = reactive({
   candidatesTrend: 15,
   openJobs: 0,
   pendingJoin: 0,
+  hcApproved: 0,
+  hcPending: 0,
 });
 
 // 加载状态
@@ -337,10 +356,11 @@ async function fetchFunnelStats() {
 // 获取统计数据
 async function fetchStats() {
   try {
-    const [candidatesRes, jobsRes, offersRes] = await Promise.all([
+    const [candidatesRes, jobsRes, offersRes, hcRes] = await Promise.all([
       getCandidateList({ page: 1, pageSize: 1 }),
       getJobList({ page: 1, pageSize: 1, status: 'open' }),
       getOfferList({ page: 1, pageSize: 100, result: 'accepted' }),
+      getHCRequests({ pageSize: 100 }),
     ]);
 
     if (candidatesRes.success) {
@@ -351,6 +371,10 @@ async function fetchStats() {
     }
     if (offersRes.success) {
       stats.pendingJoin = offersRes.data.filter((o: any) => !o.joined).length;
+    }
+    if (hcRes.success) {
+      stats.hcApproved = hcRes.data.filter((h: any) => h.status === 'approved' || h.status === 'fulfilled').length;
+      stats.hcPending = hcRes.data.filter((h: any) => h.status === 'submitted').length;
     }
   } catch (error) {
     console.error('获取统计数据失败:', error);
@@ -443,6 +467,10 @@ onUnmounted(() => {
 
     &.orange {
       background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    &.purple {
+      background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
     }
   }
 

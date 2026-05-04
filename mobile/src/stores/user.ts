@@ -8,6 +8,7 @@ export interface UserInfo {
   email: string;
   name: string;
   role: string;
+  department: string | null;
   createdAt: string;
 }
 

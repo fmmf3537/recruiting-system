@@ -1,18 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-
-const TEST_EMAIL = 'admin@example.com';
-const TEST_PASSWORD = 'admin123';
-
-async function login(page: Page) {
-  await page.context().clearCookies();
-  await page.goto('/login');
-  await page.waitForLoadState('networkidle');
-  await page.locator('.el-input input').first().fill(TEST_EMAIL);
-  await page.locator('.el-input input[type="password"]').fill(TEST_PASSWORD);
-  await page.click('.login-button');
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000 });
-  await page.waitForLoadState('networkidle');
-}
+import { login } from './helpers';
 
 test.describe('Offer管理模块', () => {
   let page: Page;
@@ -118,7 +105,7 @@ test.describe('创建Offer模块', () => {
   });
 
   test('创建Offer表单正确加载', async () => {
-    await expect(page.locator('h2')).toContainText('创建 Offer');
+    await expect(page.locator('.el-card__header h2').first()).toContainText('创建 Offer');
     await expect(page.locator('text=候选人信息')).toBeVisible();
     await expect(page.locator('text=Offer 信息')).toBeVisible();
   });

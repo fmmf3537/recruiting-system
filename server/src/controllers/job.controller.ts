@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { jobService, type CreateJobInput, type UpdateJobInput, type JobListQuery } from '../services/job.service';
 import { asyncHandler } from '../middleware/errorHandler';
+import { getUserDepartment } from '../middleware/auth';
 
 /**
  * 职位控制器
@@ -36,7 +37,7 @@ export class JobController {
       status: req.query.status as string | undefined,
       type: req.query.type as string | undefined,
       location: req.query.location as string | undefined,
-      department: req.query.department as string | undefined,
+      department: (getUserDepartment(req) || req.query.department) as string | undefined,
       createdBy: req.query.createdBy as string | undefined,
     };
 

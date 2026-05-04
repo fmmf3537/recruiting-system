@@ -1,18 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-
-const TEST_EMAIL = 'admin@example.com';
-const TEST_PASSWORD = 'admin123';
-
-async function login(page: Page) {
-  await page.context().clearCookies();
-  await page.goto('/login');
-  await page.waitForLoadState('networkidle');
-  await page.locator('.el-input input').first().fill(TEST_EMAIL);
-  await page.locator('.el-input input[type="password"]').fill(TEST_PASSWORD);
-  await page.click('.login-button');
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000 });
-  await page.waitForLoadState('networkidle');
-}
+import { login } from './helpers';
 
 test.describe('候选人管理模块', () => {
   let page: Page;

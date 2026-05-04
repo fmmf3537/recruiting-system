@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { login, TEST_EMAIL } from './helpers';
 
-const TEST_EMAIL = 'admin@example.com';
 const TEST_PASSWORD = 'admin123';
 
 async function clearAuthAndGoToLogin(page: any) {
@@ -75,11 +75,7 @@ test.describe('认证模块', () => {
 
 test.describe('导航模块', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page.locator('.el-input input').first().fill(TEST_EMAIL);
-    await page.locator('.el-input input[type="password"]').fill(TEST_PASSWORD);
-    await page.click('.login-button');
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
+    await login(page);
   });
 
   test('侧边栏菜单正确显示', async ({ page }) => {
@@ -90,6 +86,15 @@ test.describe('导航模块', () => {
     await expect(page.locator('.el-menu-item:has-text("Offer管理")')).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("数据统计")')).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("消息通知")')).toBeVisible();
+    await expect(page.locator('.el-menu-item:has-text("编制管理")')).toBeVisible();
+    await expect(page.locator('.el-menu-item:has-text("成员管理")')).toBeVisible();
+    await expect(page.locator('.el-menu-item:has-text("自动化邮件")')).toBeVisible();
+  });
+
+  test('点击编制管理跳转正确', async ({ page }) => {
+    await page.click('.el-menu-item:has-text("编制管理")');
+    await expect(page).toHaveURL(/\/hc-requests/);
+    await expect(page.locator('.page-title').first()).toContainText('编制管理');
   });
 
   test('点击职位管理跳转正确', async ({ page }) => {

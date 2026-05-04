@@ -162,7 +162,8 @@ import {
 import { LinearGradient } from 'echarts/lib/util/graphic';
 import VChart from 'vue-echarts';
 
-import { getWorkloadStats, getChannelStats, getFunnelStats } from '@/api/stats';
+import { getWorkloadStats, getChannelStats, getFunnelStats, getCycleStats } from '@/api/stats';
+import * as XLSX from 'xlsx';
 
 // 注册 ECharts 组件
 use([
@@ -274,13 +275,7 @@ const funnelOption = computed(() => ({
 }));
 
 // ============ 招聘周期数据 ============
-const cycleData = ref([
-  { stage: '初筛', avgDays: 2, maxDays: 7, minDays: 1, totalCount: 600 },
-  { stage: '复试', avgDays: 5, maxDays: 14, minDays: 2, totalCount: 300 },
-  { stage: '终面', avgDays: 3, maxDays: 10, minDays: 1, totalCount: 150 },
-  { stage: 'Offer谈判', avgDays: 4, maxDays: 21, minDays: 1, totalCount: 80 },
-  { stage: '入职准备', avgDays: 15, maxDays: 45, minDays: 7, totalCount: 60 },
-]);
+const cycleData = ref<Array<{ stage: string; avgDays: number; maxDays: number; minDays: number; totalCount: number }>>([]);
 
 const cycleOption = computed(() => ({
   title: { text: '各阶段平均停留天数', left: 'center' },
@@ -500,25 +495,30 @@ async function fetchStats() {
       params.endDate = dateRange.value[1];
     }
 
-    const [workloadRes, channelRes, funnelRes] = await Promise.all([
+    const [workloadRes, channelRes, funnelRes, cycleRes] = await Promise.all([
       getWorkloadStats(params),
       getChannelStats(params),
       getFunnelStats(params),
+      getCycleStats(params),
     ]);
 
     if (workloadRes.success && workloadRes.data.length > 0) {
       workloadData.value = workloadRes.data.map((item: any) => ({
         ...item,
+        hired: 0, // API 暂不返回入职数
         conversionRate: item.newCandidates > 0
-          ? Math.round((item.hired || item.offers) / item.newCandidates * 100)
+          ? Math.round((item.offers) / item.newCandidates * 100)
           : 0,
       }));
     }
 
     if (channelRes.success && channelRes.data.length > 0) {
       channelData.value = channelRes.data.map((item: any) => ({
-        ...item,
-        cost: 0, // 成本数据需要额外计算
+        source: item.source,
+        count: item.candidateCount,
+        hired: item.hiredCount,
+        conversion: item.conversionRate,
+        cost: 0,
       }));
     }
 
@@ -535,6 +535,10 @@ async function fetchStats() {
           dropOff,
         };
       });
+    }
+
+    if (cycleRes.success && cycleRes.data.length > 0) {
+      cycleData.value = cycleRes.data;
     }
   } catch (error) {
     console.error('获取统计数据失败:', error);

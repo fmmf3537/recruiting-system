@@ -13,12 +13,14 @@ export interface CreateUserParams {
   password: string;
   name: string;
   role: 'admin' | 'member';
+  department?: string | null;
 }
 
 // 更新用户参数
 export interface UpdateUserParams {
   name?: string;
   role?: 'admin' | 'member';
+  department?: string | null;
 }
 
 // 用户列表项
@@ -27,6 +29,7 @@ export interface UserItem {
   email: string;
   name: string;
   role: string;
+  department: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -85,7 +88,7 @@ export function createUser(data: CreateUserParams): Promise<UserDetailData> {
  * @param data 更新数据
  */
 export function updateUser(id: string, data: UpdateUserParams): Promise<UserDetailData> {
-  return request.patch(`/users/${id}`, data) as Promise<UserDetailData>;
+  return request.put(`/users/${id}`, data) as Promise<UserDetailData>;
 }
 
 /**

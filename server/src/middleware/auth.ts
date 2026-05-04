@@ -6,6 +6,7 @@ import { env } from '../lib/env';
 export interface JwtPayload {
   userId: string;
   email: string;
+  department: string | null;
   role: string;
 }
 
@@ -101,3 +102,13 @@ export const authorize = (...roles: string[]) => {
     next();
   };
 };
+
+/**
+ * 获取当前用户的部门过滤条件
+ * admin → undefined（不限制，看全部）
+ * member → department（仅看本部门）
+ */
+export function getUserDepartment(req: Request): string | undefined {
+  if (req.user!.role === 'admin') return undefined;
+  return req.user!.department || undefined;
+}

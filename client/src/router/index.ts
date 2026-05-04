@@ -10,6 +10,7 @@ import {
   User,
   Setting,
   Bell,
+  Tickets,
 } from '@element-plus/icons-vue';
 
 // 路由配置
@@ -141,6 +142,35 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/offers/OfferDetail.vue'),
         meta: {
           title: 'Offer 详情',
+          hidden: true,
+          public: true,
+        },
+      },
+      {
+        path: '/hc-requests',
+        name: 'HCRequests',
+        component: () => import('@/views/hc-requests/index.vue'),
+        meta: {
+          title: '编制管理',
+          icon: Tickets,
+        },
+      },
+      {
+        path: '/hc-requests/create',
+        name: 'HCRequestCreate',
+        component: () => import('@/views/hc-requests/HCRequestForm.vue'),
+        meta: {
+          title: '新建申请',
+          hidden: true,
+          public: true,
+        },
+      },
+      {
+        path: '/hc-requests/:id/edit',
+        name: 'HCRequestEdit',
+        component: () => import('@/views/hc-requests/HCRequestForm.vue'),
+        meta: {
+          title: '编辑申请',
           hidden: true,
           public: true,
         },

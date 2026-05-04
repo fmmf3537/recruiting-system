@@ -41,6 +41,43 @@ export interface FunnelStat {
   count: number;
 }
 
+// 招聘周期统计项
+export interface CycleStat {
+  stage: string;
+  avgDays: number;
+  maxDays: number;
+  minDays: number;
+  totalCount: number;
+}
+
+// 职位时间指标
+export interface JobTimeStat {
+  jobId: string;
+  jobTitle: string;
+  department: string;
+  candidateCount: number;
+  hiredCount: number;
+  ttfDays: number | null;
+  tthDays: number | null;
+}
+
+// 仪表盘统计数据
+export interface DashboardStats {
+  kpi: {
+    newCandidatesThisMonth: number;
+    interviewingCount: number;
+    pendingOffers: number;
+    joinedThisMonth: number;
+  };
+  trend: Array<{ date: string; count: number }>;
+  hcStats: {
+    totalApproved: number;
+    totalFilled: number;
+    fulfillmentRate: number;
+    openRequests: number;
+  };
+}
+
 // 工作量统计响应
 export interface WorkloadStatsData {
   success: boolean;
@@ -144,6 +181,46 @@ export function exportJobStats(params?: DateRangeParams): Promise<Blob> {
     params,
     responseType: 'blob'
   }) as Promise<Blob>;
+}
+
+/**
+ * 下载文件辅助函数
+ * @param blob 文件 Blob
+ * @param filename 文件名
+ */
+/**
+ * 获取仪表盘统计数据
+ */
+export function getDashboardStats(): Promise<{ success: boolean; data: DashboardStats }> {
+  return request.get('/stats/dashboard') as Promise<{ success: boolean; data: DashboardStats }>;
+}
+
+/**
+ * 获取招聘周期统计
+ */
+export function getCycleStats(params?: DateRangeParams): Promise<{ success: boolean; data: CycleStat[] }> {
+  return request.get('/stats/cycle', { params }) as Promise<{ success: boolean; data: CycleStat[] }>;
+}
+
+/**
+ * 获取职位时间指标
+ */
+export function getJobTimeStats(params?: DateRangeParams): Promise<{ success: boolean; data: JobTimeStat[] }> {
+  return request.get('/stats/job-time', { params }) as Promise<{ success: boolean; data: JobTimeStat[] }>;
+}
+
+/**
+ * 导出招聘周期 CSV
+ */
+export function exportCycleStats(params?: DateRangeParams): Promise<Blob> {
+  return request.get('/stats/cycle/export', { params, responseType: 'blob' }) as Promise<Blob>;
+}
+
+/**
+ * 导出招聘漏斗 CSV
+ */
+export function exportFunnelStats(params?: DateRangeParams): Promise<Blob> {
+  return request.get('/stats/funnel/export', { params, responseType: 'blob' }) as Promise<Blob>;
 }
 
 /**

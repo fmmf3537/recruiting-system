@@ -89,6 +89,7 @@ export class JobService {
         createdById: true,
         createdAt: true,
         updatedAt: true,
+        hcRequestId: true,
       },
     });
 
@@ -191,6 +192,7 @@ export class JobService {
           createdById: true,
           createdAt: true,
           updatedAt: true,
+        hcRequestId: true,
           _count: {
             select: {
               candidateJobs: true,
@@ -252,6 +254,7 @@ export class JobService {
         createdById: true,
         createdAt: true,
         updatedAt: true,
+        hcRequestId: true,
         createdBy: {
           select: {
             id: true,
@@ -345,6 +348,7 @@ export class JobService {
         createdById: true,
         createdAt: true,
         updatedAt: true,
+        hcRequestId: true,
       },
     });
 
@@ -404,6 +408,7 @@ export class JobService {
         createdById: true,
         createdAt: true,
         updatedAt: true,
+        hcRequestId: true,
       },
     });
 
@@ -451,6 +456,7 @@ export class JobService {
         createdById: true,
         createdAt: true,
         updatedAt: true,
+        hcRequestId: true,
       },
     });
 

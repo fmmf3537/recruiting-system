@@ -32,6 +32,12 @@
 
         <el-table-column prop="email" label="邮箱" min-width="200" show-overflow-tooltip />
 
+        <el-table-column prop="department" label="部门" width="120" align="center">
+          <template #default="{ row }">
+            {{ row.department || '全部' }}
+          </template>
+        </el-table-column>
+
         <el-table-column prop="role" label="角色" width="120" align="center">
           <template #default="{ row }">
             <el-tag
@@ -148,6 +154,24 @@
             </el-option>
           </el-select>
         </el-form-item>
+
+        <el-form-item label="部门">
+          <el-select
+            v-model="formData.department"
+            placeholder="全部部门（可查看所有数据）"
+            style="width: 100%"
+            clearable
+            filterable
+          >
+            <el-option label="不限部门（查看全部）" value="" />
+            <el-option
+              v-for="item in deptOptions"
+              :key="item.code"
+              :label="item.name"
+              :value="item.name"
+            />
+          </el-select>
+        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -179,10 +203,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onActivated } from 'vue';
+import { ref, reactive, computed, onMounted, onActivated } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, UserFilled } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
+import { useDictionaryStore } from '@/stores/dictionary';
 import {
   getUserList,
   createUser,
@@ -195,6 +220,10 @@ import {
 
 // Store
 const authStore = useAuthStore();
+const dictionaryStore = useDictionaryStore();
+
+// 部门选项
+const deptOptions = computed(() => dictionaryStore.departmentOptions || []);
 
 // 表格数据
 const loading = ref(false);
@@ -218,6 +247,7 @@ const formData = reactive<CreateUserParams & { id?: string }>({
   email: '',
   password: '',
   role: 'member',
+  department: null,
 });
 
 // 表单验证规则
@@ -301,6 +331,7 @@ function handleAdd() {
   formData.email = '';
   formData.password = '';
   formData.role = 'member';
+  formData.department = null;
   dialogVisible.value = true;
 }
 
@@ -312,6 +343,7 @@ function handleEdit(row: UserItem) {
   formData.email = row.email;
   formData.password = '';
   formData.role = row.role as 'admin' | 'member';
+  formData.department = row.department as string | null;
   dialogVisible.value = true;
 }
 
@@ -327,6 +359,7 @@ async function handleSubmit() {
       const updateData: UpdateUserParams = {
         name: formData.name,
         role: formData.role,
+        department: formData.department || null,
       };
       if (formData.password) {
         (updateData as any).password = formData.password;
@@ -420,6 +453,7 @@ async function confirmRoleChange() {
 
 // 初始化
 onMounted(() => {
+  dictionaryStore.fetchDictionaries('department');
   fetchUserList();
 });
 onActivated(() => {

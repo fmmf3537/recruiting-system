@@ -231,4 +231,86 @@ router.get(
   statsController.getFunnelStats
 );
 
+/**
+ * GET /api/stats/cycle
+ * 招聘周期统计
+ */
+router.get(
+  '/cycle',
+  authenticate,
+  validate(dateRangeQuerySchema, 'query'),
+  statsController.getCycleStats
+);
+
+/**
+ * GET /api/stats/cycle/export
+ * 导出招聘周期 CSV
+ */
+router.get(
+  '/cycle/export',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      const dateRange = (startDate && endDate)
+        ? statsService.parseDateRange(startDate, endDate)
+        : undefined;
+
+      const stats = await statsService.getCycleStats(dateRange);
+      const headers = ['阶段', '平均天数', '最长天数', '最短天数', '总人数'];
+      const rows = stats.map((s) => [s.stage, s.avgDays, s.maxDays, s.minDays, s.totalCount]);
+      const csvContent = '\uFEFF' + convertToCSV(headers, rows);
+      const filename = `招聘周期_${new Date().toISOString().split('T')[0]}.csv`;
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      res.send(csvContent);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/stats/funnel/export
+ * 导出招聘漏斗 CSV
+ */
+router.get(
+  '/funnel/export',
+  authenticate,
+  async (req, res, next) => {
+    try {
+      const startDate = req.query.startDate as string | undefined;
+      const endDate = req.query.endDate as string | undefined;
+      const dateRange = (startDate && endDate)
+        ? statsService.parseDateRange(startDate, endDate)
+        : undefined;
+
+      const stats = await statsService.getFunnelStats(dateRange);
+      const headers = ['阶段', '人数'];
+      const rows = stats.map((s) => [s.stage, s.count]);
+      const csvContent = '\uFEFF' + convertToCSV(headers, rows);
+      const filename = `招聘漏斗_${new Date().toISOString().split('T')[0]}.csv`;
+
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+      res.send(csvContent);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/stats/job-time
+ * 职位时间指标
+ */
+router.get(
+  '/job-time',
+  authenticate,
+  validate(dateRangeQuerySchema, 'query'),
+  statsController.getJobTimeStats
+);
+
 export default router;

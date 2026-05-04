@@ -26,6 +26,7 @@ vi.mock('../../src/middleware/auth', () => ({
     next();
   },
   authorize: () => (req: any, res: any, next: any) => next(),
+  getUserDepartment: () => undefined,
 }));
 
 describe('职位模块 API 测试', () => {

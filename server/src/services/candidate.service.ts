@@ -28,6 +28,7 @@ export interface CandidateListQuery {
   jobId?: string;
   tagIds?: string[];
   hasNoJob?: boolean;
+  department?: string;
 }
 
 // 创建候选人参数类型
@@ -401,6 +402,30 @@ export class CandidateService {
         where.id = { in: intersection };
       } else {
         where.id = { in: matchedIds };
+      }
+    }
+
+    // 部门过滤：通过关联职位的部门筛选（member 只看本部门）
+    // 人才库模式（hasNoJob）不适用部门过滤
+    if (query.department && !hasNoJob) {
+      const deptJobIds = await prisma.job.findMany({
+        where: { departments: { array_contains: [query.department] } },
+        select: { id: true },
+      });
+      const deptCandidateJobs = await prisma.candidateJob.findMany({
+        where: { jobId: { in: deptJobIds.map((j) => j.id) } },
+        select: { candidateId: true },
+      });
+      const deptCandidateIds = deptCandidateJobs.map((cj) => cj.candidateId);
+      const currentInFilter = (where.id as Prisma.StringFilter)?.in as string[] | undefined;
+      if (currentInFilter) {
+        const intersection = currentInFilter.filter((id) => deptCandidateIds.includes(id));
+        if (intersection.length === 0) {
+          return { candidates: [], total: 0, page, pageSize, totalPages: 0 };
+        }
+        where.id = { in: intersection };
+      } else {
+        where.id = { in: deptCandidateIds };
       }
     }
 

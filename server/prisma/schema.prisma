@@ -15,6 +15,7 @@ model User {
   name             String
   role             String   // admin, member
   feishuEmployeeId String?  @unique
+  department       String?  // 所属部门，null = 无部门限制（管理员）
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -39,6 +40,12 @@ model User {
   // 关系：一个 User 接收多条通知
   notifications  Notification[]
 
+  // 关系：一个 User 提交的 HC 申请
+  hcRequests  HCRequest[] @relation("HCRequests")
+
+  // 关系：一个 User 审批的 HC 申请
+  hcApprovals HCRequest[] @relation("HCApprovals")
+
   // 关系：一个 User 产生多个操作日志
   operationLogs     OperationLog[] @relation("UserOperationLogs")
 
@@ -60,7 +67,8 @@ model Job {
   status       String   // open, paused, closed
   description  String   @db.Text  // 富文本
   requirements String   @db.Text  // 富文本
-  
+  hcRequestId  String?  // 关联的编制申请ID
+
   createdById  String
   createdBy    User     @relation("CreatedJobs", fields: [createdById], references: [id])
   
@@ -515,4 +523,45 @@ model Notification {
   @@index([recipientId, isRead])
   @@index([recipientId, createdAt])
   @@map("notification")
+}
+
+// ==================== HC编制申请表 ====================
+model HCRequest {
+  id           String    @id @default(cuid())
+  title        String    // 岗位名称
+  department   String    // 需求部门
+  level        String    // 职级（P6, M2 等）
+  headcount    Int       // 需求人数
+  filledCount  Int       @default(0) // 已招人数
+  urgency      String    // urgent | normal | low
+  expectedDate DateTime? // 期望到岗时间
+  salaryMin    String?   // 薪资下限
+  salaryMax    String?   // 薪资上限
+  reason       String    // new | replacement | expansion
+  reasonNote   String?   @db.Text // 需求说明
+  status       String    @default("draft") // draft | submitted | approved | rejected | fulfilled
+  submittedAt  DateTime?
+  approvedAt   DateTime?
+  rejectedAt   DateTime?
+
+  // 申请人
+  requesterId  String
+  requester    User      @relation("HCRequests", fields: [requesterId], references: [id])
+
+  // 审批人
+  approverId   String?
+  approver     User?     @relation("HCApprovals", fields: [approverId], references: [id])
+  approveNote  String?   // 审批意见
+
+  // 关联职位
+  createdJobId String?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status])
+  @@index([requesterId])
+  @@index([department])
+  @@index([createdAt])
+  @@map("hc_request")
 }

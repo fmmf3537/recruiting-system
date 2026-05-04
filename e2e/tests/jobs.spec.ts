@@ -1,18 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-
-const TEST_EMAIL = 'admin@example.com';
-const TEST_PASSWORD = 'admin123';
-
-async function login(page: Page) {
-  await page.context().clearCookies();
-  await page.goto('/login');
-  await page.waitForLoadState('networkidle');
-  await page.locator('.el-input input').first().fill(TEST_EMAIL);
-  await page.locator('.el-input input[type="password"]').fill(TEST_PASSWORD);
-  await page.click('.login-button');
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000 });
-  await page.waitForLoadState('networkidle');
-}
+import { login } from './helpers';
 
 test.describe('职位管理模块', () => {
   let page: Page;
@@ -59,19 +46,25 @@ test.describe('职位管理模块', () => {
 
   test('关闭职位功能正常', async () => {
     const closeButton = page.locator('button:has-text("关闭")').first();
-    if (await closeButton.isVisible({ timeout: 1000 })) {
-      await closeButton.click();
-      await page.click('text=确定');
-      await expect(page.locator('.el-message')).toContainText('职位已关闭');
+    const btnCount = await closeButton.count();
+    if (btnCount === 0) {
+      test.skip(true, '无可用操作行');
+      return;
     }
+    await closeButton.click();
+    await page.click('text=确定');
+    await expect(page.locator('.el-message')).toContainText('职位已关闭');
   });
 
   test('复制职位功能正常', async () => {
     const duplicateButton = page.locator('button:has-text("复制")').first();
-    if (await duplicateButton.isVisible({ timeout: 1000 })) {
-      await duplicateButton.click();
-      await expect(page.locator('.el-message')).toContainText('职位复制成功');
+    const btnCount = await duplicateButton.count();
+    if (btnCount === 0) {
+      test.skip(true, '无可用操作行');
+      return;
     }
+    await duplicateButton.click();
+    await expect(page.locator('.el-message')).toContainText('职位复制成功');
   });
 });
 

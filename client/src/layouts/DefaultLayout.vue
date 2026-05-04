@@ -136,6 +136,7 @@ import {
   ArrowDown,
   SwitchButton,
   Bell,
+  Tickets,
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -184,6 +185,9 @@ const menuItems = computed(() => {
   
   // 消息通知对所有用户可见
   items.push({ path: '/notifications', title: '消息通知', icon: Bell });
+
+  // 编制管理对所有用户可见
+  items.push({ path: '/hc-requests', title: '编制管理', icon: Tickets });
 
   // 仅管理员可见成员管理和字典管理
   if (authStore.isAdmin) {

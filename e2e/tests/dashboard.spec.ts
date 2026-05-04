@@ -1,18 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-
-const TEST_EMAIL = 'admin@example.com';
-const TEST_PASSWORD = 'admin123';
-
-async function login(page: Page) {
-  await page.context().clearCookies();
-  await page.goto('/login');
-  await page.waitForLoadState('networkidle');
-  await page.locator('.el-input input').first().fill(TEST_EMAIL);
-  await page.locator('.el-input input[type="password"]').fill(TEST_PASSWORD);
-  await page.click('.login-button');
-  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15000 });
-  await page.waitForLoadState('networkidle');
-}
+import { login } from './helpers';
 
 test.describe('仪表盘模块', () => {
   let page: Page;
@@ -30,6 +17,7 @@ test.describe('仪表盘模块', () => {
     await expect(page.locator('text=本月新增候选人')).toBeVisible({ timeout: 10000 });
     await expect(page.locator('text=进行中职位数')).toBeVisible();
     await expect(page.locator('text=待入职人数')).toBeVisible();
+    await expect(page.locator('text=已批准编制')).toBeVisible({ timeout: 5000 });
   });
 
   test('近期候选人动态正确显示', async () => {

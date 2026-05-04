@@ -22,9 +22,9 @@ export const useNotificationStore = defineStore('notification', () => {
     }
   }
 
-  async function fetchNotifications(page = 1, pageSize = 10) {
+  async function fetchNotifications(page = 1, pageSize = 10, type?: string) {
     try {
-      const res = await getNotifications({ page, pageSize });
+      const res = await getNotifications({ page, pageSize, type });
       if (res.success) {
         notifications.value = res.data;
         return res.pagination;
