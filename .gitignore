@@ -33,9 +33,12 @@ lerna-debug.log*
 .DS_Store
 Thumbs.db
 
-# Prisma
-prisma/migrations/
+# Prisma（保留 server/prisma/migrations/ 入库；仅忽略生成物）
 prisma/generated/
+
+# 数据库备份（禁止入库）
+backup/
+*.dump
 
 # Uploads
 uploads/
