@@ -1,4 +1,5 @@
 import Redis from 'ioredis';
+import type { ConnectionOptions } from 'bullmq';
 import { env } from './env';
 
 export const redis = new Redis(env.REDIS_URL, {
@@ -12,6 +13,18 @@ export const redis = new Redis(env.REDIS_URL, {
     return Math.min(times * 100, 3000);
   },
 });
+
+/** BullMQ 连接配置（避免与 bullmq 内置 ioredis 类型冲突） */
+export function getBullMQConnection(): ConnectionOptions {
+  const url = new URL(env.REDIS_URL);
+  return {
+    host: url.hostname,
+    port: url.port ? Number(url.port) : 6379,
+    username: url.username || undefined,
+    password: url.password || undefined,
+    maxRetriesPerRequest: null,
+  };
+}
 
 redis.on('error', (err) => {
   console.error('Redis error:', err.message);

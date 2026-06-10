@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq';
-import { redis } from './redis';
+import { getBullMQConnection } from './redis';
 
 export const resumeParseQueue = new Queue('resume-parse', {
-  connection: redis,
+  connection: getBullMQConnection(),
 });

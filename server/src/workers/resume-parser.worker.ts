@@ -1,6 +1,6 @@
 import { Worker } from 'bullmq';
 import fs from 'fs/promises';
-import { redis } from '../lib/redis';
+import { getBullMQConnection } from '../lib/redis';
 import { parseResume } from '../services/resume-parser.service';
 
 export const resumeParseWorker = new Worker(
@@ -15,7 +15,7 @@ export const resumeParseWorker = new Worker(
     });
     return result;
   },
-  { connection: redis }
+  { connection: getBullMQConnection() }
 );
 
 resumeParseWorker.on('completed', (job) => {

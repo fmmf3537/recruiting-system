@@ -8,14 +8,29 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-5213537}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
       POSTGRES_DB: ${DB_NAME:-recruitment_system}
     volumes:
       - postgres_data:/var/lib/postgresql
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-recruitment_system}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ats_network
+
+  # Redis（BullMQ 队列与缓存）
+  redis:
+    image: redis:7-alpine
+    container_name: ats_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,18 +47,22 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://${DB_USER:-ats_user}:${DB_PASSWORD:-ats_password}@postgres:5432/${DB_NAME:-ats_db}?schema=public
-      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-changeme}@postgres:5432/${DB_NAME:-recruitment_system}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-min-32-chars!!}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     volumes:
       - ./server/uploads:/app/uploads
     networks:
       - ats_network
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/health',(r)=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -88,16 +107,18 @@ services:
       - "${NGINX_PORT:-80}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - client_dist:/usr/share/nginx/html:ro
-      - mobile_dist:/usr/share/nginx/html/mobile:ro
-      - ./server/uploads:/usr/share/nginx/html/uploads:ro
+      - client_dist:/var/www/client:ro
+      - mobile_dist:/var/www/mobile:ro
+      - ./server/uploads:/var/www/uploads:ro
     depends_on:
-      - server
+      server:
+        condition: service_healthy
     networks:
       - ats_network
 
 volumes:
   postgres_data:
+  redis_data:
   client_dist:
   mobile_dist:
 
