@@ -66,3 +66,6 @@ kimi-export-*.md
 # Bug screenshots
 bug/
 
+# AI 工具本地配置（不入库）
+.claude/
+
