@@ -55,7 +55,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '发布职位',
           hidden: true,
-          public: true,
         },
       },
       {
@@ -65,7 +64,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '职位详情',
           hidden: true,
-          public: true,
         },
       },
       {
@@ -75,7 +73,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '编辑职位',
           hidden: true,
-          public: true,
         },
       },
       {
@@ -94,7 +91,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '新增候选人',
           hidden: true,
-          public: true,
         },
       },
       {
@@ -104,7 +100,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '候选人详情',
           hidden: true,
-          public: true,
         },
       },
       {
@@ -114,7 +109,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '编辑候选人',
           hidden: true,
-          public: true,
         },
       },
       {
@@ -133,7 +127,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '创建 Offer',
           hidden: true,
-          public: true,
         },
       },
       {
@@ -143,7 +136,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: 'Offer 详情',
           hidden: true,
-          public: true,
         },
       },
       {
@@ -162,7 +154,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '新建申请',
           hidden: true,
-          public: true,
         },
       },
       {
@@ -172,7 +163,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '编辑申请',
           hidden: true,
-          public: true,
         },
       },
       {
@@ -254,7 +244,6 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '个人中心',
           hidden: true,
-          public: true,
         },
       },
     ],
