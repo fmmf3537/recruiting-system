@@ -36,7 +36,12 @@ export class TagController {
   async updateTag(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
-      const tag = await tagService.updateTag(id, req.body);
+      const tag = await tagService.updateTag(
+        id,
+        req.body,
+        req.user!.userId,
+        req.user!.role === 'admin'
+      );
       res.json({ success: true, data: tag });
     } catch (error) {
       next(error);
@@ -50,7 +55,7 @@ export class TagController {
   async deleteTag(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { id } = req.params;
-      await tagService.deleteTag(id);
+      await tagService.deleteTag(id, req.user!.userId, req.user!.role === 'admin');
       res.json({ success: true, message: '标签已删除' });
     } catch (error) {
       next(error);

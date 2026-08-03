@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import { AppError } from '../middleware/errorHandler';
 
 export interface CreateTagInput {
   name: string;
@@ -57,9 +58,36 @@ export async function createTag(data: CreateTagInput, createdById?: string) {
 }
 
 /**
- * 更新标签
+ * 标签写权限校验：预设标签仅管理员可改删；自定义标签限创建者或管理员
  */
-export async function updateTag(id: string, data: UpdateTagInput) {
+function assertTagWritable(
+  tag: { category: string; createdById: string | null },
+  userId: string,
+  isAdmin: boolean
+): void {
+  if (isAdmin) return;
+  if (tag.category === 'preset') {
+    throw new AppError('预设标签仅管理员可修改或删除', 403);
+  }
+  if (tag.createdById !== userId) {
+    throw new AppError('只能操作自己创建的标签', 403);
+  }
+}
+
+/**
+ * 更新标签（预设限管理员，自定义限创建者或管理员）
+ */
+export async function updateTag(
+  id: string,
+  data: UpdateTagInput,
+  userId: string,
+  isAdmin: boolean
+) {
+  const tag = await prisma.tag.findUnique({ where: { id } });
+  if (!tag) {
+    throw new AppError('标签不存在', 404);
+  }
+  assertTagWritable(tag, userId, isAdmin);
   return prisma.tag.update({
     where: { id },
     data,
@@ -67,9 +95,14 @@ export async function updateTag(id: string, data: UpdateTagInput) {
 }
 
 /**
- * 删除标签（级联删除关联记录）
+ * 删除标签（级联删除关联记录；预设限管理员，自定义限创建者或管理员）
  */
-export async function deleteTag(id: string) {
+export async function deleteTag(id: string, userId: string, isAdmin: boolean) {
+  const tag = await prisma.tag.findUnique({ where: { id } });
+  if (!tag) {
+    throw new AppError('标签不存在', 404);
+  }
+  assertTagWritable(tag, userId, isAdmin);
   return prisma.tag.delete({
     where: { id },
   });
