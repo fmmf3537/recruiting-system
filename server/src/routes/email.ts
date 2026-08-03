@@ -1,6 +1,7 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { authenticate } from '../middleware/auth';
+import { emailSendLimiter } from '../middleware/rate-limit';
 import { validate } from '../middleware/validate';
 import {
   getTemplates,
@@ -62,8 +63,8 @@ router.get('/templates/:id', authenticate, validate(templateIdParamSchema, 'para
 router.patch('/templates/:id', authenticate, validate(templateIdParamSchema, 'params'), validate(updateTemplateSchema), updateTemplate);
 router.delete('/templates/:id', authenticate, validate(templateIdParamSchema, 'params'), deleteTemplate);
 
-// 发送邮件
-router.post('/send', authenticate, validate(sendEmailSchema), sendEmail);
+// 发送邮件（限流防滥用）
+router.post('/send', authenticate, emailSendLimiter, validate(sendEmailSchema), sendEmail);
 
 // 邮件日志
 router.get('/logs', authenticate, validate(listLogsQuerySchema, 'query'), getEmailLogs);
