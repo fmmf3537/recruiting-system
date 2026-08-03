@@ -17,6 +17,9 @@ interface FeishuUserTokenResponse {
   };
 }
 
+// 飞书 API 请求超时（防止对端挂起导致登录请求堆积）
+const FEISHU_TIMEOUT_MS = 10_000;
+
 /**
  * 用飞书 authCode 换取员工标识（employee_no 或 user_id）
  */
@@ -29,6 +32,7 @@ export async function resolveFeishuEmployeeId(authCode: string): Promise<string>
     'https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal',
     {
       method: 'POST',
+      signal: AbortSignal.timeout(FEISHU_TIMEOUT_MS),
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         app_id: env.FEISHU_APP_ID,
@@ -45,6 +49,7 @@ export async function resolveFeishuEmployeeId(authCode: string): Promise<string>
     'https://open.feishu.cn/open-apis/authen/v1/access_token',
     {
       method: 'POST',
+      signal: AbortSignal.timeout(FEISHU_TIMEOUT_MS),
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${appAccessTokenRes.app_access_token}`,

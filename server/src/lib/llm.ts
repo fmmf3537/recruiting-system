@@ -1,28 +1,31 @@
 import { env } from './env';
 
 const LLM_CONFIG = {
-  provider: process.env.LLM_PROVIDER || 'deepseek',
+  provider: env.LLM_PROVIDER,
   deepseek: {
-    apiKey: process.env.DEEPSEEK_API_KEY,
+    apiKey: env.DEEPSEEK_API_KEY,
     baseUrl: 'https://api.deepseek.com/v1',
     model: 'deepseek-chat',
   },
   zhipu: {
-    apiKey: process.env.ZHIPU_API_KEY,
+    apiKey: env.ZHIPU_API_KEY,
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     model: 'glm-4-flash',
   },
   kimi: {
-    apiKey: process.env.KIMI_API_KEY,
+    apiKey: env.KIMI_API_KEY,
     baseUrl: 'https://api.moonshot.cn/v1',
     model: 'moonshot-v1-8k',
   },
   minimax: {
-    apiKey: process.env.MINIMAX_API_KEY,
+    apiKey: env.MINIMAX_API_KEY,
     baseUrl: 'https://api.minimax.chat/v1',
     model: 'abab6.5s-chat',
   },
 };
+
+// LLM 请求超时（简历解析文本较长，给足 60s；防止 LLM 挂起导致 BullMQ worker 永久占用）
+const LLM_TIMEOUT_MS = 60_000;
 
 interface LLMResponse {
   content: string;
@@ -52,6 +55,7 @@ async function callLLM(prompt: string, systemPrompt?: string): Promise<LLMRespon
 
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: 'POST',
+    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${config.apiKey}`,

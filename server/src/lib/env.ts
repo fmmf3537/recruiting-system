@@ -30,6 +30,13 @@ const envSchema = z.object({
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
 
+  // LLM 简历解析配置（可选）
+  LLM_PROVIDER: z.enum(['deepseek', 'zhipu', 'kimi', 'minimax']).default('deepseek'),
+  DEEPSEEK_API_KEY: z.string().optional(),
+  ZHIPU_API_KEY: z.string().optional(),
+  KIMI_API_KEY: z.string().optional(),
+  MINIMAX_API_KEY: z.string().optional(),
+
   // SMTP 邮件配置（可选）
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 587)),
