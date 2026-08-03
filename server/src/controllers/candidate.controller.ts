@@ -247,9 +247,11 @@ export class CandidateController {
       }
 
       const { resumeParseQueue } = await import('../lib/queue');
+      // 记录提交人，供状态查询时校验归属（防止遍历 jobId 读取他人简历）
       const job = await resumeParseQueue.add('parse', {
         filePath: file.path,
         mimetype: file.mimetype,
+        userId: req.user!.userId,
       });
 
       res.json({
@@ -281,6 +283,15 @@ export class CandidateController {
         res.status(404).json({
           success: false,
           error: '任务不存在',
+        });
+        return;
+      }
+
+      // 归属校验：仅提交人本人或管理员可查询（BullMQ jobId 为自增 ID，可枚举）
+      if (job.data.userId !== req.user!.userId && req.user!.role !== 'admin') {
+        res.status(403).json({
+          success: false,
+          error: '没有权限查看该任务',
         });
         return;
       }
