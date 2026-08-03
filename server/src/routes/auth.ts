@@ -5,7 +5,9 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { env } from '../lib/env';
 import prisma from '../lib/prisma';
+import { resolveFeishuEmployeeId } from '../lib/feishu-auth';
 import { authenticate } from '../middleware/auth';
+import { feishuLimiter, bindFeishuLimiter } from '../middleware/rate-limit';
 import { validate } from '../middleware/validate';
 import { asyncHandler } from '../middleware/errorHandler';
 
@@ -42,6 +44,16 @@ const registerSchema = z.object({
 const changePasswordSchema = z.object({
   oldPassword: z.string().min(1, '请输入当前密码'),
   newPassword: z.string().min(6, '新密码至少6位字符'),
+});
+
+const bindFeishuSchema = z.object({
+  email: z.string().email('请输入有效的邮箱地址'),
+  password: z.string().min(6, '密码至少6位字符'),
+  authCode: z.string().min(1, '缺少飞书授权码'),
+});
+
+const feishuLoginSchema = z.object({
+  authCode: z.string().min(1, '缺少 authCode'),
 });
 
 /**
@@ -226,26 +238,13 @@ router.post(
  */
 router.post(
   '/bind-feishu',
+  bindFeishuLimiter,
+  validate(bindFeishuSchema),
   asyncHandler(async (req, res) => {
-    const { email, password, feishuEmployeeId } = req.body;
+    const { email, password, authCode } = req.body;
 
-    if (!email || !password || !feishuEmployeeId) {
-      res.status(400).json({
-        success: false,
-        error: '缺少必要参数',
-      });
-      return;
-    }
+    const feishuEmployeeId = await resolveFeishuEmployeeId(authCode);
 
-    if (!feishuEmployeeId) {
-      res.status(400).json({
-        success: false,
-        error: '无法获取飞书用户标识，请重新进入应用',
-      });
-      return;
-    }
-
-    // 1. 查找本地用户并验证密码
     const user = await prisma.user.findUnique({
       where: { email },
     });
@@ -270,14 +269,14 @@ router.post(
       return;
     }
 
-    // 2. 更新 feishuEmployeeId
     try {
       await prisma.user.update({
         where: { id: user.id },
         data: { feishuEmployeeId },
       });
-    } catch (err: any) {
-      if (err.code === 'P2002') {
+    } catch (err: unknown) {
+      const prismaErr = err as { code?: string };
+      if (prismaErr.code === 'P2002') {
         res.status(409).json({
           success: false,
           error: '该飞书账号已被其他用户绑定',
@@ -287,7 +286,6 @@ router.post(
       throw err;
     }
 
-    // 3. 签发 JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email, department: user.department || null, role: user.role },
       env.JWT_SECRET,
@@ -369,64 +367,13 @@ router.post(
  */
 router.post(
   '/feishu/login',
+  feishuLimiter,
+  validate(feishuLoginSchema),
   asyncHandler(async (req, res) => {
     const { authCode } = req.body;
-    if (!authCode) {
-      res.status(400).json({ success: false, error: '缺少 authCode' });
-      return;
-    }
 
-    // 1. 获取飞书应用凭证
-    const appAccessTokenRes = await fetch(
-      'https://open.feishu.cn/open-apis/auth/v3/app_access_token/internal',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          app_id: env.FEISHU_APP_ID,
-          app_secret: env.FEISHU_APP_SECRET,
-        }),
-      }
-    ).then((r) => r.json() as Promise<{ code: number; msg?: string; app_access_token?: string }>);
+    const feishuEmployeeId = await resolveFeishuEmployeeId(authCode);
 
-    if (appAccessTokenRes.code !== 0) {
-      res.status(400).json({
-        success: false,
-        error: appAccessTokenRes.msg || '获取飞书应用凭证失败',
-      });
-      return;
-    }
-
-    const appAccessToken = appAccessTokenRes.app_access_token;
-
-    // 2. 用 authCode 获取用户信息
-    const userInfoRes = await fetch(
-      'https://open.feishu.cn/open-apis/authen/v1/access_token',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${appAccessToken}`,
-        },
-        body: JSON.stringify({
-          grant_type: 'authorization_code',
-          code: authCode,
-        }),
-      }
-    ).then((r) => r.json() as Promise<{ code: number; msg?: string; data?: { employee_no?: string; user_id?: string; name?: string } }>);
-
-    if (userInfoRes.code !== 0) {
-      res.status(400).json({
-        success: false,
-        error: userInfoRes.msg || '飞书授权码无效或已过期',
-      });
-      return;
-    }
-
-    const feishuEmployeeId =
-      userInfoRes.data?.employee_no || userInfoRes.data?.user_id || '';
-
-    // 3. 匹配本地用户
     const user = await prisma.user.findFirst({
       where: { feishuEmployeeId },
     });
@@ -436,12 +383,10 @@ router.post(
         success: false,
         code: 'USER_NOT_BOUND',
         error: '账号未绑定，请使用账号密码完成首次绑定',
-        feishuEmployeeId,
       });
       return;
     }
 
-    // 4. 签发 JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email, department: user.department || null, role: user.role },
       env.JWT_SECRET,

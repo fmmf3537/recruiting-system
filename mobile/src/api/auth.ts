@@ -53,7 +53,7 @@ export function feishuLogin(data: FeishuLoginParams): Promise<LoginResult> {
 export interface BindFeishuParams {
   email: string;
   password: string;
-  feishuEmployeeId: string;
+  authCode: string;
 }
 
 /**

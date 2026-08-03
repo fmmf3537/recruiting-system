@@ -99,7 +99,6 @@ const feishuError = ref('');
 
 // 绑定表单状态
 const showBindForm = ref(false);
-const pendingFeishuEmployeeId = ref('');
 const bindLoading = ref(false);
 const bindError = ref('');
 const bindForm = ref({
@@ -124,7 +123,6 @@ async function tryFeishuLogin() {
     }
 
     if (res.code === 'USER_NOT_BOUND') {
-      pendingFeishuEmployeeId.value = res.feishuEmployeeId || '';
       showBindForm.value = true;
       return;
     }
@@ -159,17 +157,14 @@ async function onBindSubmit() {
     bindError.value = '请输入邮箱和密码';
     return;
   }
-  if (!pendingFeishuEmployeeId.value) {
-    bindError.value = '系统错误：缺少飞书用户标识，请刷新重试';
-    return;
-  }
   bindLoading.value = true;
   bindError.value = '';
   try {
+    const authCode = await getAuthCode();
     const res = await bindFeishu({
       email: bindForm.value.email,
       password: bindForm.value.password,
-      feishuEmployeeId: pendingFeishuEmployeeId.value,
+      authCode,
     });
 
     if (res.success && res.token) {
