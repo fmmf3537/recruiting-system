@@ -1,6 +1,5 @@
 import type { Response, NextFunction } from 'express';
 import { candidateService } from '../services/candidate.service';
-import { getUserDepartment } from '../middleware/auth';
 import type { Request } from 'express';
 
 /**
@@ -72,7 +71,6 @@ export class CandidateController {
         jobId: req.query.jobId as string | undefined,
         tagIds: tagIds as string[] | undefined,
         hasNoJob: req.query.hasNoJob as boolean | undefined,
-        department: getUserDepartment(req),
       };
 
       const result = await candidateService.getCandidates(query);
@@ -125,7 +123,12 @@ export class CandidateController {
   ): Promise<void> {
     try {
       const { id } = req.params;
-      const candidate = await candidateService.updateCandidate(id, req.body);
+      const candidate = await candidateService.updateCandidate(
+        id,
+        req.body,
+        req.user!.userId,
+        req.user!.role === 'admin'
+      );
 
       res.json({
         success: true,

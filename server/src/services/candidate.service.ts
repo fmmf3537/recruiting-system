@@ -28,7 +28,6 @@ export interface CandidateListQuery {
   jobId?: string;
   tagIds?: string[];
   hasNoJob?: boolean;
-  department?: string;
 }
 
 // 创建候选人参数类型
@@ -405,30 +404,6 @@ export class CandidateService {
       }
     }
 
-    // 部门过滤：通过关联职位的部门筛选（member 只看本部门）
-    // 人才库模式（hasNoJob）不适用部门过滤
-    if (query.department && !hasNoJob) {
-      const deptJobIds = await prisma.job.findMany({
-        where: { departments: { array_contains: [query.department] } },
-        select: { id: true },
-      });
-      const deptCandidateJobs = await prisma.candidateJob.findMany({
-        where: { jobId: { in: deptJobIds.map((j) => j.id) } },
-        select: { candidateId: true },
-      });
-      const deptCandidateIds = deptCandidateJobs.map((cj) => cj.candidateId);
-      const currentInFilter = (where.id as Prisma.StringFilter)?.in as string[] | undefined;
-      if (currentInFilter) {
-        const intersection = currentInFilter.filter((id) => deptCandidateIds.includes(id));
-        if (intersection.length === 0) {
-          return { candidates: [], total: 0, page, pageSize, totalPages: 0 };
-        }
-        where.id = { in: intersection };
-      } else {
-        where.id = { in: deptCandidateIds };
-      }
-    }
-
     // 并行查询数据和总数（主查询不再嵌套 include，减少 JOIN 开销）
     const [candidates, total] = await Promise.all([
       prisma.candidate.findMany({
@@ -642,11 +617,13 @@ export class CandidateService {
   }
 
   /**
-   * 更新候选人
+   * 更新候选人（仅创建者或管理员）
    */
   async updateCandidate(
     id: string,
-    data: UpdateCandidateInput
+    data: UpdateCandidateInput,
+    userId: string,
+    isAdmin: boolean
   ): Promise<Candidate> {
     // 检查候选人是否存在
     const existingCandidate = await prisma.candidate.findUnique({
@@ -655,6 +632,11 @@ export class CandidateService {
 
     if (!existingCandidate) {
       throw new AppError('候选人不存在', 404);
+    }
+
+    // 权限校验：全员可读，但写操作仅限创建者或管理员（与 deleteCandidate 一致）
+    if (existingCandidate.createdById !== userId && !isAdmin) {
+      throw new AppError('无权修改此候选人', 403);
     }
 
     // 如果修改手机号或邮箱，检查是否与其他候选人冲突
@@ -755,6 +737,12 @@ export class CandidateService {
     // 检查是否为 admin
     const user = await prisma.user.findUnique({ where: { id: operatedById } });
     const isAdmin = user?.role === 'admin';
+
+    // 权限校验：全员可读，但推进流程仅限创建者或管理员
+    // （面试官协作通过 addInterviewFeedback，不走此接口）
+    if (candidate.createdById !== operatedById && !isAdmin) {
+      throw new AppError('无权操作此候选人', 403);
+    }
 
     // 非 admin 用户验证阶段顺序：只能向前推进，不能回退
     if (!isAdmin) {

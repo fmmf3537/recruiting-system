@@ -175,6 +175,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
+        createdById: 'user-1',
         stageRecords: [],
         interviewFeedbacks: [],
         offer: null,
@@ -203,6 +204,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
+        createdById: 'user-1',
         stageRecords: [{ stage: '入库', status: 'in_progress', enteredAt: new Date() }],
       } as any);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
@@ -220,6 +222,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
+        createdById: 'user-1',
         stageRecords: [{ stage: '初筛', status: 'in_progress', enteredAt: new Date() }],
       } as any);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
@@ -234,6 +237,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
+        createdById: 'user-1',
         stageRecords: [{ stage: '复试', status: 'in_progress', enteredAt: new Date() }],
       } as any);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
@@ -242,6 +246,22 @@ describe('CandidateService - 候选人服务单元测试', () => {
         stage: '初筛',
         status: 'in_progress',
       }, 'user-1')).rejects.toThrow('不能回退到之前的阶段');
+    });
+
+    it('非创建者且非管理员应拒绝推进', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        createdById: 'user-1',
+        stageRecords: [{ stage: '入库', status: 'in_progress', enteredAt: new Date() }],
+      } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-2', role: 'member' } as any);
+
+      await expect(service.advanceStage('candidate-1', {
+        stage: '初筛',
+        status: 'passed',
+      }, 'user-2')).rejects.toThrow('无权操作此候选人');
+      expect(prisma.stageRecord.create).not.toHaveBeenCalled();
     });
   });
 
@@ -318,13 +338,14 @@ describe('CandidateService - 候选人服务单元测试', () => {
         id: 'candidate-1',
         phone: '13800138000',
         email: 'old@test.com',
+        createdById: 'user-1',
       } as any);
       vi.mocked(prisma.candidate.update).mockResolvedValue({
         id: 'candidate-1',
         name: '李四',
       } as any);
 
-      const result = await service.updateCandidate('candidate-1', { name: '李四' });
+      const result = await service.updateCandidate('candidate-1', { name: '李四' }, 'user-1', false);
 
       expect(prisma.candidate.update).toHaveBeenCalled();
     });
@@ -332,7 +353,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
     it('候选人不存在时应抛出错误', async () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue(null);
 
-      await expect(service.updateCandidate('non-existent', { name: '李四' })).rejects.toThrow('候选人不存在');
+      await expect(service.updateCandidate('non-existent', { name: '李四' }, 'user-1', false)).rejects.toThrow('候选人不存在');
     });
 
     it('修改手机号时检查重复', async () => {
@@ -341,10 +362,11 @@ describe('CandidateService - 候选人服务单元测试', () => {
           id: 'candidate-1',
           phone: '13800138000',
           email: 'old@test.com',
+          createdById: 'user-1',
         } as any);
       vi.mocked(prisma.candidate.count).mockResolvedValueOnce(1);
 
-      await expect(service.updateCandidate('candidate-1', { phone: '13999999999' })).rejects.toThrow('该手机号已被其他候选人使用');
+      await expect(service.updateCandidate('candidate-1', { phone: '13999999999' }, 'user-1', false)).rejects.toThrow('该手机号已被其他候选人使用');
     });
 
     it('修改邮箱时检查重复', async () => {
@@ -353,10 +375,40 @@ describe('CandidateService - 候选人服务单元测试', () => {
           id: 'candidate-1',
           phone: '13800138000',
           email: 'old@test.com',
+          createdById: 'user-1',
         } as any);
       vi.mocked(prisma.candidate.count).mockResolvedValueOnce(1);
 
-      await expect(service.updateCandidate('candidate-1', { email: 'new@test.com' })).rejects.toThrow('该邮箱已被其他候选人使用');
+      await expect(service.updateCandidate('candidate-1', { email: 'new@test.com' }, 'user-1', false)).rejects.toThrow('该邮箱已被其他候选人使用');
+    });
+
+    it('非创建者且非管理员应拒绝修改', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        phone: '13800138000',
+        email: 'old@test.com',
+        createdById: 'user-1',
+      } as any);
+
+      await expect(service.updateCandidate('candidate-1', { name: '李四' }, 'user-2', false)).rejects.toThrow('无权修改此候选人');
+      expect(prisma.candidate.update).not.toHaveBeenCalled();
+    });
+
+    it('管理员可修改任意候选人', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        phone: '13800138000',
+        email: 'old@test.com',
+        createdById: 'user-1',
+      } as any);
+      vi.mocked(prisma.candidate.update).mockResolvedValue({
+        id: 'candidate-1',
+        name: '李四',
+      } as any);
+
+      await service.updateCandidate('candidate-1', { name: '李四' }, 'user-2', true);
+
+      expect(prisma.candidate.update).toHaveBeenCalled();
     });
   });
 
@@ -438,6 +490,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
+        createdById: 'user-1',
         stageRecords: [{ stage: '拟录用', status: 'passed', enteredAt: new Date() }],
       } as any);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
@@ -457,6 +510,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
+        createdById: 'user-1',
         stageRecords: [{ stage: 'Offer', status: 'passed', enteredAt: new Date() }],
       } as any);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
@@ -479,6 +533,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
+        createdById: 'user-1',
         stageRecords: [{ stage: '初筛', status: 'in_progress', enteredAt: new Date() }],
       } as any);
       vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
@@ -493,6 +548,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
+        createdById: 'user-1',
         stageRecords: [{ stage: '初筛', status: 'in_progress', enteredAt: new Date() }],
       } as any);
 
