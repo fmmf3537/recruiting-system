@@ -30,7 +30,11 @@ function convertToCSV(headers: string[], rows: (string | number | null | undefin
     if (value === null || value === undefined) {
       return '';
     }
-    const str = String(value);
+    let str = String(value);
+    // 防 CSV 公式注入：以 = + - @ 等开头的单元格前置单引号，避免 Excel 打开时执行为公式
+    if (/^[=+\-@\t\r]/.test(str)) {
+      str = `'${str}`;
+    }
     if (str.includes(',') || str.includes('"') || str.includes('\n')) {
       return `"${str.replace(/"/g, '""')}"`;
     }
@@ -79,9 +83,12 @@ router.get(
         s.interviews,
         s.offers,
       ]);
-      
-      const csvContent = '\uFEFF成员,新增候选人,阶段推进,面试次数,发放 Offer\n' + 
-        rows.map(r => r.join(',')).join('\n');
+
+      // 复用 convertToCSV（含转义与公式注入防护），不再手工拼接
+      const csvContent = '\uFEFF' + convertToCSV(
+        ['成员', '新增候选人', '阶段推进', '面试次数', '发放 Offer'],
+        rows
+      );
       const filename = `工作量统计_${new Date().toISOString().split('T')[0]}.csv`;
       
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
