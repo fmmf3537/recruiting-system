@@ -112,6 +112,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: '/interviews',
+        name: 'Interviews',
+        component: () => import('@/views/interviews/index.vue'),
+        meta: {
+          title: '面试管理',
+          hidden: true,
+        },
+      },
+      {
         path: '/offers',
         name: 'Offers',
         component: () => import('@/views/offers/index.vue'),
