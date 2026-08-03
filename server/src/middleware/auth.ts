@@ -60,10 +60,21 @@ async function loadUserFromToken(token: string): Promise<JwtPayload> {
   };
 }
 
-function extractToken(req: Request): string | undefined {
+// 仅从 Authorization Header 提取 token（常规 API 场景）
+// query.token 会进入访问日志/浏览器历史/Referer，仅限文件下载等特殊场景使用
+function extractTokenFromHeader(req: Request): string | undefined {
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith('Bearer ')) {
     return authHeader.substring(7);
+  }
+  return undefined;
+}
+
+// Header 或 query.token 均可（仅限文件下载等浏览器直接打开的场景）
+function extractToken(req: Request): string | undefined {
+  const headerToken = extractTokenFromHeader(req);
+  if (headerToken) {
+    return headerToken;
   }
   const queryToken = req.query.token;
   if (typeof queryToken === 'string' && queryToken.length > 0) {
@@ -81,7 +92,7 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const token = extractToken(req);
+    const token = extractTokenFromHeader(req);
     if (!token) {
       res.status(401).json({
         success: false,
