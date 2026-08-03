@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock prisma before importing the service
-const mockPrisma = {
+// 使用 vi.hoisted 避免 vi.mock 提升后访问未初始化的变量（TDZ）
+const mockPrisma = vi.hoisted(() => ({
   $queryRaw: vi.fn(),
   user: {
     findMany: vi.fn(),
@@ -31,10 +32,19 @@ const mockPrisma = {
     count: vi.fn(),
     findMany: vi.fn(),
   },
-};
+}));
 
 vi.mock('../../src/lib/prisma', () => ({
   default: mockPrisma,
+}));
+
+// Mock redis：默认缓存未命中，避免单测连接真实 Redis
+vi.mock('../../src/lib/redis', () => ({
+  redis: {
+    get: vi.fn().mockResolvedValue(null),
+    setex: vi.fn().mockResolvedValue('OK'),
+  },
+  connectRedis: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { StatsService } from '../../src/services/stats.service';
