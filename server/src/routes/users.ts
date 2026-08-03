@@ -158,6 +158,12 @@ router.put(
       throw new AppError('没有权限修改部门', 403);
     }
 
+    // 非管理员不能通过此接口修改密码，防止会话被劫持后静默改密；
+    // 修改密码请走 /auth/change-password（需验证旧密码）
+    if (req.user?.role !== 'admin' && password) {
+      throw new AppError('请通过"修改密码"功能修改密码', 403);
+    }
+
     // 检查用户是否存在
     const existingUser = await prisma.user.findUnique({
       where: { id },
@@ -165,6 +171,11 @@ router.put(
 
     if (!existingUser) {
       throw new AppError('用户不存在', 404);
+    }
+
+    // 非管理员不能修改登录邮箱（与密码同理，防止会话被劫持后接管账号）
+    if (req.user?.role !== 'admin' && email && email !== existingUser.email) {
+      throw new AppError('修改邮箱请联系管理员', 403);
     }
 
     // 如果修改邮箱，检查是否已被其他用户使用
