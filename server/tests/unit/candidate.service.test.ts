@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock prisma before importing the service
-vi.mock('../../src/lib/prisma', () => ({
-  default: {
+vi.mock('../../src/lib/prisma', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mock: any = {
     candidate: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
@@ -47,8 +48,11 @@ vi.mock('../../src/lib/prisma', () => ({
       deleteMany: vi.fn(),
       groupBy: vi.fn(),
     },
-  },
-}));
+  };
+  // $transaction 直接以同一 mock 作为 tx 执行回调，断言仍可命中各模型方法
+  mock.$transaction = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => cb(mock));
+  return { default: mock };
+});
 
 import { CandidateService } from '../../src/services/candidate.service';
 import prisma from '../../src/lib/prisma';
@@ -60,6 +64,9 @@ describe('CandidateService - 候选人服务单元测试', () => {
     service = new CandidateService();
     vi.clearAllMocks();
     vi.mocked(prisma.candidateTag.findMany).mockResolvedValue([]);
+    // afterEach 的 resetAllMocks 会清掉实现，需每次重新注册 $transaction
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked((prisma as any).$transaction).mockImplementation(async (cb: any) => cb(prisma));
   });
 
   afterEach(() => {

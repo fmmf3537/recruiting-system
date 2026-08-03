@@ -703,7 +703,8 @@ export class CandidateService {
   async advanceStage(
     id: string,
     data: AdvanceStageInput,
-    operatedById: string
+    operatedById: string,
+    isAdminOverride?: boolean
   ): Promise<void> {
     const { stage, status, rejectReason, assigneeId, note } = data;
 
@@ -734,9 +735,12 @@ export class CandidateService {
     const currentStageIndex = STAGE_ORDER.indexOf(currentStage as Stage);
     const currentStatus = candidate.stageRecords[0]?.status || DEFAULT_STAGE_STATUS;
 
-    // 检查是否为 admin
-    const user = await prisma.user.findUnique({ where: { id: operatedById } });
-    const isAdmin = user?.role === 'admin';
+    // 检查是否为 admin（批量场景由调用方传入，避免每次推进都查一次用户表）
+    let isAdmin = isAdminOverride;
+    if (isAdmin === undefined) {
+      const user = await prisma.user.findUnique({ where: { id: operatedById } });
+      isAdmin = user?.role === 'admin';
+    }
 
     // 权限校验：全员可读，但推进流程仅限创建者或管理员
     // （面试官协作通过 addInterviewFeedback，不走此接口）
@@ -806,55 +810,59 @@ export class CandidateService {
       return;
     }
 
-    // 创建新的阶段记录
-    await prisma.stageRecord.create({
-      data: {
-        candidateId: id,
-        stage,
-        status,
-        rejectReason: rejectReason || null,
-        assigneeId: assigneeId || null,
-        note: note || null,
-        enteredAt: new Date(),
-        completedAt: status !== 'in_progress' ? new Date() : null,
-      },
-    });
-
-    // 如果阶段是 "Offer" 且状态是通过，自动创建 Offer 记录
-    if (stage === 'Offer' && status === 'passed') {
-      const existingOffer = await prisma.offer.findUnique({
-        where: { candidateId: id },
+    // 创建阶段记录 + Offer 联动写入，包在事务中保证原子性
+    // （防止并发推进产生重复阶段记录或半成品数据）
+    await prisma.$transaction(async (tx) => {
+      // 创建新的阶段记录
+      await tx.stageRecord.create({
+        data: {
+          candidateId: id,
+          stage,
+          status,
+          rejectReason: rejectReason || null,
+          assigneeId: assigneeId || null,
+          note: note || null,
+          enteredAt: new Date(),
+          completedAt: status !== 'in_progress' ? new Date() : null,
+        },
       });
 
-      if (!existingOffer) {
-        await prisma.offer.create({
-          data: {
-            candidateId: id,
-            salary: '',
-            offerDate: new Date(),
-            result: 'pending',
-          },
-        });
-      }
-    }
-
-    // 如果阶段是 "入职" 且状态是通过，更新 Offer 记录
-    if (stage === '入职' && status === 'passed') {
-      const existingOffer = await prisma.offer.findUnique({
-        where: { candidateId: id },
-      });
-
-      if (existingOffer) {
-        await prisma.offer.update({
+      // 如果阶段是 "Offer" 且状态是通过，自动创建 Offer 记录
+      if (stage === 'Offer' && status === 'passed') {
+        const existingOffer = await tx.offer.findUnique({
           where: { candidateId: id },
-          data: {
-            joined: true,
-            actualJoinDate: new Date(),
-            result: 'accepted',
-          },
         });
+
+        if (!existingOffer) {
+          await tx.offer.create({
+            data: {
+              candidateId: id,
+              salary: '',
+              offerDate: new Date(),
+              result: 'pending',
+            },
+          });
+        }
       }
-    }
+
+      // 如果阶段是 "入职" 且状态是通过，更新 Offer 记录
+      if (stage === '入职' && status === 'passed') {
+        const existingOffer = await tx.offer.findUnique({
+          where: { candidateId: id },
+        });
+
+        if (existingOffer) {
+          await tx.offer.update({
+            where: { candidateId: id },
+            data: {
+              joined: true,
+              actualJoinDate: new Date(),
+              result: 'accepted',
+            },
+          });
+        }
+      }
+    });
 
     // 异步触发自动化邮件（发后即忘，失败不阻塞流程）
     void autoSendEmailOnStageTransition(id, stage, status, operatedById);
@@ -1291,9 +1299,13 @@ export class CandidateService {
     let success = 0;
     let failed = 0;
 
+    // 操作人角色只查一次，避免每个候选人都重复查询用户表（N+1）
+    const operator = await prisma.user.findUnique({ where: { id: operatedById } });
+    const isAdmin = operator?.role === 'admin';
+
     for (const id of candidateIds) {
       try {
-        await this.advanceStage(id, data, operatedById);
+        await this.advanceStage(id, data, operatedById, isAdmin);
         success++;
       } catch (error) {
         console.error(`[BatchAdvance] 候选人 ${id} 推进失败:`, error);
