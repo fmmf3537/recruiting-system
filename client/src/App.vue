@@ -1,13 +1,4 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import { useUserStore } from '@stores/user';
-
-const userStore = useUserStore();
-
-onMounted(() => {
-  // 初始化用户状态
-  userStore.initUser();
-});
 </script>
 
 <template>

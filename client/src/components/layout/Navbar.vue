@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
-import { useUserStore } from '@stores/user';
+import { useAuthStore } from '@stores/auth';
 
 const router = useRouter();
-const userStore = useUserStore();
+// 统一使用 auth store（stores/user.ts 为废弃实现，token key 与角色判断均不正确）
+const authStore = useAuthStore();
 
 // 简单的面包屑组件
 const Breadcrumb = () => null;
 
 const handleLogout = () => {
-  userStore.logout();
-  router.push('/login');
+  // authStore.logout 内部会清除 token 并跳转登录页
+  authStore.logout();
 };
 
 const handleCommand = (command: string) => {
@@ -28,10 +29,10 @@ const handleCommand = (command: string) => {
     <div class="right-menu flex">
       <el-dropdown @command="handleCommand">
         <span class="user-info flex">
-          <el-avatar :size="32" :src="userStore.userInfo?.avatar">
-            {{ userStore.userInfo?.name?.charAt(0) }}
+          <el-avatar :size="32">
+            {{ authStore.userInfo?.name?.charAt(0) }}
           </el-avatar>
-          <span class="username">{{ userStore.userInfo?.name }}</span>
+          <span class="username">{{ authStore.userInfo?.name }}</span>
           <el-icon><i-ep-arrow-down /></el-icon>
         </span>
         <template #dropdown>
