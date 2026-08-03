@@ -133,13 +133,13 @@
         <!-- 职位描述 -->
         <div class="description-section">
           <h3 class="section-title">职位描述</h3>
-          <div class="rich-text" v-html="jobInfo.description"></div>
+          <div class="rich-text" v-html="sanitizeHtml(jobInfo.description)"></div>
         </div>
 
         <!-- 任职要求 -->
         <div class="requirements-section">
           <h3 class="section-title">任职要求</h3>
-          <div class="rich-text" v-html="jobInfo.requirements"></div>
+          <div class="rich-text" v-html="sanitizeHtml(jobInfo.requirements)"></div>
         </div>
 
         <!-- AI 推荐候选人 -->
@@ -274,6 +274,7 @@ import {
 import { getCandidateList, type CandidateItem } from '@/api/candidate';
 import type { Tag } from '@/api/tag';
 import { getRecommendations, type MatchResult } from '@/api/ai-matcher';
+import { sanitizeHtml } from '@/utils/sanitize';
 
 const route = useRoute();
 const router = useRouter();

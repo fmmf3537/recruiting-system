@@ -22,10 +22,10 @@
       </van-cell-group>
 
       <div class="section-title">职位描述</div>
-      <div class="rich-text" v-html="job.description" />
+      <div class="rich-text" v-html="sanitizeHtml(job.description)" />
 
       <div class="section-title">职位要求</div>
-      <div class="rich-text" v-html="job.requirements" />
+      <div class="rich-text" v-html="sanitizeHtml(job.requirements)" />
 
       <div class="section-title">技能要求</div>
       <div class="tags">
@@ -47,6 +47,7 @@ import { useRoute } from 'vue-router';
 import { showToast, showSuccessToast } from 'vant';
 import { getJobById, type JobDetail, type JobStatus } from '@/api/jobs';
 import { isFeishu, shareAppMessage } from '@/lib/feishu';
+import { sanitizeHtml } from '@/utils/sanitize';
 
 const route = useRoute();
 const jobId = route.params.id as string;

@@ -19,6 +19,7 @@
     "@element-plus/icons-vue": "^2.3.1",
     "@vueup/vue-quill": "^1.2.0",
     "axios": "^1.6.2",
+    "dompurify": "^3.4.1",
     "echarts": "^6.0.0",
     "element-plus": "^2.5.0",
     "pinia": "^2.1.7",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@rushstack/eslint-patch": "^1.6.1",
     "@tsconfig/node18": "^18.2.2",
+    "@types/dompurify": "^3.2.0",
     "@types/node": "^20.10.6",
     "@vitejs/plugin-vue": "^5.0.2",
     "@vue/eslint-config-airbnb": "^8.0.0",

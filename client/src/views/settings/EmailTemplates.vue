@@ -123,7 +123,7 @@
     <!-- 预览对话框 -->
     <el-dialog v-model="previewVisible" title="模板预览" width="600px">
       <div class="preview-subject"><strong>主题：</strong>{{ previewData.subject }}</div>
-      <div class="preview-body" v-html="previewData.body" />
+      <div class="preview-body" v-html="sanitizeHtml(previewData.body)" />
       <template #footer>
         <el-button @click="previewVisible = false">关闭</el-button>
       </template>
@@ -133,6 +133,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
+import { sanitizeHtml } from '@/utils/sanitize';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Plus } from '@element-plus/icons-vue';
 import {
