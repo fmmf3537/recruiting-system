@@ -117,6 +117,7 @@ import { showToast, showImagePreview } from 'vant';
 import { getCandidateById, type CandidateDetail } from '@/api/candidates';
 import StageActionSheet from '@/components/StageActionSheet.vue';
 import { isFeishu, openDocument } from '@/lib/feishu';
+import { resolveFileUrl } from '@/utils/file';
 
 const route = useRoute();
 const router = useRouter();
@@ -165,9 +166,7 @@ function previewResume(url: string) {
     showToast('暂无简历文件');
     return;
   }
-  const fullUrl = url.startsWith('http')
-    ? url
-    : `${window.location.origin}${url.startsWith('/') ? '' : '/'}${url}`;
+  const fullUrl = resolveFileUrl(url);
 
   if (isFeishu()) {
     openDocument(fullUrl).catch(() => {

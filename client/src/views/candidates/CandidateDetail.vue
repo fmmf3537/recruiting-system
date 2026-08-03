@@ -50,7 +50,7 @@
             <el-descriptions-item label="来源渠道">{{ candidate.source }}</el-descriptions-item>
             <el-descriptions-item label="推荐人">{{ candidate.referrer || '-' }}</el-descriptions-item>
             <el-descriptions-item label="简历附件">
-              <el-link v-if="candidate.resumeUrl" :href="candidate.resumeUrl" target="_blank" type="primary">
+              <el-link v-if="candidate.resumeUrl" :href="resumeDownloadUrl" target="_blank" type="primary">
                 下载简历
               </el-link>
               <span v-else>-</span>
@@ -519,6 +519,7 @@ import { getTasksByCandidate, updateTask, generateDefaultTasks, type OnboardingT
 import { getCandidateInterviews, type InterviewItem } from '@/api/interview';
 import { getCandidateCommunications, createCommunication, type CommunicationItem } from '@/api/communication';
 import { useAuthStore } from '@/stores/auth';
+import { resolveFileUrl } from '@/utils/file';
 import { useResumeParserStore } from '@/stores/resumeParser';
 import ResumeUpload from './ResumeUpload.vue';
 
@@ -529,6 +530,9 @@ const authStore = useAuthStore();
 const resumeParserStore = useResumeParserStore();
 
 const candidate = ref<CandidateDetail | null>(null);
+const resumeDownloadUrl = computed(() =>
+  candidate.value?.resumeUrl ? resolveFileUrl(candidate.value.resumeUrl) : ''
+);
 const loading = ref(false);
 const notFound = ref(false);
 const showResumeUpload = ref(false);

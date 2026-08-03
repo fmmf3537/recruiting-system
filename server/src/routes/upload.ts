@@ -7,10 +7,11 @@ import fs from 'fs/promises';
 import { env } from '../lib/env';
 import { authenticate } from '../middleware/auth';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
+import { validateAndRenameUpload, buildFileApiPath } from '../utils/upload-file';
+import { createUploadRecord, deleteUploadRecordIfOwner } from '../services/file.service';
 
 const router: RouterType = Router();
 
-// 文件上传接口限流：15 分钟内最多 30 次
 const uploadLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 30,
@@ -23,57 +24,51 @@ const uploadLimiter = rateLimit({
   },
 });
 
-// 确保上传目录存在
 const uploadDir = path.resolve(process.cwd(), env.UPLOAD_DIR);
 await fs.mkdir(uploadDir, { recursive: true });
 
-// 配置 multer 存储
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, uploadDir);
   },
-  filename: (_req, file, cb) => {
-    // 使用 UUID + 原始扩展名
-    const uniqueName = `${uuidv4()}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
+  filename: (_req, _file, cb) => {
+    // 临时文件名，后续按 magic bytes 重命名
+    cb(null, `${uuidv4()}.tmp`);
   },
 });
 
-// 文件过滤
-const fileFilter = (
-  _req: Express.Request,
-  file: Express.Multer.File,
-  cb: multer.FileFilterCallback
-) => {
-  // 允许的文件类型
-  const allowedTypes = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'image/jpeg',
-    'image/png',
-  ];
-
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('不支持的文件类型，仅支持 PDF、Word、JPG、PNG'));
-  }
-};
-
-// 创建 multer 实例
 const upload = multer({
   storage,
-  fileFilter,
-  limits: {
-    fileSize: env.MAX_FILE_SIZE, // 最大文件大小
-  },
+  limits: { fileSize: env.MAX_FILE_SIZE },
 });
 
-/**
- * POST /api/upload
- * 上传单个文件
- */
+async function processUploadedFile(
+  file: Express.Multer.File,
+  userId: string
+) {
+  const { filename, mimetype, size } = await validateAndRenameUpload(
+    file.path,
+    uploadDir,
+    file.mimetype
+  );
+
+  await createUploadRecord({
+    filename,
+    originalName: file.originalname,
+    mimetype,
+    size,
+    uploadedById: userId,
+  });
+
+  return {
+    originalName: file.originalname,
+    filename,
+    mimetype,
+    size,
+    url: buildFileApiPath(filename),
+  };
+}
+
 router.post(
   '/',
   authenticate,
@@ -84,44 +79,29 @@ router.post(
       throw new AppError('没有上传文件', 400);
     }
 
-    const file = req.file;
-    const fileUrl = `/uploads/${file.filename}`;
+    const data = await processUploadedFile(req.file, req.user!.userId);
 
     res.json({
       success: true,
       message: '文件上传成功',
-      data: {
-        originalName: file.originalname,
-        filename: file.filename,
-        mimetype: file.mimetype,
-        size: file.size,
-        url: fileUrl,
-      },
+      data,
     });
   })
 );
 
-/**
- * POST /api/upload/batch
- * 批量上传多个文件
- */
 router.post(
   '/batch',
   authenticate,
   uploadLimiter,
-  upload.array('files', 5), // 最多5个文件
+  upload.array('files', 5),
   asyncHandler(async (req, res) => {
     if (!req.files || !Array.isArray(req.files) || req.files.length === 0) {
       throw new AppError('没有上传文件', 400);
     }
 
-    const files = req.files.map((file) => ({
-      originalName: file.originalname,
-      filename: file.filename,
-      mimetype: file.mimetype,
-      size: file.size,
-      url: `/uploads/${file.filename}`,
-    }));
+    const files = await Promise.all(
+      req.files.map((file) => processUploadedFile(file, req.user!.userId))
+    );
 
     res.json({
       success: true,
@@ -131,30 +111,24 @@ router.post(
   })
 );
 
-/**
- * DELETE /api/upload/:filename
- * 删除上传的文件
- */
 router.delete(
   '/:filename',
   authenticate,
   asyncHandler(async (req, res) => {
     const { filename } = req.params;
 
-    // 安全检查：防止目录遍历攻击
     if (filename.includes('..') || filename.includes('/')) {
       throw new AppError('非法文件名', 400);
     }
 
-    const filePath = path.join(uploadDir, filename);
+    await deleteUploadRecordIfOwner(
+      filename,
+      req.user!.userId,
+      req.user!.role === 'admin'
+    );
 
-    // 检查文件是否存在并删除
-    try {
-      await fs.access(filePath);
-    } catch {
-      throw new AppError('文件不存在', 404);
-    }
-    await fs.unlink(filePath);
+    const filePath = path.join(uploadDir, filename);
+    await fs.unlink(filePath).catch(() => undefined);
 
     res.json({
       success: true,

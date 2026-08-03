@@ -30,11 +30,17 @@ vi.mock('../../src/lib/prisma', () => ({
     },
     candidate: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
       count: vi.fn(),
+    },
+    uploadRecord: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      delete: vi.fn(),
     },
     candidateJob: {
       findUnique: vi.fn(),

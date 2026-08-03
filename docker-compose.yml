@@ -109,7 +109,6 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - client_dist:/var/www/client:ro
       - mobile_dist:/var/www/mobile:ro
-      - ./server/uploads:/var/www/uploads:ro
     depends_on:
       server:
         condition: service_healthy

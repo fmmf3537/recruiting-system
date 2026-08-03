@@ -50,6 +50,9 @@ model User {
   // 关系：一个 User 产生多个操作日志
   operationLogs     OperationLog[] @relation("UserOperationLogs")
 
+  // 关系：一个 User 上传多个文件
+  uploadRecords     UploadRecord[] @relation("UploadedFiles")
+
   @@index([email])
   @@index([role])
   @@index([createdAt])
@@ -565,4 +568,20 @@ model HCRequest {
   @@index([department])
   @@index([createdAt])
   @@map("hc_request")
+}
+
+// ==================== 上传文件记录表 ====================
+model UploadRecord {
+  id           String   @id @default(cuid())
+  filename     String   @unique
+  originalName String?
+  mimetype     String
+  size         Int
+  uploadedById String
+  uploadedBy   User     @relation("UploadedFiles", fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([uploadedById])
+  @@map("upload_record")
 }

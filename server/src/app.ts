@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
-import path from 'path';
 import rateLimit from 'express-rate-limit';
 import routes from './routes';
 import { env } from './lib/env';
@@ -54,10 +53,7 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// 静态文件服务（上传的文件）
-app.use('/uploads', express.static(path.join(process.cwd(), env.UPLOAD_DIR)));
-
-// 挂载 API 路由
+// 挂载 API 路由（上传文件改走 /api/files/:filename 鉴权下载）
 app.use('/api', routes);
 
 // Swagger 文档（仅在非生产环境显示）
