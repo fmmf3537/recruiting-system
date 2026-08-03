@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import { env } from './env';
 
 const LLM_CONFIG = {
   provider: process.env.LLM_PROVIDER || 'deepseek',
@@ -111,7 +111,9 @@ ${resumeText}
 
   const result = await callLLM(userPrompt, systemPrompt);
 
-  console.log('【LLM原始返回】', result.content);
+  if (env.NODE_ENV === 'development') {
+    console.log('[LLM] resume extraction completed');
+  }
 
   let jsonStr = result.content.trim();
   
