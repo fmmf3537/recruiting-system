@@ -1,6 +1,8 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../lib/env';
+import prisma from '../lib/prisma';
+import { AppError } from './errorHandler';
 
 // JWT Payload 类型
 export interface JwtPayload {
@@ -10,7 +12,6 @@ export interface JwtPayload {
   role: string;
 }
 
-// 扩展 Express Request 类型
 declare global {
   namespace Express {
     interface Request {
@@ -19,9 +20,60 @@ declare global {
   }
 }
 
+async function loadUserFromToken(token: string): Promise<JwtPayload> {
+  let decoded: JwtPayload;
+  try {
+    decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      throw new AppError('认证令牌已过期', 401);
+    }
+    if (error instanceof jwt.JsonWebTokenError) {
+      throw new AppError('无效的认证令牌', 401);
+    }
+    throw new AppError('认证过程中发生错误', 500);
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: decoded.userId },
+    select: { id: true, email: true, role: true, department: true },
+  });
+
+  if (!user) {
+    throw new AppError('用户不存在或已被禁用', 401);
+  }
+
+  // JWT 与数据库不一致时拒绝（降权/改邮箱后旧 token 失效）
+  if (
+    user.email !== decoded.email
+    || user.role !== decoded.role
+    || (user.department || null) !== decoded.department
+  ) {
+    throw new AppError('认证令牌已失效，请重新登录', 401);
+  }
+
+  return {
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    department: user.department || null,
+  };
+}
+
+function extractToken(req: Request): string | undefined {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  const queryToken = req.query.token;
+  if (typeof queryToken === 'string' && queryToken.length > 0) {
+    return queryToken;
+  }
+  return undefined;
+}
+
 /**
  * JWT 认证中间件
- * 验证请求头中的 Authorization Bearer token
  */
 export const authenticate = async (
   req: Request,
@@ -29,9 +81,8 @@ export const authenticate = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const token = extractToken(req);
+    if (!token) {
       res.status(401).json({
         success: false,
         error: '未提供认证令牌',
@@ -40,33 +91,17 @@ export const authenticate = async (
       return;
     }
 
-    const token = authHeader.substring(7);
-
-    // 验证 JWT
-    const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
-
-    // 将用户信息注入到请求对象（JWT payload 已包含完整用户信息，无需查库）
-    req.user = decoded;
+    req.user = await loadUserFromToken(token);
     next();
   } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      res.status(401).json({
+    if (error instanceof AppError) {
+      res.status(error.statusCode).json({
         success: false,
-        error: '无效的认证令牌',
-        code: 401,
+        error: error.message,
+        code: error.statusCode,
       });
       return;
     }
-    
-    if (error instanceof jwt.TokenExpiredError) {
-      res.status(401).json({
-        success: false,
-        error: '认证令牌已过期',
-        code: 401,
-      });
-      return;
-    }
-
     res.status(500).json({
       success: false,
       error: '认证过程中发生错误',
@@ -76,9 +111,25 @@ export const authenticate = async (
 };
 
 /**
- * 角色授权中间件
- * @param roles 允许访问的角色列表
+ * 文件下载等场景：Header 或 query.token 均可
  */
+export const authenticateFlexible = async (
+  req: Request,
+  _res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const token = extractToken(req);
+    if (!token) {
+      throw new AppError('未提供认证令牌', 401);
+    }
+    req.user = await loadUserFromToken(token);
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const authorize = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
@@ -103,11 +154,6 @@ export const authorize = (...roles: string[]) => {
   };
 };
 
-/**
- * 获取当前用户的部门过滤条件
- * admin → undefined（不限制，看全部）
- * member → department（仅看本部门）
- */
 export function getUserDepartment(req: Request): string | undefined {
   if (req.user!.role === 'admin') return undefined;
   return req.user!.department || undefined;
