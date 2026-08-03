@@ -153,6 +153,11 @@ router.put(
       throw new AppError('没有权限修改角色', 403);
     }
 
+    // 非管理员不能修改部门（部门用于数据隔离，防止成员自行提权）
+    if (department !== undefined && req.user?.role !== 'admin') {
+      throw new AppError('没有权限修改部门', 403);
+    }
+
     // 检查用户是否存在
     const existingUser = await prisma.user.findUnique({
       where: { id },

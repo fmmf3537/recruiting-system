@@ -1,7 +1,7 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { automationRuleController } from '../controllers/automation-rule.controller';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 
 const router: RouterType = Router();
@@ -38,7 +38,7 @@ const ruleIdParamSchema = z.object({
  * 获取自动化规则列表
  * 权限：管理员
  */
-router.get('/', authenticate, automationRuleController.getRules);
+router.get('/', authenticate, authorize('admin'), automationRuleController.getRules);
 
 /**
  * GET /api/automation-rules/:id
@@ -48,6 +48,7 @@ router.get('/', authenticate, automationRuleController.getRules);
 router.get(
   '/:id',
   authenticate,
+  authorize('admin'),
   validate(ruleIdParamSchema, 'params'),
   automationRuleController.getRuleById
 );
@@ -60,6 +61,7 @@ router.get(
 router.post(
   '/',
   authenticate,
+  authorize('admin'),
   validate(createRuleSchema),
   automationRuleController.createRule
 );
@@ -72,6 +74,7 @@ router.post(
 router.patch(
   '/:id',
   authenticate,
+  authorize('admin'),
   validate(ruleIdParamSchema, 'params'),
   validate(updateRuleSchema),
   automationRuleController.updateRule
@@ -85,6 +88,7 @@ router.patch(
 router.delete(
   '/:id',
   authenticate,
+  authorize('admin'),
   validate(ruleIdParamSchema, 'params'),
   automationRuleController.deleteRule
 );

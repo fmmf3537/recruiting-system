@@ -1,7 +1,7 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { dictionaryController } from '../controllers/dictionary.controller';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 
 const router: RouterType = Router();
@@ -54,6 +54,7 @@ router.get(
 router.post(
   '/',
   authenticate,
+  authorize('admin'),
   validate(createSchema),
   dictionaryController.createDictionary
 );
@@ -65,6 +66,7 @@ router.post(
 router.patch(
   '/:id',
   authenticate,
+  authorize('admin'),
   validate(idParamSchema, 'params'),
   validate(updateSchema),
   dictionaryController.updateDictionary
@@ -77,6 +79,7 @@ router.patch(
 router.delete(
   '/:id',
   authenticate,
+  authorize('admin'),
   validate(idParamSchema, 'params'),
   dictionaryController.deleteDictionary
 );
