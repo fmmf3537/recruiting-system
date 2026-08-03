@@ -40,6 +40,10 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // 响应压缩
 app.use(compression());
 
+// 部署在 Nginx 反向代理之后：信任第一层代理，
+// 使 req.ip 取 X-Forwarded-For 中的真实客户端 IP（限流按真实 IP 聚桶）
+app.set('trust proxy', 1);
+
 // 全局限流：15 分钟内最多 1000 次请求
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
