@@ -77,7 +77,9 @@ describe('候选人模块 API 测试', () => {
       expect(res.body.data).toBeDefined();
       expect(candidateService.createCandidate).toHaveBeenCalledWith(
         expect.objectContaining(validCandidate),
-        'user-1'
+        'user-1',
+        // 第三个参数为数据可见性范围
+        expect.objectContaining({ userId: 'user-1', isAdmin: true })
       );
     });
 

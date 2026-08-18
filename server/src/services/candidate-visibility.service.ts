@@ -1,4 +1,6 @@
 import { Prisma } from '@prisma/client';
+import prisma from '../lib/prisma';
+import { AppError } from '../middleware/errorHandler';
 
 /**
  * 候选人数据可见性范围
@@ -61,4 +63,23 @@ export function buildCandidateVisibilityWhere(
   }
 
   return { OR: or };
+}
+
+/**
+ * 校验候选人在当前用户可见范围内，越权抛出 403
+ * admin（或未传 scope）直接放行；member 用一次 count 查询校验，无 N+1
+ */
+export async function assertCandidateVisible(
+  candidateId: string,
+  scope?: CandidateVisibilityScope
+): Promise<void> {
+  const where = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+  if (!where) return;
+
+  const count = await prisma.candidate.count({
+    where: { id: candidateId, AND: [where] },
+  });
+  if (count === 0) {
+    throw new AppError('无权访问该候选人的数据', 403);
+  }
 }

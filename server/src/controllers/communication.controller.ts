@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { communicationService } from '../services/communication.service';
+import { scopeFromUser } from '../services/candidate-visibility.service';
 
 /**
  * 沟通记录控制器
@@ -12,7 +13,11 @@ export class CommunicationController {
   async createCommunication(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
-      const log = await communicationService.createCommunication(req.body, userId);
+      const log = await communicationService.createCommunication(
+        req.body,
+        userId,
+        scopeFromUser(req.user!)
+      );
 
       res.status(201).json({
         success: true,
@@ -39,7 +44,11 @@ export class CommunicationController {
         type: req.query.type as string | undefined,
       };
 
-      const result = await communicationService.getCommunications(query) as {
+      // 可见性范围由 JWT 用户信息构建，实际过滤逻辑集中在 service 层
+      const result = await communicationService.getCommunications(
+        query,
+        scopeFromUser(req.user!)
+      ) as {
         communications: unknown[];
         page: number;
         pageSize: number;
@@ -73,7 +82,8 @@ export class CommunicationController {
   ): Promise<void> {
     try {
       const logs = await communicationService.getCommunicationsByCandidate(
-        req.params.id
+        req.params.id,
+        scopeFromUser(req.user!)
       );
 
       res.json({

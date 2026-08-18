@@ -72,7 +72,9 @@ describe('Offer 模块 API 测试', () => {
         expect.objectContaining({
           candidateId: validOffer.candidateId,
           salary: validOffer.salary,
-        })
+        }),
+        // 第二个参数为数据可见性范围
+        expect.objectContaining({ userId: 'user-1', isAdmin: true })
       );
     });
 
@@ -146,7 +148,8 @@ describe('Offer 模块 API 测试', () => {
       expect(res.body.success).toBe(true);
       expect(offerService.updateOffer).toHaveBeenCalledWith(
         'clh12345678901234567890123',
-        expect.objectContaining({ salary: '28000元/月' })
+        expect.objectContaining({ salary: '28000元/月' }),
+        expect.objectContaining({ userId: 'user-1', isAdmin: true })
       );
     });
 
@@ -160,7 +163,8 @@ describe('Offer 模块 API 测试', () => {
 
       expect(offerService.updateOffer).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ salary: '30000元/月' })
+        expect.objectContaining({ salary: '30000元/月' }),
+        expect.anything()
       );
     });
 
@@ -174,7 +178,8 @@ describe('Offer 模块 API 测试', () => {
 
       expect(offerService.updateOffer).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ expectedJoinDate: '2024-03-01T00:00:00Z' })
+        expect.objectContaining({ expectedJoinDate: '2024-03-01T00:00:00Z' }),
+        expect.anything()
       );
     });
 
@@ -196,7 +201,8 @@ describe('Offer 模块 API 测试', () => {
       // 验证服务层被调用时包含 result: accepted
       expect(offerService.updateOffer).toHaveBeenCalledWith(
         expect.any(String),
-        expect.objectContaining({ result: 'accepted' })
+        expect.objectContaining({ result: 'accepted' }),
+        expect.anything()
       );
     });
 
@@ -231,7 +237,8 @@ describe('Offer 模块 API 测试', () => {
       expect(res.body.success).toBe(true);
       expect(offerService.updateOfferResult).toHaveBeenCalledWith(
         'clh12345678901234567890123',
-        'accepted'
+        'accepted',
+        expect.objectContaining({ userId: 'user-1', isAdmin: true })
       );
     });
 
@@ -273,7 +280,8 @@ describe('Offer 模块 API 测试', () => {
       expect(res.body.success).toBe(true);
       expect(offerService.markAsJoined).toHaveBeenCalledWith(
         'clh12345678901234567890123',
-        '2024-02-01T00:00:00Z'
+        '2024-02-01T00:00:00Z',
+        expect.objectContaining({ userId: 'user-1', isAdmin: true })
       );
     });
 
@@ -347,7 +355,8 @@ describe('Offer 模块 API 测试', () => {
         .expect(200);
 
       expect(offerService.getOffers).toHaveBeenCalledWith(
-        expect.objectContaining({ result: 'accepted' })
+        expect.objectContaining({ result: 'accepted' }),
+        expect.objectContaining({ userId: 'user-1', isAdmin: true })
       );
     });
 
@@ -357,7 +366,8 @@ describe('Offer 模块 API 测试', () => {
         .expect(200);
 
       expect(offerService.getOffers).toHaveBeenCalledWith(
-        expect.objectContaining({ page: 2, pageSize: 20 })
+        expect.objectContaining({ page: 2, pageSize: 20 }),
+        expect.objectContaining({ userId: 'user-1', isAdmin: true })
       );
     });
   });

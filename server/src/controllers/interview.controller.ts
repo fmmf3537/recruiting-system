@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { interviewSchedulerService } from '../services/interview-scheduler.service';
+import { scopeFromUser } from '../services/candidate-visibility.service';
 
 /**
  * 面试安排控制器
@@ -12,7 +13,11 @@ export class InterviewController {
   async createInterview(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const userId = req.user!.userId;
-      const interview = await interviewSchedulerService.createInterview(req.body, userId);
+      const interview = await interviewSchedulerService.createInterview(
+        req.body,
+        userId,
+        scopeFromUser(req.user!)
+      );
 
       res.status(201).json({
         success: true,
@@ -40,7 +45,11 @@ export class InterviewController {
         endDate: req.query.endDate as string | undefined,
       };
 
-      const result = await interviewSchedulerService.getInterviews(query);
+      // 可见性范围由 JWT 用户信息构建，实际过滤逻辑集中在 service 层
+      const result = await interviewSchedulerService.getInterviews(
+        query,
+        scopeFromUser(req.user!)
+      );
 
       res.json({
         success: true,
@@ -82,7 +91,8 @@ export class InterviewController {
     try {
       const interview = await interviewSchedulerService.updateInterview(
         req.params.id,
-        req.body
+        req.body,
+        scopeFromUser(req.user!)
       );
 
       res.json({
@@ -102,7 +112,11 @@ export class InterviewController {
   async cancelInterview(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const reason = req.body.reason as string | undefined;
-      await interviewSchedulerService.cancelInterview(req.params.id, reason);
+      await interviewSchedulerService.cancelInterview(
+        req.params.id,
+        reason,
+        scopeFromUser(req.user!)
+      );
 
       res.json({
         success: true,
@@ -141,7 +155,8 @@ export class InterviewController {
   ): Promise<void> {
     try {
       const interviews = await interviewSchedulerService.getInterviewsByCandidate(
-        req.params.id
+        req.params.id,
+        scopeFromUser(req.user!)
       );
 
       res.json({

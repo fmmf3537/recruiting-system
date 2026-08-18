@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from 'express';
 import type { Request } from 'express';
 import { offerService } from '../services/offer.service';
+import { scopeFromUser } from '../services/candidate-visibility.service';
 
 /**
  * Offer 控制器
@@ -23,7 +24,8 @@ export class OfferController {
         result: req.query.result as string | undefined,
       };
 
-      const result = await offerService.getOffers(query);
+      // 可见性范围由 JWT 用户信息构建，实际过滤逻辑集中在 service 层
+      const result = await offerService.getOffers(query, scopeFromUser(req.user!));
 
       res.json({
         success: true,
@@ -51,7 +53,10 @@ export class OfferController {
   ): Promise<void> {
     try {
       const { candidateId } = req.params;
-      const offer = await offerService.getOfferByCandidateId(candidateId);
+      const offer = await offerService.getOfferByCandidateId(
+        candidateId,
+        scopeFromUser(req.user!)
+      );
 
       res.json({
         success: true,
@@ -72,7 +77,7 @@ export class OfferController {
     next: NextFunction
   ): Promise<void> {
     try {
-      const offer = await offerService.createOffer(req.body);
+      const offer = await offerService.createOffer(req.body, scopeFromUser(req.user!));
 
       res.status(201).json({
         success: true,
@@ -95,7 +100,11 @@ export class OfferController {
   ): Promise<void> {
     try {
       const { candidateId } = req.params;
-      const offer = await offerService.updateOffer(candidateId, req.body);
+      const offer = await offerService.updateOffer(
+        candidateId,
+        req.body,
+        scopeFromUser(req.user!)
+      );
 
       res.json({
         success: true,
@@ -119,7 +128,11 @@ export class OfferController {
     try {
       const { candidateId } = req.params;
       const { result } = req.body;
-      const offer = await offerService.updateOfferResult(candidateId, result);
+      const offer = await offerService.updateOfferResult(
+        candidateId,
+        result,
+        scopeFromUser(req.user!)
+      );
 
       res.json({
         success: true,
@@ -143,7 +156,11 @@ export class OfferController {
     try {
       const { candidateId } = req.params;
       const { actualJoinDate } = req.body;
-      const offer = await offerService.markAsJoined(candidateId, actualJoinDate);
+      const offer = await offerService.markAsJoined(
+        candidateId,
+        actualJoinDate,
+        scopeFromUser(req.user!)
+      );
 
       res.json({
         success: true,
@@ -166,7 +183,7 @@ export class OfferController {
   ): Promise<void> {
     try {
       const { candidateId } = req.params;
-      await offerService.deleteOffer(candidateId);
+      await offerService.deleteOffer(candidateId, scopeFromUser(req.user!));
 
       res.json({
         success: true,

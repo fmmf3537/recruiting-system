@@ -3,6 +3,11 @@ import prisma from '../lib/prisma';
 import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 import * as notificationService from './notification.service';
+import {
+  assertCandidateVisible,
+  buildCandidateVisibilityWhere,
+  type CandidateVisibilityScope,
+} from './candidate-visibility.service';
 
 // 面试列表查询参数
 export interface InterviewListQuery {
@@ -79,7 +84,8 @@ export class InterviewSchedulerService {
    */
   async createInterview(
     data: CreateInterviewInput,
-    createdById: string
+    createdById: string,
+    scope?: CandidateVisibilityScope
   ): Promise<Interview> {
     // 验证候选人是否存在
     const candidate = await prisma.candidate.findUnique({
@@ -88,6 +94,9 @@ export class InterviewSchedulerService {
     if (!candidate) {
       throw new AppError('候选人不存在', 404);
     }
+
+    // 数据可见性校验：member 只能为可见范围内的候选人安排面试
+    await assertCandidateVisible(data.candidateId, scope);
 
     // 验证职位（如果指定）
     if (data.jobId) {
@@ -223,7 +232,10 @@ export class InterviewSchedulerService {
   /**
    * 获取面试列表（支持分页和筛选）
    */
-  async getInterviews(query: InterviewListQuery): Promise<InterviewListResult> {
+  async getInterviews(
+    query: InterviewListQuery,
+    scope?: CandidateVisibilityScope
+  ): Promise<InterviewListResult> {
     const {
       page = 1,
       pageSize = 10,
@@ -234,7 +246,8 @@ export class InterviewSchedulerService {
       endDate,
     } = query;
 
-    const cacheKey = `interviews:list:${JSON.stringify(query)}`;
+    // 缓存 key 包含完整可见性范围，避免不同角色/部门的成员共享同一份缓存
+    const cacheKey = `interviews:list:${scope ? `${JSON.stringify(scope)}:` : ''}${JSON.stringify(query)}`;
     const cached = await getFromCache<InterviewListResult>(cacheKey);
     if (cached) return cached;
 
@@ -245,6 +258,12 @@ export class InterviewSchedulerService {
     if (candidateId) where.candidateId = candidateId;
     if (jobId) where.jobId = jobId;
     if (status) where.status = status;
+
+    // 数据可见性：member 仅可见范围内候选人的面试安排（admin 不过滤）
+    const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    if (visibilityWhere) {
+      where.candidate = visibilityWhere;
+    }
 
     if (startDate || endDate) {
       where.scheduledAt = {};
@@ -301,12 +320,16 @@ export class InterviewSchedulerService {
    */
   async updateInterview(
     id: string,
-    data: UpdateInterviewInput
+    data: UpdateInterviewInput,
+    scope?: CandidateVisibilityScope
   ): Promise<Interview> {
     const existing = await prisma.interview.findUnique({ where: { id } });
     if (!existing) {
       throw new AppError('面试安排不存在', 404);
     }
+
+    // 数据可见性校验：member 只能操作可见范围内候选人的面试
+    await assertCandidateVisible(existing.candidateId, scope);
 
     if (existing.status !== 'scheduled') {
       throw new AppError('只能修改待进行的面试安排', 400);
@@ -334,11 +357,18 @@ export class InterviewSchedulerService {
   /**
    * 取消面试
    */
-  async cancelInterview(id: string, reason?: string): Promise<Interview> {
+  async cancelInterview(
+    id: string,
+    reason?: string,
+    scope?: CandidateVisibilityScope
+  ): Promise<Interview> {
     const existing = await prisma.interview.findUnique({ where: { id } });
     if (!existing) {
       throw new AppError('面试安排不存在', 404);
     }
+
+    // 数据可见性校验：member 只能操作可见范围内候选人的面试
+    await assertCandidateVisible(existing.candidateId, scope);
 
     if (existing.status === 'cancelled') {
       throw new AppError('面试已经取消', 400);
@@ -387,13 +417,16 @@ export class InterviewSchedulerService {
   /**
    * 获取候选人的面试安排列表
    */
-  async getInterviewsByCandidate(candidateId: string) {
+  async getInterviewsByCandidate(candidateId: string, scope?: CandidateVisibilityScope) {
     const candidate = await prisma.candidate.findUnique({
       where: { id: candidateId },
     });
     if (!candidate) {
       throw new AppError('候选人不存在', 404);
     }
+
+    // 数据可见性校验：member 越权访问范围外候选人时返回 403
+    await assertCandidateVisible(candidateId, scope);
 
     return prisma.interview.findMany({
       where: { candidateId },

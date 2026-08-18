@@ -2,6 +2,11 @@ import type { CommunicationLog, Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
+import {
+  assertCandidateVisible,
+  buildCandidateVisibilityWhere,
+  type CandidateVisibilityScope,
+} from './candidate-visibility.service';
 
 // 创建沟通记录参数
 export interface CreateCommunicationInput {
@@ -37,7 +42,8 @@ export class CommunicationService {
    */
   async createCommunication(
     data: CreateCommunicationInput,
-    createdById: string
+    createdById: string,
+    scope?: CandidateVisibilityScope
   ): Promise<CommunicationLog> {
     // 验证候选人是否存在
     const candidate = await prisma.candidate.findUnique({
@@ -46,6 +52,9 @@ export class CommunicationService {
     if (!candidate) {
       throw new AppError('候选人不存在', 404);
     }
+
+    // 数据可见性校验：member 只能为可见范围内的候选人添加沟通记录
+    await assertCandidateVisible(data.candidateId, scope);
 
     const log = await prisma.communicationLog.create({
       data: {
@@ -89,10 +98,11 @@ export class CommunicationService {
   /**
    * 获取沟通记录列表（支持分页和筛选）
    */
-  async getCommunications(query: CommunicationListQuery) {
+  async getCommunications(query: CommunicationListQuery, scope?: CandidateVisibilityScope) {
     const { page = 1, pageSize = 20, candidateId, type } = query;
 
-    const cacheKey = `communications:list:${JSON.stringify(query)}`;
+    // 缓存 key 包含完整可见性范围，避免不同角色/部门的成员共享同一份缓存
+    const cacheKey = `communications:list:${scope ? `${JSON.stringify(scope)}:` : ''}${JSON.stringify(query)}`;
     const cached = await getFromCache(cacheKey);
     if (cached) return cached;
 
@@ -101,6 +111,12 @@ export class CommunicationService {
     const where: Prisma.CommunicationLogWhereInput = {};
     if (candidateId) where.candidateId = candidateId;
     if (type) where.type = type;
+
+    // 数据可见性：member 仅可见范围内候选人的沟通记录（admin 不过滤）
+    const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    if (visibilityWhere) {
+      where.candidate = visibilityWhere;
+    }
 
     const [logs, total] = await Promise.all([
       prisma.communicationLog.findMany({
@@ -131,7 +147,10 @@ export class CommunicationService {
   /**
    * 获取某候选人的所有沟通记录（按时间倒序）
    */
-  async getCommunicationsByCandidate(candidateId: string) {
+  async getCommunicationsByCandidate(candidateId: string, scope?: CandidateVisibilityScope) {
+    // 数据可见性校验：member 越权访问范围外候选人时返回 403
+    await assertCandidateVisible(candidateId, scope);
+
     return prisma.communicationLog.findMany({
       where: { candidateId },
       orderBy: { createdAt: 'desc' },

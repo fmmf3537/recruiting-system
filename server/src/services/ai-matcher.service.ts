@@ -1,6 +1,10 @@
 import prisma from '../lib/prisma';
 import { callLLM } from '../lib/llm';
 import { AppError } from '../middleware/errorHandler';
+import {
+  buildCandidateVisibilityWhere,
+  type CandidateVisibilityScope,
+} from './candidate-visibility.service';
 
 export interface CandidateForMatch {
   id: string;
@@ -24,7 +28,8 @@ export interface MatchResult {
  */
 export async function recommendCandidatesForJob(
   jobId: string,
-  limit = 5
+  limit = 5,
+  scope?: CandidateVisibilityScope
 ): Promise<MatchResult[]> {
   // 获取职位详情
   const job = await prisma.job.findUnique({
@@ -44,9 +49,12 @@ export async function recommendCandidatesForJob(
   }
 
   // 从人才库获取候选人（未关联任何职位的候选人）
+  // 数据可见性：member 只能匹配自己可见范围内的候选人（admin 不过滤）
+  const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
   const candidates = await prisma.candidate.findMany({
     where: {
       candidateJobs: { none: {} },
+      ...(visibilityWhere ? { AND: [visibilityWhere] } : {}),
     },
     select: {
       id: true,

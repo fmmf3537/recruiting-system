@@ -1,5 +1,9 @@
 import prisma from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
+import {
+  assertCandidateVisible,
+  type CandidateVisibilityScope,
+} from './candidate-visibility.service';
 
 export interface CreateOnboardingTaskInput {
   candidateId: string;
@@ -33,18 +37,24 @@ export const DEFAULT_ONBOARDING_TASKS = [
   { title: '安排入职培训', category: '培训' },
 ];
 
-export async function getTasksByCandidate(candidateId: string) {
+export async function getTasksByCandidate(candidateId: string, scope?: CandidateVisibilityScope) {
+  // 数据可见性校验：member 越权访问范围外候选人时返回 403
+  await assertCandidateVisible(candidateId, scope);
+
   return prisma.onboardingTask.findMany({
     where: { candidateId },
     orderBy: [{ status: 'asc' }, { createdAt: 'asc' }],
   });
 }
 
-export async function createTask(data: CreateOnboardingTaskInput) {
+export async function createTask(data: CreateOnboardingTaskInput, scope?: CandidateVisibilityScope) {
   const candidate = await prisma.candidate.findUnique({ where: { id: data.candidateId } });
   if (!candidate) {
     throw new AppError('候选人不存在', 404);
   }
+
+  // 数据可见性校验：member 只能为可见范围内的候选人创建任务
+  await assertCandidateVisible(data.candidateId, scope);
 
   return prisma.onboardingTask.create({
     data: {
@@ -89,11 +99,14 @@ export async function deleteTask(id: string) {
 /**
  * 为候选人批量生成标准入职任务
  */
-export async function generateDefaultTasks(candidateId: string) {
+export async function generateDefaultTasks(candidateId: string, scope?: CandidateVisibilityScope) {
   const candidate = await prisma.candidate.findUnique({ where: { id: candidateId } });
   if (!candidate) {
     throw new AppError('候选人不存在', 404);
   }
+
+  // 数据可见性校验：member 只能为可见范围内的候选人生成任务
+  await assertCandidateVisible(candidateId, scope);
 
   const existingCount = await prisma.onboardingTask.count({ where: { candidateId } });
   if (existingCount > 0) {

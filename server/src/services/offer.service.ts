@@ -4,6 +4,11 @@ import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/
 import { AppError } from '../middleware/errorHandler';
 import { autoSendEmailOnStageTransition } from './email-auto-sender.service';
 import * as notificationService from './notification.service';
+import {
+  assertCandidateVisible,
+  buildCandidateVisibilityWhere,
+  type CandidateVisibilityScope,
+} from './candidate-visibility.service';
 
 // Offer 列表查询参数类型
 export interface OfferListQuery {
@@ -47,9 +52,13 @@ export class OfferService {
   /**
    * 获取 Offer 列表
    */
-  async getOffers(query: OfferListQuery): Promise<OfferListResult> {
+  async getOffers(
+    query: OfferListQuery,
+    scope?: CandidateVisibilityScope
+  ): Promise<OfferListResult> {
     const { page = 1, pageSize = 10, result } = query;
-    const cacheKey = `offers:list:${JSON.stringify(query)}`;
+    // 缓存 key 包含完整可见性范围，避免不同角色/部门的成员共享同一份缓存
+    const cacheKey = `offers:list:${scope ? `${JSON.stringify(scope)}:` : ''}${JSON.stringify(query)}`;
     const cached = await getFromCache<OfferListResult>(cacheKey);
     if (cached) {
       return cached;
@@ -60,6 +69,12 @@ export class OfferService {
     const where: Prisma.OfferWhereInput = {};
     if (result) {
       where.result = result;
+    }
+
+    // 数据可见性：member 仅可见范围内候选人的 Offer（admin 不过滤）
+    const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    if (visibilityWhere) {
+      where.candidate = visibilityWhere;
     }
 
     const [offers, total] = await Promise.all([
@@ -100,7 +115,8 @@ export class OfferService {
    * 获取某候选人的 Offer
    */
   async getOfferByCandidateId(
-    candidateId: string
+    candidateId: string,
+    scope?: CandidateVisibilityScope
   ): Promise<
     Offer & {
       candidate: {
@@ -131,6 +147,9 @@ export class OfferService {
     if (!candidate) {
       throw new AppError('候选人不存在', 404);
     }
+
+    // 数据可见性校验：member 越权访问范围外候选人时返回 403
+    await assertCandidateVisible(candidateId, scope);
 
     const offer = await prisma.offer.findUnique({
       where: { candidateId },
@@ -173,7 +192,7 @@ export class OfferService {
   /**
    * 创建 Offer
    */
-  async createOffer(data: CreateOfferInput): Promise<Offer> {
+  async createOffer(data: CreateOfferInput, scope?: CandidateVisibilityScope): Promise<Offer> {
     // 检查候选人是否存在
     const candidate = await prisma.candidate.findUnique({
       where: { id: data.candidateId },
@@ -183,6 +202,9 @@ export class OfferService {
     if (!candidate) {
       throw new AppError('候选人不存在', 404);
     }
+
+    // 数据可见性校验：member 只能为可见范围内的候选人创建 Offer
+    await assertCandidateVisible(data.candidateId, scope);
 
     if (candidate.offer) {
       throw new AppError('该候选人已有 Offer', 409);
@@ -211,7 +233,8 @@ export class OfferService {
    */
   async updateOffer(
     candidateId: string,
-    data: UpdateOfferInput
+    data: UpdateOfferInput,
+    scope?: CandidateVisibilityScope
   ): Promise<Offer> {
     // 检查候选人是否存在
     const candidate = await prisma.candidate.findUnique({
@@ -221,6 +244,9 @@ export class OfferService {
     if (!candidate) {
       throw new AppError('候选人不存在', 404);
     }
+
+    // 数据可见性校验：member 只能操作可见范围内候选人的 Offer
+    await assertCandidateVisible(candidateId, scope);
 
     // 检查 Offer 是否存在
     const existingOffer = await prisma.offer.findUnique({
@@ -302,9 +328,10 @@ export class OfferService {
    */
   async updateOfferResult(
     candidateId: string,
-    result: string
+    result: string,
+    scope?: CandidateVisibilityScope
   ): Promise<Offer> {
-    return this.updateOffer(candidateId, { result });
+    return this.updateOffer(candidateId, { result }, scope);
   }
 
   /**
@@ -312,7 +339,8 @@ export class OfferService {
    */
   async markAsJoined(
     candidateId: string,
-    actualJoinDate: string
+    actualJoinDate: string,
+    scope?: CandidateVisibilityScope
   ): Promise<Offer> {
     // 检查候选人是否存在
     const candidate = await prisma.candidate.findUnique({
@@ -322,6 +350,9 @@ export class OfferService {
     if (!candidate) {
       throw new AppError('候选人不存在', 404);
     }
+
+    // 数据可见性校验：member 只能操作可见范围内候选人的 Offer
+    await assertCandidateVisible(candidateId, scope);
 
     // 检查 Offer 是否存在
     const existingOffer = await prisma.offer.findUnique({
@@ -351,7 +382,7 @@ export class OfferService {
   /**
    * 删除 Offer
    */
-  async deleteOffer(candidateId: string): Promise<void> {
+  async deleteOffer(candidateId: string, scope?: CandidateVisibilityScope): Promise<void> {
     // 检查候选人是否存在
     const candidate = await prisma.candidate.findUnique({
       where: { id: candidateId },
@@ -360,6 +391,9 @@ export class OfferService {
     if (!candidate) {
       throw new AppError('候选人不存在', 404);
     }
+
+    // 数据可见性校验：member 只能操作可见范围内候选人的 Offer
+    await assertCandidateVisible(candidateId, scope);
 
     // 检查 Offer 是否存在
     const existingOffer = await prisma.offer.findUnique({
