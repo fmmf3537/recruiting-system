@@ -320,6 +320,27 @@
 验收标准：周报生成逻辑有单测（数据口径与 stats service 输出一致）；SMTP 未配置时任务静默跳过；订阅 CRUD 有集成测试；设置中心菜单可见且权限正确（member 不可见）；现有测试全部通过。
 ```
 
+### 提示词 1.3b —— 封堵关联模块越权访问（审核后补充）
+
+```
+先阅读项目根目录的 AGENTS.md 了解项目规范。
+
+背景：候选人主体数据的可见性隔离已完成（server/src/services/candidate-visibility.service.ts 是唯一权限入口，提供 scopeFromUser 和 buildCandidateVisibilityWhere）。但审核发现关联模块仍可越权读取范围外候选人的数据：任何 member 调用 GET /api/offers/:candidateId 可看任意候选人的薪资；沟通记录、面试安排、入职任务同理。
+
+任务：把可见性控制扩展到所有以 candidateId 为入口的关联模块，过滤逻辑继续集中在 service 层，复用 candidate-visibility.service。
+1. offer.service.ts：getOffers 列表注入可见性过滤（Offer→Candidate 关联）；getOfferByCandidateId / updateOffer / createOffer 操作前校验候选人在当前用户可见范围内，越权返回 403。
+2. communication.service.ts：沟通记录的列表查询与新增，同样按候选人可见性过滤/校验。
+3. interview-scheduler.service.ts：面试列表（含候选人姓名展示）注入可见性过滤；创建/更新/取消面试前校验候选人可见性。
+4. onboarding-task.service.ts：任务列表/创建/批量生成，校验候选人可见性。
+5. ai-matcher.service.ts：人才库匹配结果按可见性过滤（member 只能匹配自己可见的候选人）。
+6. duplicate-checker.service.ts：创建候选人时的重复警告，若重复候选人在当前用户可见范围外，只返回"存在疑似重复，请联系管理员核实"，不返回对方姓名/手机号/邮箱；可见范围内维持现有返回。
+7. 各 controller 仅组装 scope 透传（scopeFromUser(req.user!)），参照 candidate.controller.ts 的既有改法。
+
+约束：最小变更；中文注释；别名导入；不用 any；过滤逻辑不得写进 controller。
+
+验收标准：每个模块的越权访问在 tests/integration/ 补测试（member 访问范围外候选人的 offer/沟通/面试/入职任务均 403，列表不包含范围外数据）；duplicate-checker 越权脱敏有单测；现有测试全部通过。
+```
+
 ---
 
 ## 附：交回审核的方式
