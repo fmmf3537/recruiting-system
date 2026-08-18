@@ -17,6 +17,7 @@ model User {
   role             String   // admin, member
   feishuEmployeeId String?  @unique
   department       String?  // 所属部门，null = 无部门限制（管理员）
+  tokenVersion     Int      @default(0) // JWT 吊销版本号：改密/重置密码时 +1，使旧 token 立即失效
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

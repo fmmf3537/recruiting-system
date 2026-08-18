@@ -428,6 +428,8 @@ Nginx (:80)
   - `admin`：可访问成员管理、查看全部数据。
   - `member`：普通成员权限。
   - 后端通过 `authorize('admin')` 中间件保护敏感接口，前端路由通过 `meta.requireAdmin` 控制。
+- **JWT 吊销**：`User.tokenVersion` 写入 JWT payload，`authenticate` 中间件与数据库比对，不一致即 401；修改密码、管理员重置密码（`POST /api/users/:id/reset-password`，仅 admin，返回 12 位临时密码并写 OperationLog）、管理员直接改密时 `tokenVersion +1`，实现“改密即全端下线”。
+- **密码策略**：新密码至少 8 位且同时包含字母和数字，统一由 `server/src/middleware/validate.ts` 的 `passwordSchema` 校验（登录/绑定飞书等校验既有密码的场景不适用）。
 
 ---
 

@@ -57,7 +57,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="180" fixed="right" v-if="authStore.isAdmin">
+        <el-table-column label="操作" width="240" fixed="right" v-if="authStore.isAdmin">
           <template #default="{ row }">
             <el-button
               type="primary"
@@ -66,6 +66,14 @@
               @click="handleEdit(row)"
             >
               编辑
+            </el-button>
+            <el-button
+              type="warning"
+              link
+              size="small"
+              @click="handleResetPassword(row)"
+            >
+              重置密码
             </el-button>
             <el-button
               type="danger"
@@ -129,7 +137,7 @@
           <el-input
             v-model="formData.password"
             type="password"
-            placeholder="请输入密码"
+            placeholder="至少8位，需包含字母和数字"
             show-password
           />
         </el-form-item>
@@ -138,7 +146,7 @@
           <el-input
             v-model="formData.password"
             type="password"
-            placeholder="不修改请留空"
+            placeholder="不修改请留空（至少8位，需包含字母和数字）"
             show-password
           />
           <span class="form-tip">留空表示不修改密码</span>
@@ -182,6 +190,24 @@
       </template>
     </el-dialog>
 
+    <!-- 重置密码结果弹窗：临时密码仅展示一次，请立即复制并告知成员 -->
+    <el-dialog
+      v-model="resetDialogVisible"
+      title="密码已重置"
+      width="420px"
+      :close-on-click-modal="false"
+    >
+      <p>成员 <strong>{{ resetTargetName }}</strong> 的密码已重置，临时密码为：</p>
+      <div class="temp-password">
+        <span class="temp-password-value">{{ tempPassword }}</span>
+        <el-button size="small" type="primary" @click="copyTempPassword">复制</el-button>
+      </div>
+      <p class="form-tip">临时密码仅此一次展示，请立即复制并告知该成员，提醒其登录后尽快修改密码。</p>
+      <template #footer>
+        <el-button type="primary" @click="resetDialogVisible = false">我已保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 角色切换确认弹窗 -->
     <el-dialog
       v-model="roleDialogVisible"
@@ -213,6 +239,7 @@ import {
   createUser,
   updateUser,
   deleteUser,
+  resetUserPassword,
   type UserItem,
   type CreateUserParams,
   type UpdateUserParams,
@@ -262,7 +289,8 @@ const formRules = {
   ],
   password: [
     { required: !isEdit.value, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码长度至少6位', trigger: 'blur' },
+    { min: 8, message: '密码长度至少8位', trigger: 'blur' },
+    { pattern: /^(?=.*[A-Za-z])(?=.*\d)/, message: '密码需同时包含字母和数字', trigger: 'blur' },
   ],
   role: [
     { required: true, message: '请选择角色', trigger: 'change' },
@@ -417,6 +445,46 @@ async function handleDelete(row: UserItem) {
   }
 }
 
+// 重置密码
+const resetDialogVisible = ref(false);
+const tempPassword = ref('');
+const resetTargetName = ref('');
+
+async function handleResetPassword(row: UserItem) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要重置成员 "${row.name}" 的密码吗？重置后该成员需使用临时密码重新登录。`,
+      '确认重置密码',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    );
+
+    const res = await resetUserPassword(row.id);
+    if (res.success) {
+      tempPassword.value = res.data.tempPassword;
+      resetTargetName.value = row.name;
+      resetDialogVisible.value = true;
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '重置密码失败');
+    }
+  }
+}
+
+// 复制临时密码到剪贴板
+async function copyTempPassword() {
+  try {
+    await navigator.clipboard.writeText(tempPassword.value);
+    ElMessage.success('已复制到剪贴板');
+  } catch {
+    ElMessage.warning('复制失败，请手动选中复制');
+  }
+}
+
 // 角色切换点击
 function handleRoleChange(row: UserItem) {
   // 不能修改自己的角色
@@ -518,6 +586,25 @@ onActivated(() => {
       color: #909399;
       margin-top: 4px;
     }
+  }
+
+  .temp-password {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0;
+
+    .temp-password-value {
+      font-size: 18px;
+      font-weight: 600;
+      font-family: monospace;
+      letter-spacing: 1px;
+    }
+  }
+
+  .form-tip {
+    font-size: 12px;
+    color: #909399;
   }
 }
 </style>

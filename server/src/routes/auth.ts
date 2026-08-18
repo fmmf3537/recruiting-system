@@ -8,7 +8,7 @@ import prisma from '../lib/prisma';
 import { resolveFeishuEmployeeId } from '../lib/feishu-auth';
 import { authenticate } from '../middleware/auth';
 import { feishuLimiter, bindFeishuLimiter } from '../middleware/rate-limit';
-import { validate } from '../middleware/validate';
+import { validate, passwordSchema } from '../middleware/validate';
 import { asyncHandler } from '../middleware/errorHandler';
 
 const router: RouterType = Router();
@@ -35,7 +35,7 @@ const loginSchema = z.object({
 // 注册请求验证 schema
 const registerSchema = z.object({
   email: z.string().email('请输入有效的邮箱地址'),
-  password: z.string().min(6, '密码至少6位字符'),
+  password: passwordSchema,
   name: z.string().min(2, '姓名至少2位字符').max(50, '姓名最多50位字符'),
   role: z.enum(['admin', 'member']).default('member'),
 });
@@ -43,7 +43,7 @@ const registerSchema = z.object({
 // 修改密码请求验证 schema
 const changePasswordSchema = z.object({
   oldPassword: z.string().min(1, '请输入当前密码'),
-  newPassword: z.string().min(6, '新密码至少6位字符'),
+  newPassword: passwordSchema,
 });
 
 const bindFeishuSchema = z.object({
@@ -93,9 +93,9 @@ router.post(
       return;
     }
 
-    // 生成 JWT
+    // 生成 JWT（payload 携带 tokenVersion，改密/重置密码后旧 token 自动失效）
     const token = jwt.sign(
-      { userId: user.id, email: user.email, department: user.department || null, role: user.role },
+      { userId: user.id, email: user.email, department: user.department || null, role: user.role, tokenVersion: user.tokenVersion },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
     );
@@ -287,7 +287,7 @@ router.post(
     }
 
     const token = jwt.sign(
-      { userId: user.id, email: user.email, department: user.department || null, role: user.role },
+      { userId: user.id, email: user.email, department: user.department || null, role: user.role, tokenVersion: user.tokenVersion },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
     );
@@ -348,10 +348,10 @@ router.post(
     // 加密新密码
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // 更新密码
+    // 更新密码，同时 tokenVersion +1，使该用户所有已签发 token 立即失效（改密即全端下线）
     await prisma.user.update({
       where: { id: userId },
-      data: { password: hashedPassword },
+      data: { password: hashedPassword, tokenVersion: { increment: 1 } },
     });
 
     res.json({
@@ -388,7 +388,7 @@ router.post(
     }
 
     const token = jwt.sign(
-      { userId: user.id, email: user.email, department: user.department || null, role: user.role },
+      { userId: user.id, email: user.email, department: user.department || null, role: user.role, tokenVersion: user.tokenVersion },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
     );

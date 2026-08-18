@@ -112,3 +112,20 @@ export interface ChangePasswordParams {
 export function changePassword(data: ChangePasswordParams): Promise<OperationResult> {
   return request.post('/auth/change-password', data) as Promise<OperationResult>;
 }
+
+// 重置密码响应（临时密码仅本次返回）
+export interface ResetPasswordResult {
+  success: boolean;
+  message?: string;
+  data: {
+    tempPassword: string;
+  };
+}
+
+/**
+ * 管理员重置成员密码
+ * @param id 用户ID
+ */
+export function resetUserPassword(id: string): Promise<ResetPasswordResult> {
+  return request.post(`/users/${id}/reset-password`) as Promise<ResetPasswordResult>;
+}

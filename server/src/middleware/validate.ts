@@ -86,6 +86,13 @@ export const validateAll = (schemas: {
   };
 };
 
+// 密码策略：至少 8 位，且同时包含字母和数字
+// 仅用于"设置新密码"场景（注册/改密/管理员重置）；登录、绑定飞书等校验既有密码的场景不使用
+export const passwordSchema = z
+  .string()
+  .min(8, '密码至少8位字符')
+  .regex(/^(?=.*[A-Za-z])(?=.*\d)/, '密码需同时包含字母和数字');
+
 // 常用验证 schema
 export const commonSchemas = {
   // ID 参数验证

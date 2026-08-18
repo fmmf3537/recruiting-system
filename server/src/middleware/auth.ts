@@ -10,6 +10,8 @@ export interface JwtPayload {
   email: string;
   department: string | null;
   role: string;
+  // JWT 吊销版本号（旧 token 可能无此字段，按 0 处理）
+  tokenVersion?: number;
 }
 
 declare global {
@@ -36,7 +38,7 @@ async function loadUserFromToken(token: string): Promise<JwtPayload> {
 
   const user = await prisma.user.findUnique({
     where: { id: decoded.userId },
-    select: { id: true, email: true, role: true, department: true },
+    select: { id: true, email: true, role: true, department: true, tokenVersion: true },
   });
 
   if (!user) {
@@ -49,6 +51,11 @@ async function loadUserFromToken(token: string): Promise<JwtPayload> {
     || user.role !== decoded.role
     || (user.department || null) !== decoded.department
   ) {
+    throw new AppError('认证令牌已失效，请重新登录', 401);
+  }
+
+  // tokenVersion 不一致说明密码已修改/被重置，吊销旧 token（改密即全端下线）
+  if (user.tokenVersion !== (decoded.tokenVersion ?? 0)) {
     throw new AppError('认证令牌已失效，请重新登录', 401);
   }
 

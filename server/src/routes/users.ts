@@ -1,19 +1,41 @@
+import { randomInt } from 'crypto';
 import { Router, type Router as RouterType } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { authenticate, authorize } from '../middleware/auth';
-import { validate, commonSchemas } from '../middleware/validate';
+import { validate, commonSchemas, passwordSchema } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
 
 const router: RouterType = Router();
+
+// 生成 12 位随机临时密码：保证至少含一个字母和一个数字，满足密码策略
+function generateTempPassword(): string {
+  // 去除易混淆字符（0/O、1/l/I 等）
+  const letters = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz';
+  const digits = '23456789';
+  const all = letters + digits;
+  const chars = [
+    letters[randomInt(letters.length)],
+    digits[randomInt(digits.length)],
+  ];
+  for (let i = chars.length; i < 12; i += 1) {
+    chars.push(all[randomInt(all.length)]);
+  }
+  // 打乱顺序，避免固定前两位模式
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
 
 // 更新用户信息验证 schema
 const updateUserSchema = z.object({
   name: z.string().min(2).max(50).optional(),
   email: z.string().email().optional(),
-  password: z.string().min(6).optional(),
+  password: passwordSchema.optional(),
   role: z.enum(['admin', 'member']).optional(),
   department: z.string().optional().nullable(),
 });
@@ -197,6 +219,8 @@ router.put(
     if (department !== undefined) updateData.department = department;
     if (password) {
       updateData.password = await bcrypt.hash(password, 10);
+      // 管理员直接改密同样 tokenVersion +1，强制该用户重新登录
+      updateData.tokenVersion = { increment: 1 };
     }
 
     const updatedUser = await prisma.user.update({
@@ -219,6 +243,56 @@ router.put(
       success: true,
       message: '用户信息更新成功',
       data: updatedUser,
+    });
+  })
+);
+
+/**
+ * POST /api/users/:id/reset-password
+ * 管理员重置成员密码：生成 12 位随机临时密码（仅本次返回，不落明文）
+ */
+router.post(
+  '/:id/reset-password',
+  authenticate,
+  authorize('admin'),
+  validate(commonSchemas.idParam, 'params'),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    // 检查用户是否存在
+    const targetUser = await prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!targetUser) {
+      throw new AppError('用户不存在', 404);
+    }
+
+    // 生成临时密码并加密存储（明文仅在本次响应中返回给管理员）
+    const tempPassword = generateTempPassword();
+    const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+    // 重置密码同时 tokenVersion +1，强制该用户所有端重新登录
+    await prisma.user.update({
+      where: { id },
+      data: { password: hashedPassword, tokenVersion: { increment: 1 } },
+    });
+
+    // 写入操作日志
+    await prisma.operationLog.create({
+      data: {
+        userId: req.user!.userId,
+        targetType: 'User',
+        targetId: id,
+        action: 'password_reset',
+        detail: { targetEmail: targetUser.email, targetName: targetUser.name },
+      },
+    });
+
+    res.json({
+      success: true,
+      message: '密码已重置，请将临时密码告知该成员',
+      data: { tempPassword },
     });
   })
 );
