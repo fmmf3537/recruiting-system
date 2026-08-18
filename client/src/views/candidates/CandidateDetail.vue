@@ -36,8 +36,25 @@
             </el-tag>
           </div>
 
+          <!-- 个保法合规：未记录授权同意的候选人给出醒目标识 -->
+          <el-alert
+            v-if="!candidate.consentAt"
+            type="warning"
+            :closable="false"
+            show-icon
+            class="consent-alert"
+            title="尚未记录候选人授权同意，请在编辑页补充授权信息"
+          />
+
           <el-descriptions :column="1" border class="info-desc">
-            <el-descriptions-item label="性别">{{ candidate.gender }}</el-descriptions-item>
+            <el-descriptions-item label="授权状态">
+              <el-tag v-if="candidate.consentAt" type="success" size="small">
+                已授权（{{ formatDateTime(candidate.consentAt) }}）
+              </el-tag>
+              <el-tag v-else type="danger" size="small">未授权</el-tag>
+              <div v-if="candidate.consentNote" class="consent-note">{{ candidate.consentNote }}</div>
+            </el-descriptions-item>
+            <el-descriptions-item label="性别">{{ candidate.gender || '-' }}</el-descriptions-item>
             <el-descriptions-item label="年龄">{{ candidate.age ? candidate.age + '岁' : '-' }}</el-descriptions-item>
             <el-descriptions-item label="手机号">{{ candidate.phone }}</el-descriptions-item>
             <el-descriptions-item label="邮箱">{{ candidate.email }}</el-descriptions-item>
@@ -50,7 +67,13 @@
             <el-descriptions-item label="来源渠道">{{ candidate.source }}</el-descriptions-item>
             <el-descriptions-item label="推荐人">{{ candidate.referrer || '-' }}</el-descriptions-item>
             <el-descriptions-item label="简历附件">
-              <el-link v-if="candidate.resumeUrl" :href="resumeDownloadUrl" target="_blank" type="primary">
+              <el-link
+                v-if="candidate.resumeUrl"
+                :href="resumeDownloadUrl"
+                target="_blank"
+                type="primary"
+                @click="handleResumeView"
+              >
                 下载简历
               </el-link>
               <span v-else>-</span>
@@ -508,6 +531,7 @@ import {
   advanceStage,
   addInterviewFeedback,
   deleteCandidate,
+  logResumeView,
   type CandidateDetail,
   type AdvanceStageParams,
   type InterviewFeedbackParams,
@@ -568,6 +592,11 @@ function handleResumeReParsed(data: ResumeParseResult) {
   // 将解析结果存入 Store，跳转到编辑页面
   resumeParserStore.setParsedData(data);
   router.push(`/candidates/${candidateId}/edit`);
+}
+
+// 简历预览/下载：写入 resume_view 审计日志（发后即忘，不影响下载）
+function handleResumeView() {
+  logResumeView(candidateId).catch((e) => console.error('简历查看日志记录失败:', e));
 }
 
 // 计算是否可推进
@@ -1020,6 +1049,17 @@ onActivated(() => {
 </script>
 
 <style scoped lang="scss">
+// 未授权提示样式
+.consent-alert {
+  margin-bottom: 16px;
+}
+
+.consent-note {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
 .candidate-detail-page {
   padding: 20px;
   max-width: 1400px;

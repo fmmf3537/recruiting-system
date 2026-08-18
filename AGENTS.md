@@ -104,6 +104,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 - **校验**：Zod
 - **安全**：helmet、cors、express-rate-limit
 - **队列/缓存**：BullMQ + ioredis（用于简历解析异步任务）
+- **定时任务**：node-cron（候选人匿名化合规任务，见 `server/src/lib/cron.ts`）
 - **文件处理**：multer（上传）、pdf-parse / mammoth（简历解析）
 - **开发运行**：`tsx watch src/index.ts`
 
@@ -358,7 +359,7 @@ pnpm test:report      # show-report
 - **核心模型**：
   - `User`（用户，角色 admin / member）
   - `Job`（职位）
-  - `Candidate`（候选人）
+  - `Candidate`（候选人；`gender` 选填，`consentAt`/`consentNote` 记录授权同意，`anonymizedAt` 标记匿名化）
   - `CandidateJob`（候选人与职位多对多关联）
   - `WorkHistory`（工作经历）
   - `StageRecord`（招聘阶段记录）
@@ -421,6 +422,11 @@ Nginx (:80)
   - Nginx 限制 `client_max_body_size 50M`
   - Express 限制 `10mb`（JSON / URL-encoded）
   - 简历文件存储在 `server/uploads/`，通过 UUID 重命名；下载接口以 UUID+扩展名白名单校验文件名，杜绝路径遍历，并强制校验 `UploadRecord` 记录存在、写入 `OperationLog`（action: `resume_download`）。
+- **个保法合规**：
+  - 授权同意：候选人 `consentAt`/`consentNote` 记录授权时间与备注，未授权候选人在列表/详情页有醒目标识。
+  - 数据保留与匿名化：「淘汰超过 2 年且未入职」的候选人由 node-cron 定时任务（`ANONYMIZE_CRON` 控制开关与调度，见 `server/src/lib/cron.ts` → `anonymize.service.ts`）自动匿名化（姓名改「已匿名」、清空手机号/邮箱、删除简历物理文件，保留来源/学历/阶段等统计字段），并写入 `OperationLog`（action: `candidate_anonymized`）。
+  - 简历查看审计：详情页每次预览/下载简历调用 `POST /api/candidates/:id/resume-view` 写入 `OperationLog`（action: `resume_view`）。
+  - 性别/年龄最小化收集：`gender` 选填，列表默认不展示性别与年龄列。
 - **Rate Limiting**：全局 15 分钟最多 1000 次请求（开发时如频繁刷新可调整）。
 - **CORS**：由 `env.CORS_ORIGIN` 控制，生产环境应配置为具体域名。
 - **Helmet**：已启用，并设置 `crossOriginResourcePolicy: { policy: 'cross-origin' }` 以兼容上传文件访问。
@@ -431,6 +437,8 @@ Nginx (:80)
 - **候选人数据可见性**：
   - `admin` 可见全部候选人；`member` 仅可见「自己创建的 + 被指派给自己的阶段记录（StageRecord.assigneeId）关联的 + 自己部门职位（Job.departments 包含 User.department）下关联的」候选人，`department` 为 null 的 member 仅看前两类。
   - 可见性条件统一由 `server/src/services/candidate-visibility.service.ts` 的 `buildCandidateVisibilityWhere` 构建，在 service 层注入（候选人列表/详情/批量操作、统计接口）；详情越权返回 403。
+  - 以 candidateId 为入口的关联模块同样做可见性控制：Offer（offer.service）、沟通记录（communication.service）、面试安排（interview-scheduler.service）、入职任务（onboarding-task.service）、AI 匹配（ai-matcher.service，member 仅匹配可见候选人）；单条操作统一走 `assertCandidateVisible` 校验，越权返回 403。创建候选人时的查重（duplicate-checker.service）对范围外重复候选人脱敏，仅返回「存在疑似重复，请联系管理员核实」。
+  - 各 controller 仅通过 `scopeFromUser(req.user!)` 组装可见性范围透传，不过滤逻辑不写进 controller。
   - 职位列表按部门过滤（`job.controller.ts` 的 `getUserDepartment`）。
 - **JWT 吊销**：`User.tokenVersion` 写入 JWT payload，`authenticate` 中间件与数据库比对，不一致即 401；修改密码、管理员重置密码（`POST /api/users/:id/reset-password`，仅 admin，返回 12 位临时密码并写 OperationLog）、管理员直接改密时 `tokenVersion +1`，实现“改密即全端下线”。
 - **密码策略**：新密码至少 8 位且同时包含字母和数字，统一由 `server/src/middleware/validate.ts` 的 `passwordSchema` 校验（登录/绑定飞书等校验既有密码的场景不适用）。

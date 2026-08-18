@@ -153,7 +153,15 @@
             <div class="candidate-info">
               <el-avatar :size="36" :icon="UserFilled" />
               <div class="candidate-detail">
-                <div class="candidate-name">{{ row.name }}</div>
+                <div class="candidate-name">
+                  {{ row.name }}
+                  <!-- 个保法合规：未记录授权同意的候选人醒目标识 -->
+                  <el-tooltip content="尚未记录授权同意，请在详情页补充" placement="top">
+                    <el-tag v-if="!row.consentAt" type="danger" size="small" effect="plain" class="consent-tag">
+                      未授权
+                    </el-tag>
+                  </el-tooltip>
+                </div>
                 <div class="candidate-contact">{{ row.phone }}</div>
               </div>
             </div>
@@ -750,7 +758,7 @@ onActivated(() => { fetchCandidateList(); });
 }
 .table-card {
   .candidate-info { display: flex; align-items: center; gap: 12px;
-    .candidate-detail { .candidate-name { font-weight: 500; color: #303133; margin-bottom: 4px; }
+    .candidate-detail { .candidate-name { font-weight: 500; color: #303133; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
       .candidate-contact { font-size: 12px; color: #909399; }
     }
   }

@@ -64,6 +64,9 @@ const updateCandidateSchema = z.object({
   intro: z.string().optional(),
   tagIds: z.array(z.string()).max(20, '最多设置20个标签').optional(),
   skills: z.array(z.string()).max(50, '最多设置50个技能').optional(),
+  // 授权同意（个保法合规）：null 表示撤销授权记录
+  consentAt: z.string().datetime('无效的授权时间格式').optional().nullable(),
+  consentNote: z.string().max(200, '授权备注不能超过200字').optional().nullable(),
 });
 
 // 列表查询验证 Schema
@@ -255,6 +258,18 @@ router.post(
   validate(candidateIdParamSchema, 'params'),
   validate(advanceStageSchema),
   candidateController.advanceStage
+);
+
+/**
+ * POST /api/candidates/:id/resume-view
+ * 记录简历查看审计日志（个保法合规留痕）
+ * 权限：登录用户
+ */
+router.post(
+  '/:id/resume-view',
+  authenticate,
+  validate(candidateIdParamSchema, 'params'),
+  candidateController.logResumeView
 );
 
 /**

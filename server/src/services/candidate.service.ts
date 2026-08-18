@@ -14,6 +14,7 @@ import {
 import type { Stage } from '../constants';
 import { checkDuplicate, isPhoneUsed, isEmailUsed } from './duplicate-checker.service';
 import {
+  assertCandidateVisible,
   buildCandidateVisibilityWhere,
   type CandidateVisibilityScope,
 } from './candidate-visibility.service';
@@ -39,7 +40,7 @@ export interface CreateCandidateInput {
   name: string;
   phone: string;
   email: string;
-  gender: string;
+  gender?: string;
   age?: number;
   education: string;
   school?: string;
@@ -55,6 +56,9 @@ export interface CreateCandidateInput {
   jobIds?: string[];
   tagIds?: string[];
   skills?: string[];
+  // 授权同意（个保法合规）：勾选后写入授权时间与备注
+  consentAt?: string | null;
+  consentNote?: string | null;
   workHistory?: Array<{
     company: string;
     position: string;
@@ -84,6 +88,9 @@ export interface UpdateCandidateInput {
   intro?: string;
   tagIds?: string[];
   skills?: string[];
+  // 授权同意（个保法合规）：null 表示撤销授权记录
+  consentAt?: string | null;
+  consentNote?: string | null;
 }
 
 // 推进阶段参数类型
@@ -142,10 +149,16 @@ export class CandidateService {
    */
   async createCandidate(
     data: CreateCandidateInput,
-    createdById: string
+    createdById: string,
+    scope?: CandidateVisibilityScope
   ): Promise<CreateCandidateResult> {
-    // 查重：检查手机号或邮箱是否已存在
-    const { duplicates } = await checkDuplicate(data.phone, data.email);
+    // 查重：检查手机号或邮箱是否已存在（member 场景下范围外的重复候选人脱敏处理）
+    const { duplicates, hasHiddenDuplicate } = await checkDuplicate(
+      data.phone,
+      data.email,
+      undefined,
+      scope
+    );
 
     // 创建候选人
     const candidate = await prisma.candidate.create({
@@ -167,6 +180,8 @@ export class CandidateService {
         referrer: data.referrer,
         intro: data.intro,
         skills: data.skills || [],
+        consentAt: data.consentAt ? new Date(data.consentAt) : null,
+        consentNote: data.consentNote || null,
         createdById,
       },
     });
@@ -237,6 +252,14 @@ export class CandidateService {
         candidate,
         warning: '发现重复候选人',
         duplicates,
+      };
+    }
+
+    // 重复候选人在当前用户可见范围外：脱敏提示，不返回对方任何信息
+    if (hasHiddenDuplicate) {
+      return {
+        candidate,
+        warning: '存在疑似重复，请联系管理员核实',
       };
     }
 
@@ -643,6 +666,38 @@ export class CandidateService {
   }
 
   /**
+   * 记录简历查看审计日志（个保法合规：详情页每次预览/下载简历均留痕）
+   * 复用 file.service 中 resume_download 的 OperationLog 模式
+   */
+  async logResumeView(
+    id: string,
+    userId: string,
+    scope?: CandidateVisibilityScope
+  ): Promise<void> {
+    const candidate = await prisma.candidate.findUnique({
+      where: { id },
+      select: { id: true, resumeUrl: true },
+    });
+
+    if (!candidate) {
+      throw new AppError('候选人不存在', 404);
+    }
+
+    // 数据可见性校验：member 越权访问范围外候选人时返回 403
+    await assertCandidateVisible(id, scope);
+
+    await prisma.operationLog.create({
+      data: {
+        userId,
+        targetType: 'Candidate',
+        targetId: id,
+        action: 'resume_view',
+        detail: { resumeUrl: candidate.resumeUrl },
+      },
+    });
+  }
+
+  /**
    * 更新候选人（仅创建者或管理员）
    */
   async updateCandidate(
@@ -702,6 +757,9 @@ export class CandidateService {
     if (data.referrer !== undefined) updateData.referrer = data.referrer;
     if (data.intro !== undefined) updateData.intro = data.intro;
     if (data.skills !== undefined) updateData.skills = data.skills;
+    if (data.consentAt !== undefined)
+      updateData.consentAt = data.consentAt ? new Date(data.consentAt) : null;
+    if (data.consentNote !== undefined) updateData.consentNote = data.consentNote;
 
     const candidate = await prisma.candidate.update({
       where: { id },

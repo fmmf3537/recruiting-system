@@ -36,7 +36,7 @@ export interface CreateCandidateParams {
   name: string;
   phone: string;
   email: string;
-  gender: Gender;
+  gender?: Gender; // 性别选填（个保法合规：非必要不收集）
   age?: number;
   education: string;
   school?: string;
@@ -49,6 +49,9 @@ export interface CreateCandidateParams {
   sourceNote?: string;
   referrer?: string;
   intro?: string;
+  // 授权同意记录（勾选后写入授权时间与备注）
+  consentAt?: string | null;
+  consentNote?: string | null;
   jobIds?: string[];
   tagIds?: string[];
   skills?: string[];
@@ -73,6 +76,8 @@ export interface UpdateCandidateParams {
   sourceNote?: string;
   referrer?: string;
   intro?: string;
+  consentAt?: string | null;
+  consentNote?: string | null;
   tagIds?: string[];
   skills?: string[];
 }
@@ -157,7 +162,7 @@ export interface CandidateItem {
   name: string;
   phone: string;
   email: string;
-  gender: Gender;
+  gender: Gender | null;
   age: number | null;
   education: string;
   school: string | null;
@@ -170,6 +175,9 @@ export interface CandidateItem {
   sourceNote: string | null;
   referrer: string | null;
   intro: string | null;
+  // 授权同意时间（null = 未记录授权，列表/详情需醒目标识）
+  consentAt: string | null;
+  consentNote: string | null;
   createdById: string;
   createdAt: string;
   updatedAt: string;
@@ -337,6 +345,14 @@ export function createCandidate(data: CreateCandidateParams): Promise<CreateCand
  */
 export function updateCandidate(id: string, data: UpdateCandidateParams): Promise<OperationResult> {
   return request.patch(`/candidates/${id}`, data) as Promise<OperationResult>;
+}
+
+/**
+ * 记录简历查看审计日志（每次打开简历预览/下载时调用）
+ * @param id 候选人ID
+ */
+export function logResumeView(id: string): Promise<OperationResult> {
+  return request.post(`/candidates/${id}/resume-view`) as Promise<OperationResult>;
 }
 
 /**

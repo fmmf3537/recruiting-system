@@ -34,7 +34,7 @@
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
-                  <el-form-item label="性别" prop="gender">
+                  <el-form-item label="性别（选填）" prop="gender">
                     <el-radio-group v-model="formData.gender">
                       <el-radio-button label="男">男</el-radio-button>
                       <el-radio-button label="女">女</el-radio-button>
@@ -65,6 +65,29 @@
                 <el-col :span="12">
                   <el-form-item label="工作年限" prop="workYears">
                     <el-input-number v-model="formData.workYears" :min="0" :max="50" style="width: 100%" placeholder="年" />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <!-- 授权同意（个保法合规） -->
+              <el-form-item label="授权同意">
+                <el-checkbox v-model="consented">已获得候选人授权同意（收集与使用其个人信息）</el-checkbox>
+              </el-form-item>
+              <el-row v-if="consented" :gutter="20">
+                <el-col :span="12">
+                  <el-form-item label="授权时间">
+                    <el-date-picker
+                      v-model="consentAt"
+                      type="datetime"
+                      placeholder="默认当前时间"
+                      style="width: 100%"
+                      value-format="YYYY-MM-DDTHH:mm:ss.SSSZ"
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="授权备注">
+                    <el-input v-model="consentNote" placeholder="选填，如：电话授权 / 邮件授权" />
                   </el-form-item>
                 </el-col>
               </el-row>
@@ -360,11 +383,16 @@ const submitting = ref(false);
 const formRef = ref<FormInstance>();
 const jobList = ref<JobItem[]>([]);
 
+// 授权同意（个保法合规）：勾选状态独立于表单数据，保存时转换为 consentAt/consentNote
+const consented = ref(false);
+const consentAt = ref<string | null>(null);
+const consentNote = ref('');
+
 const formData = reactive<CreateCandidateParams>({
   name: '',
   phone: '',
   email: '',
-  gender: '男',
+  gender: undefined, // 性别选填（合规要求）
   age: undefined,
   education: '',
   school: '',
@@ -415,7 +443,7 @@ const formRules: FormRules = {
       }
     }, trigger: 'blur' },
   ],
-  gender: [{ required: true, message: '请选择性别', trigger: 'change' }],
+  gender: [{ required: false }],
   education: [{ required: true, message: '请选择学历', trigger: 'change' }],
   source: [{ required: true, message: '请选择来源渠道', trigger: 'change' }],
 };
@@ -476,6 +504,10 @@ async function fetchCandidateDetail() {
           description: w.description || '',
         })) || [],
       });
+      // 回填授权同意状态
+      consented.value = !!data.consentAt;
+      consentAt.value = data.consentAt;
+      consentNote.value = data.consentNote || '';
     }
   } catch (error) {
     ElMessage.error('获取候选人详情失败');
@@ -534,15 +566,20 @@ async function handleSubmit() {
 
   submitting.value = true;
   try {
+    // 授权同意：勾选则写入授权时间（未选时间默认当前时间）与备注，未勾选则清空
+    const consentPayload = {
+      consentAt: consented.value ? consentAt.value || new Date().toISOString() : null,
+      consentNote: consented.value && consentNote.value ? consentNote.value : null,
+    };
     if (isEdit.value) {
-      const updateData: UpdateCandidateParams = { ...formData };
+      const updateData: UpdateCandidateParams = { ...formData, ...consentPayload };
       const res = await updateCandidate(candidateId.value, updateData);
       if (res.success) {
         ElMessage.success('修改成功');
         router.back();
       }
     } else {
-      const res = await createCandidate({ ...formData });
+      const res = await createCandidate({ ...formData, ...consentPayload });
       if (res.success) {
         // 有查重警告时显示确认弹窗
         if (res.warning && res.duplicates && res.duplicates.length > 0) {
@@ -588,7 +625,7 @@ function resetForm() {
     name: '',
     phone: '',
     email: '',
-    gender: '男',
+    gender: undefined,
     age: undefined,
     education: '',
     school: '',
@@ -606,6 +643,10 @@ function resetForm() {
     skills: [],
     workHistory: [],
   });
+  // 重置授权同意状态
+  consented.value = false;
+  consentAt.value = null;
+  consentNote.value = '';
 }
 
 function fillFromParsedResume() {
@@ -615,7 +656,7 @@ function fillFromParsedResume() {
     formData.name = data.name || '';
     formData.phone = data.phone || '';
     formData.email = data.email || '';
-    formData.gender = (data.gender === '男' || data.gender === '女') ? data.gender : '男';
+    formData.gender = (data.gender === '男' || data.gender === '女') ? data.gender : undefined;
     formData.age = data.age || undefined;
     formData.education = data.education || '';
     formData.school = data.school || '';

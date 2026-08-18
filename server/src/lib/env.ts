@@ -46,6 +46,10 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
   SMTP_SECURE: z.string().optional().transform((val) => val === 'true'),
+
+  // 候选人数据匿名化定时任务（个保法合规）
+  // 值为 cron 表达式（如 0 3 * * * 每日凌晨 3 点）；设为 false 或留空则关闭
+  ANONYMIZE_CRON: z.string().optional().transform((val) => (val && val !== 'false' ? val : null)),
 });
 
 // 验证环境变量

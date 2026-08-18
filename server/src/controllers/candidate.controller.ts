@@ -19,7 +19,11 @@ export class CandidateController {
   ): Promise<void> {
     try {
       const userId = req.user!.userId;
-      const result = await candidateService.createCandidate(req.body, userId);
+      const result = await candidateService.createCandidate(
+        req.body,
+        userId,
+        scopeFromUser(req.user!)
+      );
 
       // 如果有重复，返回警告信息
       if (result.warning && result.duplicates) {
@@ -28,6 +32,17 @@ export class CandidateController {
           data: result.candidate,
           warning: result.warning,
           duplicates: result.duplicates,
+        });
+        return;
+      }
+
+      // 疑似重复但超出当前用户可见范围：仅返回脱敏警告
+      if (result.warning) {
+        res.status(201).json({
+          success: true,
+          data: result.candidate,
+          warning: result.warning,
+          message: '候选人创建成功',
         });
         return;
       }
@@ -160,6 +175,28 @@ export class CandidateController {
       res.json({
         success: true,
         message: '流程推进成功',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/candidates/:id/resume-view
+   * 记录简历查看审计日志（个保法合规留痕）
+   */
+  async logResumeView(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { id } = req.params;
+      await candidateService.logResumeView(id, req.user!.userId, scopeFromUser(req.user!));
+
+      res.json({
+        success: true,
+        message: '简历查看已记录',
       });
     } catch (error) {
       next(error);
