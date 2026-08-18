@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs/promises';
+import type { UploadRecord } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { env } from '../lib/env';
 import { AppError } from '../middleware/errorHandler';
@@ -45,6 +46,39 @@ export async function assertCanAccessFile(
   }
 
   throw new AppError('没有权限访问此文件', 403);
+}
+
+/**
+ * 校验文件记录存在（下载前强制校验，防止绕过数据库直接猜测磁盘文件名）
+ */
+export async function getUploadRecordOrThrow(filename: string): Promise<UploadRecord> {
+  const record = await prisma.uploadRecord.findUnique({ where: { filename } });
+  if (!record) {
+    throw new AppError('文件不存在', 404);
+  }
+  return record;
+}
+
+/**
+ * 记录简历/附件下载操作日志（写日志失败不阻断下载，仅打印错误）
+ */
+export async function logResumeDownload(user: JwtPayload, record: UploadRecord): Promise<void> {
+  try {
+    await prisma.operationLog.create({
+      data: {
+        userId: user.userId,
+        targetType: 'UploadRecord',
+        targetId: record.id,
+        action: 'resume_download',
+        detail: {
+          filename: record.filename,
+          originalName: record.originalName,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[文件下载日志] 写入 OperationLog 失败:', error);
+  }
 }
 
 export async function getFileAbsolutePath(filename: string): Promise<string> {

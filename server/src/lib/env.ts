@@ -26,6 +26,8 @@ const envSchema = z.object({
   // 文件上传
   UPLOAD_DIR: z.string().default('uploads'),
   MAX_FILE_SIZE: z.string().default('10485760').transform((val) => parseInt(val, 10)), // 10MB
+  // 文件下载是否走 Nginx X-Accel-Redirect 内部跳转（生产/Nginx 环境置 true，本地开发 Express 直接 sendFile）
+  X_ACCEL_REDIRECT: z.string().optional().transform((val) => val === 'true'),
 
   // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),

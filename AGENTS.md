@@ -398,14 +398,15 @@ npx prisma studio
 ### 生产部署
 - 使用 `docker-compose.prod.yml`，或直接运行 `deploy.sh` / `deploy.ps1`。
 - 生产环境 Nginx 直接挂载 `client/dist`（而不是 volume），要求先本地/CI 构建好前端产物。
-- 上传文件通过 volume 映射到 `server/uploads`，并在 Nginx 中通过 `/uploads/` 路径直接访问。
+- 上传文件通过 volume 映射到 `server/uploads`，**不对外直接暴露**：下载统一走 `GET /api/files/:filename` 鉴权接口（JWT，支持 `?token=`），生产/Nginx 环境由后端返回 `X-Accel-Redirect` 头，经 Nginx `internal` location（`/internal/uploads/`）内部跳转吐文件；外部直接访问 `/uploads/` 返回 403。本地开发（无 Nginx）由 Express 直接 `sendFile`（`X_ACCEL_REDIRECT=false`）。
 
 ### 部署架构
 ```
 Nginx (:80)
  ├── /      → 前端静态资源 (client/dist)
  ├── /api/  → Express Server (:3001)
- └── /uploads/ → server/uploads/
+ ├── /uploads/ → 403（禁止公开访问）
+ └── /internal/uploads/ → server/uploads/（internal，仅 X-Accel-Redirect 内部跳转）
          ↓
     PostgreSQL (:5432)
 ```
@@ -419,7 +420,7 @@ Nginx (:80)
 - **文件上传**：
   - Nginx 限制 `client_max_body_size 50M`
   - Express 限制 `10mb`（JSON / URL-encoded）
-  - 简历文件存储在 `server/uploads/`，通过 UUID 重命名，注意防范路径遍历。
+  - 简历文件存储在 `server/uploads/`，通过 UUID 重命名；下载接口以 UUID+扩展名白名单校验文件名，杜绝路径遍历，并强制校验 `UploadRecord` 记录存在、写入 `OperationLog`（action: `resume_download`）。
 - **Rate Limiting**：全局 15 分钟最多 1000 次请求（开发时如频繁刷新可调整）。
 - **CORS**：由 `env.CORS_ORIGIN` 控制，生产环境应配置为具体域名。
 - **Helmet**：已启用，并设置 `crossOriginResourcePolicy: { policy: 'cross-origin' }` 以兼容上传文件访问。

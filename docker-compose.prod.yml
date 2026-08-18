@@ -68,6 +68,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       CORS_ORIGIN: ${CORS_ORIGIN}
+      # Nginx 反向代理后启用 X-Accel-Redirect 内部跳转下载文件
+      X_ACCEL_REDIRECT: "true"
     depends_on:
       postgres:
         condition: service_healthy
