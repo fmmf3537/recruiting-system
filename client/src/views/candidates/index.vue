@@ -16,6 +16,16 @@
       </div>
     </div>
 
+    <!-- 数据范围提示：member 仅可见与自己相关的候选人 -->
+    <el-alert
+      v-if="!authStore.isAdmin"
+      class="scope-tip"
+      type="info"
+      :closable="false"
+      show-icon
+      title="当前仅展示与您相关的候选人（我创建的、指派给我的、本部门职位下的）"
+    />
+
     <!-- 筛选栏 -->
     <el-card class="filter-card" shadow="never">
       <el-form :model="filterForm" inline class="filter-form">
@@ -717,6 +727,7 @@ onActivated(() => { fetchCandidateList(); });
     .page-subtitle { margin-top: 8px; font-size: 14px; color: #909399; }
   }
 }
+.scope-tip { margin-bottom: 16px; }
 .filter-card { margin-bottom: 20px;
   .filter-form { display: flex; flex-wrap: wrap; gap: 10px; :deep(.el-form-item) { margin-bottom: 0; } }
 }

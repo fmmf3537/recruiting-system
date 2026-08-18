@@ -1,6 +1,7 @@
 import type { Response, NextFunction } from 'express';
 import type { Request } from 'express';
 import { statsService } from '../services/stats.service';
+import { scopeFromUser } from '../services/candidate-visibility.service';
 
 /**
  * 统计控制器
@@ -12,12 +13,12 @@ export class StatsController {
    * 数据看板统计
    */
   async getDashboard(
-    _req: Request,
+    req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> {
     try {
-      const data = await statsService.getDashboardStats();
+      const data = await statsService.getDashboardStats(scopeFromUser(req.user!));
       res.json({ success: true, data });
     } catch (error) {
       next(error);
@@ -38,7 +39,7 @@ export class StatsController {
       const endDate = req.query.endDate as string | undefined;
       const dateRange = statsService.parseDateRange(startDate, endDate);
 
-      const stats = await statsService.getWorkloadStats(dateRange);
+      const stats = await statsService.getWorkloadStats(dateRange, scopeFromUser(req.user!));
 
       res.json({
         success: true,
@@ -67,7 +68,7 @@ export class StatsController {
       const endDate = req.query.endDate as string | undefined;
       const dateRange = statsService.parseDateRange(startDate, endDate);
 
-      const stats = await statsService.getChannelStats(dateRange);
+      const stats = await statsService.getChannelStats(dateRange, scopeFromUser(req.user!));
 
       res.json({
         success: true,
@@ -96,7 +97,7 @@ export class StatsController {
       const endDate = req.query.endDate as string | undefined;
       const dateRange = statsService.parseDateRange(startDate, endDate);
 
-      const stats = await statsService.getJobStats(dateRange);
+      const stats = await statsService.getJobStats(dateRange, scopeFromUser(req.user!));
 
       res.json({
         success: true,
@@ -125,7 +126,7 @@ export class StatsController {
       const endDate = req.query.endDate as string | undefined;
       const dateRange = statsService.parseDateRange(startDate, endDate);
 
-      const stats = await statsService.getReferralStats(dateRange);
+      const stats = await statsService.getReferralStats(dateRange, scopeFromUser(req.user!));
 
       res.json({
         success: true,
@@ -154,7 +155,7 @@ export class StatsController {
       const endDate = req.query.endDate as string | undefined;
       const dateRange = statsService.parseDateRange(startDate, endDate);
 
-      const stats = await statsService.getFunnelStats(dateRange);
+      const stats = await statsService.getFunnelStats(dateRange, scopeFromUser(req.user!));
 
       res.json({
         success: true,
@@ -186,7 +187,7 @@ export class StatsController {
         : undefined;
 
       // 使用 statsService 获取数据
-      const exportData = await statsService.exportWorkloadStats(dateRange);
+      const exportData = await statsService.exportWorkloadStats(dateRange, scopeFromUser(req.user!));
       const csvContent = '\uFEFF' + this.convertToCSV(exportData.headers, exportData.rows);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${exportData.filename.replace('.xlsx', '.csv')}"`);
@@ -213,7 +214,7 @@ export class StatsController {
         ? statsService.parseDateRange(startDate, endDate)
         : undefined;
 
-      const exportData = await statsService.exportChannelStats(dateRange);
+      const exportData = await statsService.exportChannelStats(dateRange, scopeFromUser(req.user!));
 
       const csvContent = this.convertToCSV(exportData.headers, exportData.rows);
       
@@ -241,7 +242,7 @@ export class StatsController {
         ? statsService.parseDateRange(startDate, endDate)
         : undefined;
 
-      const exportData = await statsService.exportJobStats(dateRange);
+      const exportData = await statsService.exportJobStats(dateRange, scopeFromUser(req.user!));
 
       const csvContent = this.convertToCSV(exportData.headers, exportData.rows);
       
@@ -292,7 +293,7 @@ export class StatsController {
       const startDate = req.query.startDate as string | undefined;
       const endDate = req.query.endDate as string | undefined;
       const dateRange = (startDate && endDate) ? statsService.parseDateRange(startDate, endDate) : undefined;
-      const data = await statsService.getCycleStats(dateRange);
+      const data = await statsService.getCycleStats(dateRange, scopeFromUser(req.user!));
       res.json({ success: true, data, dateRange: dateRange || statsService.parseDateRange() });
     } catch (error) {
       next(error);
@@ -307,7 +308,7 @@ export class StatsController {
       const startDate = req.query.startDate as string | undefined;
       const endDate = req.query.endDate as string | undefined;
       const dateRange = (startDate && endDate) ? statsService.parseDateRange(startDate, endDate) : undefined;
-      const data = await statsService.getJobTimeStats(dateRange);
+      const data = await statsService.getJobTimeStats(dateRange, scopeFromUser(req.user!));
       res.json({ success: true, data, dateRange: dateRange || statsService.parseDateRange() });
     } catch (error) {
       next(error);

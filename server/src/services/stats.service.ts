@@ -1,13 +1,20 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { redis, connectRedis } from '../lib/redis';
+import {
+  buildCandidateVisibilityWhere,
+  type CandidateVisibilityScope,
+} from './candidate-visibility.service';
 
 // 缓存时间：5 分钟
 const CACHE_TTL = 300;
 
-function getCacheKey(prefix: string, dateRange?: DateRange): string {
+function getCacheKey(prefix: string, dateRange?: DateRange, scope?: CandidateVisibilityScope): string {
   const start = dateRange?.startDate.toISOString().split('T')[0] || 'all';
   const end = dateRange?.endDate.toISOString().split('T')[0] || 'all';
-  return `stats:${prefix}:${start}:${end}`;
+  // member 的统计结果按用户隔离缓存，避免不同可见范围的成员共享缓存
+  const scopeSuffix = scope && !scope.isAdmin ? `:u:${scope.userId}` : '';
+  return `stats:${prefix}:${start}:${end}${scopeSuffix}`;
 }
 
 // 时间范围类型
@@ -84,6 +91,26 @@ export interface ExportData {
  */
 export class StatsService {
   /**
+   * member 视角的可见候选人 ID 列表；admin 或未传 scope 返回 null（不过滤）
+   * 一次批量查询，供后续统计 SQL/ORM 条件复用，避免 N+1
+   */
+  private async getVisibleCandidateIds(scope?: CandidateVisibilityScope): Promise<string[] | null> {
+    const where = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    if (!where) return null;
+    const rows = await prisma.candidate.findMany({ where, select: { id: true } });
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * 将可见候选人 ID 列表转换为 $queryRaw 的过滤片段；null 表示不过滤（admin）
+   */
+  private visibleCandidateSql(column: string, ids: string[] | null): Prisma.Sql {
+    if (ids === null) return Prisma.empty;
+    if (ids.length === 0) return Prisma.sql`AND false`;
+    return Prisma.sql`AND ${Prisma.raw(column)} IN (${Prisma.join(ids)})`;
+  }
+
+  /**
    * 获取默认时间范围（当年 1月1日 至 今天）
    */
   private getDefaultDateRange(): DateRange {
@@ -111,7 +138,7 @@ export class StatsService {
    * GET /api/stats/dashboard
    * 数据看板：核心 KPI + 近 7 天新增候选人趋势
    */
-  async getDashboardStats(): Promise<{
+  async getDashboardStats(scope?: CandidateVisibilityScope): Promise<{
     kpi: {
       newCandidatesThisMonth: number;
       interviewingCount: number;
@@ -122,7 +149,7 @@ export class StatsService {
     hcStats: { totalApproved: number; totalFilled: number; fulfillmentRate: number; openRequests: number };
   }> {
     await connectRedis();
-    const cacheKey = 'stats:dashboard';
+    const cacheKey = getCacheKey('dashboard', undefined, scope);
     const cached = await redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
@@ -130,14 +157,19 @@ export class StatsService {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
+    // member 视角：候选人相关指标仅统计其可见范围内的数据（admin 不过滤）
+    const visibleIds = await this.getVisibleCandidateIds(scope);
+    const candidateFilter = visibleIds ? { id: { in: visibleIds } } : {};
+    const candidateRelationFilter = visibleIds ? { candidate: { id: { in: visibleIds } } } : {};
+
     // 本月新增候选人
     const newCandidatesThisMonth = await prisma.candidate.count({
-      where: { createdAt: { gte: monthStart, lte: monthEnd } },
+      where: { createdAt: { gte: monthStart, lte: monthEnd }, ...candidateFilter },
     });
 
     // 在面人数：有面试反馈且结论为 pending 的候选人（去重）
     const interviewingCandidates = await prisma.interviewFeedback.findMany({
-      where: { conclusion: 'pending' },
+      where: { conclusion: 'pending', ...candidateRelationFilter },
       distinct: ['candidateId'],
       select: { candidateId: true },
     });
@@ -145,7 +177,7 @@ export class StatsService {
 
     // 待发 Offer：result 为 pending 的 Offer 数量
     const pendingOffers = await prisma.offer.count({
-      where: { result: 'pending' },
+      where: { result: 'pending', ...candidateRelationFilter },
     });
 
     // 本月入职人数
@@ -153,6 +185,7 @@ export class StatsService {
       where: {
         joined: true,
         actualJoinDate: { gte: monthStart, lte: monthEnd },
+        ...candidateRelationFilter,
       },
     });
 
@@ -172,7 +205,7 @@ export class StatsService {
       const nextD = new Date(d);
       nextD.setDate(nextD.getDate() + 1);
       const count = await prisma.candidate.count({
-        where: { createdAt: { gte: d, lt: nextD } },
+        where: { createdAt: { gte: d, lt: nextD }, ...candidateFilter },
       });
       const dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       trend.push({ date: dateStr, count });
@@ -202,13 +235,18 @@ export class StatsService {
    * GET /api/stats/workload
    * 工作量统计
    */
-  async getWorkloadStats(dateRange?: DateRange): Promise<WorkloadStat[]> {
+  async getWorkloadStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<WorkloadStat[]> {
     await connectRedis();
-    const cacheKey = getCacheKey('workload', dateRange);
+    const cacheKey = getCacheKey('workload', dateRange, scope);
     const cached = await redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
+
+    // member 视角：仅统计本人工作量（其候选人/阶段/面试均属于自己可见范围）
+    const userFilter = scope && !scope.isAdmin
+      ? Prisma.sql`WHERE u.id = ${scope.userId}`
+      : Prisma.empty;
 
     const stats = await prisma.$queryRaw<WorkloadStat[]>`
       SELECT 
@@ -240,6 +278,7 @@ export class StatsService {
         WHERE o."offerDate" >= ${startDate} AND o."offerDate" <= ${endDate}
         GROUP BY ca."createdById"
       ) o ON o."createdById" = u.id
+      ${userFilter}
     `;
 
     const result = stats.filter(
@@ -253,19 +292,24 @@ export class StatsService {
    * GET /api/stats/channel
    * 渠道效果分析
    */
-  async getChannelStats(dateRange?: DateRange): Promise<ChannelStat[]> {
+  async getChannelStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<ChannelStat[]> {
     await connectRedis();
-    const cacheKey = getCacheKey('channel', dateRange);
+    const cacheKey = getCacheKey('channel', dateRange, scope);
     const cached = await redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
+
+    // member 视角：仅统计其可见范围内的候选人（admin 不过滤）
+    const visibleIds = await this.getVisibleCandidateIds(scope);
+    const candidateFilter = visibleIds ? { id: { in: visibleIds } } : {};
 
     // 获取所有候选人按来源分组统计
     const candidatesBySource = await prisma.candidate.groupBy({
       by: ['source'],
       where: {
         createdAt: { gte: startDate, lte: endDate },
+        ...candidateFilter,
       },
       _count: { id: true },
     });
@@ -275,6 +319,7 @@ export class StatsService {
       by: ['source'],
       where: {
         createdAt: { gte: startDate, lte: endDate },
+        ...candidateFilter,
         offer: {
           joined: true,
         },
@@ -308,13 +353,17 @@ export class StatsService {
    * GET /api/stats/jobs
    * 职位维度统计
    */
-  async getJobStats(dateRange?: DateRange): Promise<JobStat[]> {
+  async getJobStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<JobStat[]> {
     await connectRedis();
-    const cacheKey = getCacheKey('jobs', dateRange);
+    const cacheKey = getCacheKey('jobs', dateRange, scope);
     const cached = await redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
+
+    // member 视角：候选人相关计数仅统计其可见范围内的候选人（admin 不过滤）
+    const visibleIds = await this.getVisibleCandidateIds(scope);
+    const candidateFilter = this.visibleCandidateSql('cj."candidateId"', visibleIds);
 
     const rawStats = await prisma.$queryRaw<Array<{
       jobId: string;
@@ -337,6 +386,7 @@ export class StatsService {
       LEFT JOIN "candidate_job" cj ON cj."jobId" = j.id
       LEFT JOIN "interview_feedback" i ON i."candidateId" = cj."candidateId"
       LEFT JOIN "offer" o ON o."candidateId" = cj."candidateId"
+      WHERE TRUE ${candidateFilter}
       GROUP BY j.id, j.title, j.departments
     `;
 
@@ -369,18 +419,24 @@ export class StatsService {
    * GET /api/stats/funnel
    * 招聘漏斗统计
    */
-  async getFunnelStats(dateRange?: DateRange): Promise<FunnelStat[]> {
+  async getFunnelStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<FunnelStat[]> {
     await connectRedis();
-    const cacheKey = getCacheKey('funnel', dateRange);
+    const cacheKey = getCacheKey('funnel', dateRange, scope);
     const cached = await redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
 
+    // member 视角：仅统计其可见范围内的候选人（admin 不过滤）
+    const visibleIds = await this.getVisibleCandidateIds(scope);
+    const candidateFilter = visibleIds ? { id: { in: visibleIds } } : {};
+    const candidateRelationFilter = visibleIds ? { candidate: { id: { in: visibleIds } } } : {};
+
     // 简历入库：在日期范围内创建的候选人
     const newCandidates = await prisma.candidate.count({
       where: {
         createdAt: { gte: startDate, lte: endDate },
+        ...candidateFilter,
       },
     });
 
@@ -391,6 +447,7 @@ export class StatsService {
         stage: '初筛',
         status: 'passed',
         enteredAt: { gte: startDate, lte: endDate },
+        ...candidateRelationFilter,
       },
     });
 
@@ -401,6 +458,7 @@ export class StatsService {
         stage: '复试',
         status: 'passed',
         enteredAt: { gte: startDate, lte: endDate },
+        ...candidateRelationFilter,
       },
     });
 
@@ -411,6 +469,7 @@ export class StatsService {
         stage: '终面',
         status: 'passed',
         enteredAt: { gte: startDate, lte: endDate },
+        ...candidateRelationFilter,
       },
     });
 
@@ -419,6 +478,7 @@ export class StatsService {
       where: {
         result: 'accepted',
         offerDate: { gte: startDate, lte: endDate },
+        ...candidateRelationFilter,
       },
     });
 
@@ -427,6 +487,7 @@ export class StatsService {
       where: {
         joined: true,
         actualJoinDate: { gte: startDate, lte: endDate },
+        ...candidateRelationFilter,
       },
     });
 
@@ -445,8 +506,8 @@ export class StatsService {
   /**
    * 导出工作量统计数据为 Excel
    */
-  async exportWorkloadStats(dateRange?: DateRange): Promise<ExportData> {
-    const stats = await this.getWorkloadStats(dateRange);
+  async exportWorkloadStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<ExportData> {
+    const stats = await this.getWorkloadStats(dateRange, scope);
 
     return {
       headers: ['成员', '新增候选人', '阶段推进', '面试次数', '发放 Offer'],
@@ -464,8 +525,8 @@ export class StatsService {
   /**
    * 导出渠道效果数据为 Excel
    */
-  async exportChannelStats(dateRange?: DateRange): Promise<ExportData> {
-    const stats = await this.getChannelStats(dateRange);
+  async exportChannelStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<ExportData> {
+    const stats = await this.getChannelStats(dateRange, scope);
 
     return {
       headers: ['渠道', '候选人数量', '入职数量', '转化率(%)'],
@@ -482,8 +543,8 @@ export class StatsService {
   /**
    * 导出职位统计数据为 Excel
    */
-  async exportJobStats(dateRange?: DateRange): Promise<ExportData> {
-    const stats = await this.getJobStats(dateRange);
+  async exportJobStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<ExportData> {
+    const stats = await this.getJobStats(dateRange, scope);
 
     return {
       headers: ['职位', '部门', '候选人', '面试', 'Offer', '入职'],
@@ -502,7 +563,7 @@ export class StatsService {
   /**
    * 内推统计
    */
-  async getReferralStats(dateRange?: DateRange): Promise<{
+  async getReferralStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<{
     totalReferrals: number;
     hiredReferrals: number;
     hireRate: number;
@@ -514,6 +575,12 @@ export class StatsService {
         gte: dateRange.startDate,
         lte: dateRange.endDate,
       };
+    }
+
+    // member 视角：仅统计其可见范围内的候选人（admin 不过滤）
+    const visibleIds = await this.getVisibleCandidateIds(scope);
+    if (visibleIds) {
+      where.id = { in: visibleIds };
     }
 
     // 所有有推荐人的候选人
@@ -551,13 +618,17 @@ export class StatsService {
   /**
    * 招聘周期统计 — 各阶段平均/最长/最短停留天数
    */
-  async getCycleStats(dateRange?: DateRange): Promise<CycleStat[]> {
+  async getCycleStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<CycleStat[]> {
     await connectRedis();
-    const cacheKey = getCacheKey('cycle', dateRange);
+    const cacheKey = getCacheKey('cycle', dateRange, scope);
     const cached = await redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
     const range = dateRange || this.getDefaultDateRange();
+
+    // member 视角：仅统计其可见范围内候选人的阶段记录（admin 不过滤）
+    const visibleIds = await this.getVisibleCandidateIds(scope);
+    const candidateFilter = this.visibleCandidateSql('"candidateId"', visibleIds);
 
     const result = await prisma.$queryRaw<CycleStat[]>`
       SELECT stage,
@@ -568,6 +639,7 @@ export class StatsService {
       FROM stage_record
       WHERE "completedAt" IS NOT NULL
         AND "enteredAt" >= ${range.startDate} AND "enteredAt" <= ${range.endDate}
+        ${candidateFilter}
       GROUP BY stage
       ORDER BY
         CASE stage
@@ -584,13 +656,17 @@ export class StatsService {
   /**
    * 职位时间指标 — 每个职位的 TTF（发布到接受Offer）和 TTH（入库到入职）
    */
-  async getJobTimeStats(dateRange?: DateRange): Promise<JobTimeStat[]> {
+  async getJobTimeStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<JobTimeStat[]> {
     await connectRedis();
-    const cacheKey = getCacheKey('jobtime', dateRange);
+    const cacheKey = getCacheKey('jobtime', dateRange, scope);
     const cached = await redis.get(cacheKey);
     if (cached) return JSON.parse(cached);
 
     const range = dateRange || this.getDefaultDateRange();
+
+    // member 视角：候选人相关计数仅统计其可见范围内的候选人（admin 不过滤）
+    const visibleIds = await this.getVisibleCandidateIds(scope);
+    const candidateFilter = this.visibleCandidateSql('c.id', visibleIds);
 
     const result = await prisma.$queryRaw<JobTimeStat[]>`
       SELECT
@@ -610,6 +686,7 @@ export class StatsService {
       LEFT JOIN candidate c ON c.id = cj."candidateId"
       LEFT JOIN offer o ON o."candidateId" = c.id
       WHERE j."createdAt" >= ${range.startDate} AND j."createdAt" <= ${range.endDate}
+      ${candidateFilter}
       GROUP BY j.id, j.title, j.departments
       HAVING COUNT(DISTINCT cj."candidateId") > 0
       ORDER BY j."createdAt" DESC
@@ -622,8 +699,8 @@ export class StatsService {
   /**
    * 导出漏斗统计数据
    */
-  async exportFunnelStats(dateRange?: DateRange): Promise<ExportData> {
-    const stats = await this.getFunnelStats(dateRange);
+  async exportFunnelStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<ExportData> {
+    const stats = await this.getFunnelStats(dateRange, scope);
     return {
       headers: ['阶段', '人数'],
       rows: stats.map((s) => [s.stage, s.count]),
@@ -634,8 +711,8 @@ export class StatsService {
   /**
    * 导出周期统计数据
    */
-  async exportCycleStats(dateRange?: DateRange): Promise<ExportData> {
-    const stats = await this.getCycleStats(dateRange);
+  async exportCycleStats(dateRange?: DateRange, scope?: CandidateVisibilityScope): Promise<ExportData> {
+    const stats = await this.getCycleStats(dateRange, scope);
     return {
       headers: ['阶段', '平均天数', '最长天数', '最短天数', '总人数'],
       rows: stats.map((s) => [s.stage, s.avgDays, s.maxDays, s.minDays, s.totalCount]),

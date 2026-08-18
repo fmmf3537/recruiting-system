@@ -19,10 +19,16 @@ vi.mock('../../src/services/candidate.service', () => ({
   },
 }));
 
-// Mock auth middleware
+// Mock auth middleware（支持通过 x-test-role 头模拟 member 角色）
 vi.mock('../../src/middleware/auth', () => ({
   authenticate: (req: any, res: any, next: any) => {
-    req.user = { userId: 'user-1', email: 'test@test.com', role: 'admin' };
+    const role = req.headers['x-test-role'] === 'member' ? 'member' : 'admin';
+    req.user = {
+      userId: 'user-1',
+      email: 'test@test.com',
+      role,
+      department: role === 'member' ? '技术部' : null,
+    };
     next();
   },
   authorize: () => (req: any, res: any, next: any) => next(),
@@ -180,7 +186,8 @@ describe('候选人模块 API 测试', () => {
         .expect(200);
 
       expect(candidateService.getCandidates).toHaveBeenCalledWith(
-        expect.objectContaining({ page: 2, pageSize: 20 })
+        expect.objectContaining({ page: 2, pageSize: 20 }),
+        expect.objectContaining({ userId: 'user-1', isAdmin: true })
       );
     });
   });
@@ -239,6 +246,26 @@ describe('候选人模块 API 测试', () => {
         .expect(404);
 
       expect(res.body).toBeDefined();
+    });
+
+    it('member 访问他人候选人详情应返回 403', async () => {
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      // Service 层可见性校验不通过时抛出 403
+      vi.mocked(candidateService.getCandidateById).mockRejectedValue(
+        new AppError('无权查看此候选人', 403)
+      );
+
+      const res = await request(app)
+        .get('/api/candidates/clh12345678901234567890123')
+        .set('x-test-role', 'member')
+        .expect(403);
+
+      expect(res.body).toBeDefined();
+      // 断言 controller 以 member 可见性范围调用 service
+      expect(candidateService.getCandidateById).toHaveBeenCalledWith(
+        'clh12345678901234567890123',
+        expect.objectContaining({ userId: 'user-1', isAdmin: false, department: '技术部' })
+      );
     });
   });
 

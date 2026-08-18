@@ -428,6 +428,10 @@ Nginx (:80)
   - `admin`：可访问成员管理、查看全部数据。
   - `member`：普通成员权限。
   - 后端通过 `authorize('admin')` 中间件保护敏感接口，前端路由通过 `meta.requireAdmin` 控制。
+- **候选人数据可见性**：
+  - `admin` 可见全部候选人；`member` 仅可见「自己创建的 + 被指派给自己的阶段记录（StageRecord.assigneeId）关联的 + 自己部门职位（Job.departments 包含 User.department）下关联的」候选人，`department` 为 null 的 member 仅看前两类。
+  - 可见性条件统一由 `server/src/services/candidate-visibility.service.ts` 的 `buildCandidateVisibilityWhere` 构建，在 service 层注入（候选人列表/详情/批量操作、统计接口）；详情越权返回 403。
+  - 职位列表按部门过滤（`job.controller.ts` 的 `getUserDepartment`）。
 - **JWT 吊销**：`User.tokenVersion` 写入 JWT payload，`authenticate` 中间件与数据库比对，不一致即 401；修改密码、管理员重置密码（`POST /api/users/:id/reset-password`，仅 admin，返回 12 位临时密码并写 OperationLog）、管理员直接改密时 `tokenVersion +1`，实现“改密即全端下线”。
 - **密码策略**：新密码至少 8 位且同时包含字母和数字，统一由 `server/src/middleware/validate.ts` 的 `passwordSchema` 校验（登录/绑定飞书等校验既有密码的场景不适用）。
 

@@ -674,4 +674,157 @@ describe('CandidateService - 候选人服务单元测试', () => {
       await expect(service.deleteWorkHistory('non-existent')).rejects.toThrow('工作经历不存在');
     });
   });
+
+  describe('数据可见性 - 候选人权限过滤', () => {
+    const adminScope = { userId: 'admin-1', isAdmin: true, department: null };
+    const memberScope = { userId: 'user-1', isAdmin: false, department: '技术部' };
+
+    // 列表查询公共 mock：返回空列表
+    const mockEmptyList = () => {
+      vi.mocked(prisma.candidate.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.candidate.count).mockResolvedValue(0);
+      vi.mocked(prisma.stageRecord.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.candidateJob.findMany).mockResolvedValue([] as any);
+    };
+
+    it('admin 查看列表时不附加可见性条件（全量）', async () => {
+      mockEmptyList();
+
+      await service.getCandidates({ page: 1, pageSize: 10 }, adminScope);
+
+      const where = vi.mocked(prisma.candidate.findMany).mock.calls[0][0]?.where;
+      expect(where?.AND).toBeUndefined();
+    });
+
+    it('member 查看列表时仅包含"我创建的 + 指派给我的 + 本部门职位下"的候选人', async () => {
+      mockEmptyList();
+
+      await service.getCandidates({ page: 1, pageSize: 10 }, memberScope);
+
+      const where = vi.mocked(prisma.candidate.findMany).mock.calls[0][0]?.where;
+      expect(where?.AND).toEqual([
+        {
+          OR: [
+            { createdById: 'user-1' },
+            { stageRecords: { some: { assigneeId: 'user-1' } } },
+            {
+              candidateJobs: {
+                some: { job: { departments: { array_contains: ['技术部'] } } },
+              },
+            },
+          ],
+        },
+      ]);
+    });
+
+    it('department 为 null 的 member 仅看"我创建的 + 指派给我的"两类', async () => {
+      mockEmptyList();
+
+      await service.getCandidates(
+        { page: 1, pageSize: 10 },
+        { userId: 'user-1', isAdmin: false, department: null }
+      );
+
+      const where = vi.mocked(prisma.candidate.findMany).mock.calls[0][0]?.where;
+      expect(where?.AND).toEqual([
+        {
+          OR: [
+            { createdById: 'user-1' },
+            { stageRecords: { some: { assigneeId: 'user-1' } } },
+          ],
+        },
+      ]);
+    });
+
+    it('member 无权查看他人候选人详情时返回 403', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        createdById: 'user-2',
+      } as any);
+      // 可见性校验：不在 member 可见范围内
+      vi.mocked(prisma.candidate.count).mockResolvedValue(0);
+
+      await expect(service.getCandidateById('candidate-1', memberScope))
+        .rejects
+        .toThrow('无权查看此候选人');
+    });
+
+    it('member 在可见范围内时可正常查看详情', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        createdById: 'user-1',
+        stageRecords: [],
+        interviewFeedbacks: [],
+        offer: null,
+        candidateJobs: [],
+        candidateTags: [],
+        createdBy: { id: 'user-1', name: '成员', email: 'm@test.com' },
+      } as any);
+      vi.mocked(prisma.candidate.count).mockResolvedValue(1);
+
+      const result = await service.getCandidateById('candidate-1', memberScope);
+
+      expect(result.id).toBe('candidate-1');
+    });
+
+    it('admin 查看详情时不做可见性校验', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        createdById: 'user-2',
+        stageRecords: [],
+        interviewFeedbacks: [],
+        offer: null,
+        candidateJobs: [],
+        candidateTags: [],
+        createdBy: { id: 'user-2', name: '成员', email: 'm@test.com' },
+      } as any);
+
+      const result = await service.getCandidateById('candidate-1', adminScope);
+
+      expect(result.id).toBe('candidate-1');
+      expect(prisma.candidate.count).not.toHaveBeenCalled();
+    });
+
+    it('跨部门不可见：member 批量打标签时仅操作可见范围内的候选人', async () => {
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({
+        id: 'user-1',
+        role: 'member',
+        department: '技术部',
+      } as any);
+      // 可见性过滤后仅剩 c1（c2 为他人创建且属于其他部门职位）
+      vi.mocked(prisma.candidate.findMany).mockResolvedValue([{ id: 'c1' }] as any);
+      vi.mocked(prisma.candidateTag.deleteMany).mockResolvedValue({ count: 0 } as any);
+      vi.mocked(prisma.candidateTag.createMany).mockResolvedValue({ count: 1 } as any);
+
+      const result = await service.batchSetTags(['c1', 'c2'], ['tag-1'], 'user-1');
+
+      expect(result).toEqual({ success: 1, failed: 1 });
+      // 可见性过滤按本部门职位条件下推到数据库
+      expect(prisma.candidate.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: { in: ['c1', 'c2'] },
+            AND: [
+              {
+                OR: [
+                  { createdById: 'user-1' },
+                  { stageRecords: { some: { assigneeId: 'user-1' } } },
+                  {
+                    candidateJobs: {
+                      some: { job: { departments: { array_contains: ['技术部'] } } },
+                    },
+                  },
+                ],
+              },
+            ],
+          }),
+        })
+      );
+      expect(prisma.candidateTag.deleteMany).toHaveBeenCalledTimes(1);
+      expect(prisma.candidateTag.deleteMany).toHaveBeenCalledWith({ where: { candidateId: 'c1' } });
+    });
+  });
 });

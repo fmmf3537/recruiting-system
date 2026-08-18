@@ -1,5 +1,6 @@
 import type { Response, NextFunction } from 'express';
 import { candidateService } from '../services/candidate.service';
+import { scopeFromUser } from '../services/candidate-visibility.service';
 import type { Request } from 'express';
 
 /**
@@ -73,7 +74,8 @@ export class CandidateController {
         hasNoJob: req.query.hasNoJob as boolean | undefined,
       };
 
-      const result = await candidateService.getCandidates(query);
+      // 可见性范围由 JWT 用户信息构建，实际过滤逻辑集中在 service 层
+      const result = await candidateService.getCandidates(query, scopeFromUser(req.user!));
 
       res.json({
         success: true,
@@ -101,7 +103,7 @@ export class CandidateController {
   ): Promise<void> {
     try {
       const { id } = req.params;
-      const candidate = await candidateService.getCandidateById(id);
+      const candidate = await candidateService.getCandidateById(id, scopeFromUser(req.user!));
 
       res.json({
         success: true,
@@ -439,7 +441,11 @@ export class CandidateController {
     try {
       const { candidateIds, tagIds } = req.body;
 
-      const result = await candidateService.batchSetTags(candidateIds, tagIds || []);
+      const result = await candidateService.batchSetTags(
+        candidateIds,
+        tagIds || [],
+        req.user!.userId
+      );
 
       res.json({
         success: true,

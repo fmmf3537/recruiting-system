@@ -2,6 +2,7 @@ import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { statsController } from '../controllers/stats.controller';
 import { statsService } from '../services/stats.service';
+import { scopeFromUser } from '../services/candidate-visibility.service';
 
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
@@ -73,9 +74,9 @@ router.get(
 router.get(
   '/workload/export',
   authenticate,
-  async (_req, res, next) => {
+  async (req, res, next) => {
     try {
-      const stats = await statsService.getWorkloadStats(undefined);
+      const stats = await statsService.getWorkloadStats(undefined, scopeFromUser(req.user!));
       const rows = stats.map((s) => [
         s.userName,
         s.newCandidates,
@@ -128,7 +129,7 @@ router.get(
         ? statsService.parseDateRange(startDate, endDate)
         : undefined;
 
-      const stats = await statsService.getChannelStats(dateRange);
+      const stats = await statsService.getChannelStats(dateRange, scopeFromUser(req.user!));
       
       const headers = ['渠道', '候选人数量', '入职数量', '转化率(%)'];
       const rows = stats.map((s) => [
@@ -178,7 +179,7 @@ router.get(
         ? statsService.parseDateRange(startDate, endDate)
         : undefined;
 
-      const stats = await statsService.getJobStats(dateRange);
+      const stats = await statsService.getJobStats(dateRange, scopeFromUser(req.user!));
       
       const headers = ['职位', '部门', '候选人', '面试', 'Offer', '入职'];
       const rows = stats.map((s) => [
@@ -264,7 +265,7 @@ router.get(
         ? statsService.parseDateRange(startDate, endDate)
         : undefined;
 
-      const stats = await statsService.getCycleStats(dateRange);
+      const stats = await statsService.getCycleStats(dateRange, scopeFromUser(req.user!));
       const headers = ['阶段', '平均天数', '最长天数', '最短天数', '总人数'];
       const rows = stats.map((s) => [s.stage, s.avgDays, s.maxDays, s.minDays, s.totalCount]);
       const csvContent = '\uFEFF' + convertToCSV(headers, rows);
@@ -294,7 +295,7 @@ router.get(
         ? statsService.parseDateRange(startDate, endDate)
         : undefined;
 
-      const stats = await statsService.getFunnelStats(dateRange);
+      const stats = await statsService.getFunnelStats(dateRange, scopeFromUser(req.user!));
       const headers = ['阶段', '人数'];
       const rows = stats.map((s) => [s.stage, s.count]);
       const csvContent = '\uFEFF' + convertToCSV(headers, rows);

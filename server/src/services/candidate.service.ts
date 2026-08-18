@@ -13,6 +13,10 @@ import {
 } from '../constants';
 import type { Stage } from '../constants';
 import { checkDuplicate, isPhoneUsed, isEmailUsed } from './duplicate-checker.service';
+import {
+  buildCandidateVisibilityWhere,
+  type CandidateVisibilityScope,
+} from './candidate-visibility.service';
 
 // 候选人列表查询参数类型
 export interface CandidateListQuery {
@@ -242,8 +246,12 @@ export class CandidateService {
   /**
    * 获取候选人列表（支持分页和多条件筛选）
    */
-  async getCandidates(query: CandidateListQuery): Promise<CandidateListResult> {
-    const cacheKey = `candidates:list:${JSON.stringify(query)}`;
+  async getCandidates(
+    query: CandidateListQuery,
+    scope?: CandidateVisibilityScope
+  ): Promise<CandidateListResult> {
+    // 缓存 key 包含完整可见性范围，避免不同角色/部门的成员共享同一份缓存
+    const cacheKey = `candidates:list:${scope ? `${JSON.stringify(scope)}:` : ''}${JSON.stringify(query)}`;
     const cached = await getFromCache<CandidateListResult>(cacheKey);
     if (cached) {
       return cached;
@@ -268,6 +276,12 @@ export class CandidateService {
 
     // 构建查询条件
     const where: Prisma.CandidateWhereInput = {};
+
+    // 数据可见性：member 仅可见"我创建的 + 指派给我的阶段 + 本部门职位下"的候选人
+    const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    if (visibilityWhere) {
+      where.AND = [visibilityWhere];
+    }
 
     // 关键词搜索（姓名、手机号、邮箱）
     if (keyword) {
@@ -488,7 +502,8 @@ export class CandidateService {
    * 获取候选人详情（含流程记录、面试反馈、Offer 信息）
    */
   async getCandidateById(
-    id: string
+    id: string,
+    scope?: CandidateVisibilityScope
   ): Promise<
     Candidate & {
       stageRecords: Array<{
@@ -565,6 +580,17 @@ export class CandidateService {
 
     if (!candidate) {
       throw new AppError('候选人不存在', 404);
+    }
+
+    // 数据可见性校验：member 不在可见范围内时返回 403（一次 count 查询，无 N+1）
+    const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    if (visibilityWhere) {
+      const visibleCount = await prisma.candidate.count({
+        where: { id, AND: [visibilityWhere] },
+      });
+      if (visibleCount === 0) {
+        throw new AppError('无权查看此候选人', 403);
+      }
     }
 
     return {
@@ -1303,7 +1329,16 @@ export class CandidateService {
     const operator = await prisma.user.findUnique({ where: { id: operatedById } });
     const isAdmin = operator?.role === 'admin';
 
-    for (const id of candidateIds) {
+    // 数据可见性过滤：member 只能批量操作其可见范围内的候选人
+    // （一次批量查询出可见 ID，避免逐个查询）
+    const operableIds = await this.filterVisibleCandidateIds(candidateIds, {
+      userId: operatedById,
+      isAdmin,
+      department: operator?.department ?? null,
+    });
+    failed += candidateIds.length - operableIds.length;
+
+    for (const id of operableIds) {
       try {
         await this.advanceStage(id, data, operatedById, isAdmin);
         success++;
@@ -1321,12 +1356,22 @@ export class CandidateService {
    */
   async batchSetTags(
     candidateIds: string[],
-    tagIds: string[]
+    tagIds: string[],
+    operatedById: string
   ): Promise<{ success: number; failed: number }> {
     let success = 0;
     let failed = 0;
 
-    for (const candidateId of candidateIds) {
+    // 操作人信息只查一次（N+1 防护），并据此做数据可见性过滤
+    const operator = await prisma.user.findUnique({ where: { id: operatedById } });
+    const operableIds = await this.filterVisibleCandidateIds(candidateIds, {
+      userId: operatedById,
+      isAdmin: operator?.role === 'admin',
+      department: operator?.department ?? null,
+    });
+    failed += candidateIds.length - operableIds.length;
+
+    for (const candidateId of operableIds) {
       try {
         // 先删除旧标签，再创建新标签
         await prisma.candidateTag.deleteMany({ where: { candidateId } });
@@ -1345,6 +1390,26 @@ export class CandidateService {
 
     await clearListCache('candidates:list:*');
     return { success, failed };
+  }
+
+  /**
+   * 按数据可见性过滤候选人 ID（批量操作共用）
+   * admin 直接返回原列表；member 用一次批量查询筛出可见候选人，其余视为不可操作
+   */
+  private async filterVisibleCandidateIds(
+    candidateIds: string[],
+    scope: CandidateVisibilityScope
+  ): Promise<string[]> {
+    const visibilityWhere = buildCandidateVisibilityWhere(scope);
+    if (!visibilityWhere || candidateIds.length === 0) {
+      return candidateIds;
+    }
+    const visible = await prisma.candidate.findMany({
+      where: { id: { in: candidateIds }, AND: [visibilityWhere] },
+      select: { id: true },
+    });
+    const visibleIds = new Set(visible.map((v) => v.id));
+    return candidateIds.filter((cid) => visibleIds.has(cid));
   }
 }
 
