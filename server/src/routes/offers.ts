@@ -41,6 +41,21 @@ const markAsJoinedSchema = z.object({
   actualJoinDate: z.string().datetime('无效的日期格式'),
 });
 
+// 提交审批验证 Schema
+const submitApprovalSchema = z.object({
+  approverId: z.string().cuid('无效的审批人ID'),
+});
+
+// 审批通过验证 Schema
+const approveOfferSchema = z.object({
+  note: z.string().optional(),
+});
+
+// 审批驳回验证 Schema（驳回必须填写意见）
+const rejectOfferSchema = z.object({
+  note: z.string().min(1, '驳回意见不能为空'),
+});
+
 // 候选人 ID 参数验证
 const candidateIdParamSchema = z.object({
   candidateId: z.string().cuid('无效的候选人ID'),
@@ -115,6 +130,57 @@ router.patch(
   validate(candidateIdParamSchema, 'params'),
   validate(updateResultSchema),
   offerController.updateOfferResult
+);
+
+/**
+ * POST /api/offers/:candidateId/submit
+ * 提交审批（draft/rejected → pending_approval）
+ * 权限：登录用户
+ */
+router.post(
+  '/:candidateId/submit',
+  authenticate,
+  validate(candidateIdParamSchema, 'params'),
+  validate(submitApprovalSchema),
+  offerController.submitOfferApproval
+);
+
+/**
+ * POST /api/offers/:candidateId/approve
+ * 审批通过（仅 admin 或指定审批人，service 层校验）
+ * 权限：登录用户
+ */
+router.post(
+  '/:candidateId/approve',
+  authenticate,
+  validate(candidateIdParamSchema, 'params'),
+  validate(approveOfferSchema),
+  offerController.approveOffer
+);
+
+/**
+ * POST /api/offers/:candidateId/reject
+ * 审批驳回（仅 admin 或指定审批人，需填写意见）
+ * 权限：登录用户
+ */
+router.post(
+  '/:candidateId/reject',
+  authenticate,
+  validate(candidateIdParamSchema, 'params'),
+  validate(rejectOfferSchema),
+  offerController.rejectOffer
+);
+
+/**
+ * POST /api/offers/:candidateId/send
+ * 标记已发送（approved → sent）
+ * 权限：登录用户
+ */
+router.post(
+  '/:candidateId/send',
+  authenticate,
+  validate(candidateIdParamSchema, 'params'),
+  offerController.markOfferSent
 );
 
 /**

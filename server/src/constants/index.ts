@@ -26,6 +26,10 @@ export type JobType = (typeof JOB_TYPES)[number];
 export const OFFER_RESULTS = ['pending', 'accepted', 'rejected'] as const;
 export type OfferResult = (typeof OFFER_RESULTS)[number];
 
+// ==================== Offer 审批状态 ====================
+export const OFFER_STATUS = ['draft', 'pending_approval', 'approved', 'rejected', 'sent'] as const;
+export type OfferStatus = (typeof OFFER_STATUS)[number];
+
 // ==================== 性别 ====================
 export const GENDERS = ['男', '女'] as const;
 export type Gender = (typeof GENDERS)[number];

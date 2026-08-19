@@ -48,6 +48,9 @@ model User {
   // 关系：一个 User 审批的 HC 申请
   hcApprovals HCRequest[] @relation("HCApprovals")
 
+  // 关系：一个 User 审批的 Offer
+  offerApprovals Offer[] @relation("OfferApprovals")
+
   // 关系：一个 User 产生多个操作日志
   operationLogs     OperationLog[] @relation("UserOperationLogs")
 
@@ -311,6 +314,14 @@ model Offer {
   joined           Boolean   @default(false)  // 是/否
   actualJoinDate   DateTime?
   note             String?   @db.Text
+
+  // 审批流（参照 HCRequest）：draft | pending_approval | approved | rejected | sent
+  status           String    @default("draft")
+  approverId       String?
+  approver         User?     @relation("OfferApprovals", fields: [approverId], references: [id])
+  approveNote      String?   // 审批意见
+  approvedAt       DateTime?
+  rejectedAt       DateTime?
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -319,6 +330,7 @@ model Offer {
   @@index([result])
   @@index([joined])
   @@index([offerDate])
+  @@index([status])
   @@index([createdAt])
   @@map("offer")
 }

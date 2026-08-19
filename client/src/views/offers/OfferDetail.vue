@@ -14,7 +14,10 @@
           <div class="title-section">
             <h1 class="offer-title">Offer 详情</h1>
             <div class="status-tags">
-              <el-tag :type="getResultType(offer.result)" size="large" effect="dark">
+              <el-tag :type="getStatusType(offer.status)" size="large" effect="dark">
+                {{ getStatusText(offer.status) }}
+              </el-tag>
+              <el-tag :type="getResultType(offer.result)" size="large">
                 {{ getResultText(offer.result) }}
               </el-tag>
               <el-tag v-if="offer.joined" type="success" size="large" effect="dark">
@@ -23,15 +26,39 @@
             </div>
           </div>
           <div class="action-buttons">
+            <!-- 审批流操作（参照 HCRequest 交互模式） -->
             <el-button
-              v-if="offer.result === 'pending'"
+              v-if="offer.status === 'draft' || offer.status === 'rejected'"
+              type="primary"
+              @click="handleSubmitApproval"
+            >
+              <el-icon><Promotion /></el-icon>提交审批
+            </el-button>
+            <template v-if="offer.status === 'pending_approval' && canApprove">
+              <el-button type="success" @click="handleApprove">
+                <el-icon><Check /></el-icon>审批通过
+              </el-button>
+              <el-button type="danger" plain @click="handleRejectApproval">
+                <el-icon><Close /></el-icon>驳回
+              </el-button>
+            </template>
+            <el-button
+              v-if="offer.status === 'approved'"
+              type="primary"
+              @click="handleMarkSent"
+            >
+              <el-icon><Position /></el-icon>标记已发送
+            </el-button>
+            <!-- 录入候选人答复：审批通过（含已发送）后才允许 -->
+            <el-button
+              v-if="offer.result === 'pending' && (offer.status === 'approved' || offer.status === 'sent')"
               type="success"
               @click="handleAccept"
             >
               <el-icon><Check /></el-icon>接受 Offer
             </el-button>
             <el-button
-              v-if="offer.result === 'pending'"
+              v-if="offer.result === 'pending' && (offer.status === 'approved' || offer.status === 'sent')"
               type="danger"
               plain
               @click="handleReject"
@@ -87,6 +114,15 @@
             <el-descriptions-item label="关联职位" :span="2">
               {{ offer.candidate?.candidateJobs?.[0]?.job?.title || '-' }}
             </el-descriptions-item>
+            <el-descriptions-item label="审批状态">
+              {{ getStatusText(offer.status) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="审批时间" v-if="offer.approvedAt || offer.rejectedAt">
+              {{ formatDateTime((offer.approvedAt || offer.rejectedAt) as string) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="审批意见" :span="2" v-if="offer.approveNote">
+              {{ offer.approveNote }}
+            </el-descriptions-item>
           </el-descriptions>
         </div>
 
@@ -123,6 +159,54 @@
       <el-button type="primary" @click="handleCreateOffer">创建 Offer</el-button>
     </el-empty>
     <el-empty v-else description="Offer 不存在或已被删除" />
+
+    <!-- 提交审批对话框 -->
+    <el-dialog v-model="submitDialogVisible" title="提交审批" width="500px">
+      <el-form ref="submitFormRef" :model="submitForm" :rules="submitRules" label-width="100px">
+        <el-form-item label="审批人" prop="approverId">
+          <el-select v-model="submitForm.approverId" placeholder="请选择审批人" style="width: 100%">
+            <el-option
+              v-for="item in approverOptions"
+              :key="item.id"
+              :label="`${item.name}（${item.email}）`"
+              :value="item.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="submitDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleSubmitApprovalConfirm" :loading="submitting">提交</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 审批对话框（通过/驳回共用，参照 HCRequest 审批交互） -->
+    <el-dialog
+      v-model="approvalDialogVisible"
+      :title="approvalAction === 'approve' ? '审批通过' : '驳回 Offer'"
+      width="500px"
+    >
+      <el-form label-width="100px">
+        <el-form-item :label="approvalAction === 'approve' ? '审批意见' : '驳回意见'" required>
+          <el-input
+            v-model="approvalNote"
+            type="textarea"
+            :rows="3"
+            :placeholder="approvalAction === 'approve' ? '选填' : '必填'"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="approvalDialogVisible = false">取消</el-button>
+        <el-button
+          :type="approvalAction === 'approve' ? 'success' : 'danger'"
+          @click="handleApprovalConfirm"
+          :loading="approving"
+        >
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
 
     <!-- 编辑对话框 -->
     <el-dialog v-model="editDialogVisible" title="编辑 Offer" width="500px">
@@ -162,27 +246,56 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onActivated } from 'vue';
+import { ref, reactive, computed, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { ArrowLeft, Check, Close, CircleCheck, Edit, UserFilled } from '@element-plus/icons-vue';
+import { ArrowLeft, Check, Close, CircleCheck, Edit, Position, Promotion, UserFilled } from '@element-plus/icons-vue';
 import {
   getOfferByCandidateId,
   updateOffer,
   updateOfferResult,
   markAsJoined,
+  submitOfferApproval,
+  approveOffer,
+  rejectOffer,
+  markOfferSent,
   type OfferDetail,
   type OfferResult,
+  type OfferStatus,
   type UpdateOfferParams,
 } from '@/api/offer';
+import { getApproverOptions, type ApproverOption } from '@/api/user';
+import { useAuthStore } from '@/stores/auth';
 
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 const candidateId = route.params.id as string;
 
 const loading = ref(false);
 const offer = ref<OfferDetail | null>(null);
 const noOffer = ref(false);
+
+// 当前用户是否为审批人（admin 或被指定审批人可审批）
+const canApprove = computed(
+  () => authStore.isAdmin || authStore.userInfo?.id === offer.value?.approverId
+);
+
+// 提交审批对话框
+const submitDialogVisible = ref(false);
+const submitting = ref(false);
+const submitFormRef = ref<FormInstance>();
+const approverOptions = ref<ApproverOption[]>([]);
+const submitForm = reactive({ approverId: '' });
+const submitRules: FormRules = {
+  approverId: [{ required: true, message: '请选择审批人', trigger: 'change' }],
+};
+
+// 审批对话框（通过/驳回共用）
+const approvalDialogVisible = ref(false);
+const approving = ref(false);
+const approvalAction = ref<'approve' | 'reject'>('approve');
+const approvalNote = ref('');
 
 // 编辑对话框
 const editDialogVisible = ref(false);
@@ -240,6 +353,28 @@ function formatDateTime(dateStr: string): string {
   return new Date(dateStr).toLocaleString('zh-CN');
 }
 
+function getStatusType(status: OfferStatus): string {
+  const map: Record<OfferStatus, string> = {
+    draft: 'info',
+    pending_approval: 'warning',
+    approved: 'success',
+    rejected: 'danger',
+    sent: '',
+  };
+  return map[status] || 'info';
+}
+
+function getStatusText(status: OfferStatus): string {
+  const map: Record<OfferStatus, string> = {
+    draft: '草稿',
+    pending_approval: '审批中',
+    approved: '已通过',
+    rejected: '已驳回',
+    sent: '已发送',
+  };
+  return map[status] || status;
+}
+
 function getResultType(result: OfferResult): string {
   return { 'pending': 'warning', 'accepted': 'success', 'rejected': 'danger' }[result] || 'info';
 }
@@ -276,6 +411,91 @@ async function handleEditSubmit() {
     ElMessage.error(error.message || '更新失败');
   } finally {
     editSubmitting.value = false;
+  }
+}
+
+// 打开提交审批对话框，并加载可选审批人
+async function handleSubmitApproval() {
+  submitForm.approverId = '';
+  submitDialogVisible.value = true;
+  try {
+    const res = await getApproverOptions();
+    if (res.success) {
+      approverOptions.value = res.data;
+    }
+  } catch (error) {
+    console.error('获取审批人列表失败:', error);
+  }
+}
+
+async function handleSubmitApprovalConfirm() {
+  const valid = await submitFormRef.value?.validate().catch(() => false);
+  if (!valid) return;
+  submitting.value = true;
+  try {
+    const res = await submitOfferApproval(candidateId, submitForm.approverId);
+    if (res.success) {
+      ElMessage.success('已提交审批');
+      submitDialogVisible.value = false;
+      fetchOfferDetail();
+    }
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || error.message || '提交失败');
+  } finally {
+    submitting.value = false;
+  }
+}
+
+function handleApprove() {
+  approvalAction.value = 'approve';
+  approvalNote.value = '';
+  approvalDialogVisible.value = true;
+}
+
+function handleRejectApproval() {
+  approvalAction.value = 'reject';
+  approvalNote.value = '';
+  approvalDialogVisible.value = true;
+}
+
+async function handleApprovalConfirm() {
+  // 驳回必须填写审批意见（与后端校验一致）
+  if (approvalAction.value === 'reject' && !approvalNote.value.trim()) {
+    ElMessage.warning('驳回必须填写审批意见');
+    return;
+  }
+  approving.value = true;
+  try {
+    const res =
+      approvalAction.value === 'approve'
+        ? await approveOffer(candidateId, approvalNote.value || undefined)
+        : await rejectOffer(candidateId, approvalNote.value);
+    if (res.success) {
+      ElMessage.success(approvalAction.value === 'approve' ? '审批通过' : '已驳回');
+      approvalDialogVisible.value = false;
+      fetchOfferDetail();
+    }
+  } catch (error: any) {
+    ElMessage.error(error.response?.data?.error || error.message || '操作失败');
+  } finally {
+    approving.value = false;
+  }
+}
+
+async function handleMarkSent() {
+  try {
+    await ElMessageBox.confirm('确定已将 Offer 发送给候选人吗？', '标记已发送', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'info',
+    });
+    const res = await markOfferSent(candidateId);
+    if (res.success) {
+      ElMessage.success('已标记为已发送');
+      fetchOfferDetail();
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') ElMessage.error(error.response?.data?.error || error.message || '操作失败');
   }
 }
 

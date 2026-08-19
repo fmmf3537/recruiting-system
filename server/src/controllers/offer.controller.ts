@@ -145,6 +145,120 @@ export class OfferController {
   }
 
   /**
+   * POST /api/offers/:candidateId/submit
+   * 提交审批（draft/rejected → pending_approval）
+   */
+  async submitOfferApproval(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { candidateId } = req.params;
+      const { approverId } = req.body;
+      const offer = await offerService.submitOfferApproval(
+        candidateId,
+        approverId,
+        req.user!.userId,
+        scopeFromUser(req.user!)
+      );
+
+      res.json({
+        success: true,
+        data: offer,
+        message: '已提交审批',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/offers/:candidateId/approve
+   * 审批通过（仅 admin 或指定审批人）
+   */
+  async approveOffer(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { candidateId } = req.params;
+      const { note } = req.body;
+      const offer = await offerService.approveOffer(
+        candidateId,
+        req.user!.userId,
+        req.user!.role === 'admin',
+        note
+      );
+
+      res.json({
+        success: true,
+        data: offer,
+        message: '审批通过',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/offers/:candidateId/reject
+   * 审批驳回（仅 admin 或指定审批人，需填写意见）
+   */
+  async rejectOffer(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { candidateId } = req.params;
+      const { note } = req.body;
+      const offer = await offerService.rejectOffer(
+        candidateId,
+        req.user!.userId,
+        req.user!.role === 'admin',
+        note
+      );
+
+      res.json({
+        success: true,
+        data: offer,
+        message: '已驳回',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/offers/:candidateId/send
+   * 标记已发送（approved → sent）
+   */
+  async markOfferSent(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const { candidateId } = req.params;
+      const offer = await offerService.markOfferSent(
+        candidateId,
+        req.user!.userId,
+        scopeFromUser(req.user!)
+      );
+
+      res.json({
+        success: true,
+        data: offer,
+        message: '已标记为已发送',
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * PATCH /api/offers/:candidateId/join
    * 标记入职
    */

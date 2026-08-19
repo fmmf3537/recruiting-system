@@ -257,6 +257,12 @@ export class OfferService {
       throw new AppError('该候选人暂无 Offer', 404);
     }
 
+    // 审批流约束：审批通过（approved/sent）后才允许录入候选人答复；
+    // 历史 Offer 迁移后 status=sent，不受此限制
+    if (data.result !== undefined && !['approved', 'sent'].includes(existingOffer.status)) {
+      throw new AppError('Offer 审批通过后才能录入候选人答复', 400);
+    }
+
     const updateData: Prisma.OfferUpdateInput = {};
 
     if (data.salary !== undefined) updateData.salary = data.salary;
@@ -332,6 +338,261 @@ export class OfferService {
     scope?: CandidateVisibilityScope
   ): Promise<Offer> {
     return this.updateOffer(candidateId, { result }, scope);
+  }
+
+  /**
+   * 提交审批（draft/rejected → pending_approval）
+   * 参照 HCRequest 提交模式：提交时指定审批人，并发送站内通知
+   */
+  async submitOfferApproval(
+    candidateId: string,
+    approverId: string,
+    userId: string,
+    scope?: CandidateVisibilityScope
+  ): Promise<Offer> {
+    const candidate = await prisma.candidate.findUnique({
+      where: { id: candidateId },
+    });
+
+    if (!candidate) {
+      throw new AppError('候选人不存在', 404);
+    }
+
+    // 数据可见性校验：member 只能操作可见范围内候选人的 Offer
+    await assertCandidateVisible(candidateId, scope);
+
+    const existingOffer = await prisma.offer.findUnique({
+      where: { candidateId },
+    });
+
+    if (!existingOffer) {
+      throw new AppError('该候选人暂无 Offer', 404);
+    }
+
+    if (existingOffer.status !== 'draft' && existingOffer.status !== 'rejected') {
+      throw new AppError('仅草稿或已驳回的 Offer 可提交审批', 400);
+    }
+
+    // 校验审批人存在
+    const approver = await prisma.user.findUnique({
+      where: { id: approverId },
+    });
+
+    if (!approver) {
+      throw new AppError('审批人不存在', 400);
+    }
+
+    const offer = await prisma.offer.update({
+      where: { candidateId },
+      data: {
+        status: 'pending_approval',
+        approverId,
+        // 重新提交时清空上一轮审批痕迹
+        approveNote: null,
+        approvedAt: null,
+        rejectedAt: null,
+      },
+    });
+
+    await this.logOperation(userId, offer.id, 'offer_submitted', { candidateId, approverId });
+
+    // 站内通知审批人（参照 HCRequest 通知模式，失败不阻断主流程）
+    void notificationService.createNotification({
+      recipientId: approverId,
+      title: `Offer 待审批：${candidate.name}`,
+      content: `${candidate.name} 的 Offer（薪资：${offer.salary}）已提交审批，请及时处理`,
+      type: 'offer_approval',
+      businessId: offer.id,
+      businessType: 'offer',
+    }).catch((e) => console.error('[Notification] Offer审批通知发送失败:', e));
+
+    await clearListCache('offers:list:*');
+    return offer;
+  }
+
+  /**
+   * 审批通过（pending_approval → approved）
+   * 仅 admin 或被指定的审批人可操作
+   */
+  async approveOffer(
+    candidateId: string,
+    userId: string,
+    isAdmin: boolean,
+    note?: string
+  ): Promise<Offer> {
+    const { candidate, offer } = await this.getPendingApprovalOffer(candidateId);
+    this.assertApprover(offer, userId, isAdmin);
+
+    const updated = await prisma.offer.update({
+      where: { candidateId },
+      data: {
+        status: 'approved',
+        approvedAt: new Date(),
+        approveNote: note || null,
+      },
+    });
+
+    await this.logOperation(userId, updated.id, 'offer_approved', { candidateId, note });
+
+    // 站内通知创建人（候选人创建者）审批结果
+    void notificationService.createNotification({
+      recipientId: candidate.createdById,
+      title: `Offer 审批通过：${candidate.name}`,
+      content: `${candidate.name} 的 Offer 已通过审批，可标记发送并录入候选人答复`,
+      type: 'offer_approval',
+      businessId: updated.id,
+      businessType: 'offer',
+    }).catch((e) => console.error('[Notification] Offer审批通知发送失败:', e));
+
+    await clearListCache('offers:list:*');
+    return updated;
+  }
+
+  /**
+   * 审批驳回（pending_approval → rejected）
+   * 仅 admin 或被指定的审批人可操作，驳回必须填写审批意见
+   */
+  async rejectOffer(
+    candidateId: string,
+    userId: string,
+    isAdmin: boolean,
+    note: string
+  ): Promise<Offer> {
+    if (!note) {
+      throw new AppError('驳回必须填写审批意见', 400);
+    }
+
+    const { candidate, offer } = await this.getPendingApprovalOffer(candidateId);
+    this.assertApprover(offer, userId, isAdmin);
+
+    const updated = await prisma.offer.update({
+      where: { candidateId },
+      data: {
+        status: 'rejected',
+        rejectedAt: new Date(),
+        approveNote: note,
+      },
+    });
+
+    await this.logOperation(userId, updated.id, 'offer_rejected', { candidateId, note });
+
+    // 站内通知创建人（候选人创建者）审批结果
+    void notificationService.createNotification({
+      recipientId: candidate.createdById,
+      title: `Offer 已驳回：${candidate.name}`,
+      content: `${candidate.name} 的 Offer 未通过审批，意见：${note}`,
+      type: 'offer_approval',
+      businessId: updated.id,
+      businessType: 'offer',
+    }).catch((e) => console.error('[Notification] Offer审批通知发送失败:', e));
+
+    await clearListCache('offers:list:*');
+    return updated;
+  }
+
+  /**
+   * 标记已发送（approved → sent）
+   * 审批通过后才允许标记发送
+   */
+  async markOfferSent(
+    candidateId: string,
+    userId: string,
+    scope?: CandidateVisibilityScope
+  ): Promise<Offer> {
+    const candidate = await prisma.candidate.findUnique({
+      where: { id: candidateId },
+    });
+
+    if (!candidate) {
+      throw new AppError('候选人不存在', 404);
+    }
+
+    // 数据可见性校验：member 只能操作可见范围内候选人的 Offer
+    await assertCandidateVisible(candidateId, scope);
+
+    const existingOffer = await prisma.offer.findUnique({
+      where: { candidateId },
+    });
+
+    if (!existingOffer) {
+      throw new AppError('该候选人暂无 Offer', 404);
+    }
+
+    if (existingOffer.status !== 'approved') {
+      throw new AppError('仅审批通过的 Offer 可标记为已发送', 400);
+    }
+
+    const offer = await prisma.offer.update({
+      where: { candidateId },
+      data: { status: 'sent' },
+    });
+
+    await this.logOperation(userId, offer.id, 'offer_sent', { candidateId });
+
+    await clearListCache('offers:list:*');
+    return offer;
+  }
+
+  /**
+   * 审批操作公共前置校验：候选人/Offer 存在且处于审批中
+   */
+  private async getPendingApprovalOffer(
+    candidateId: string
+  ): Promise<{ candidate: { id: string; name: string; createdById: string }; offer: Offer }> {
+    const candidate = await prisma.candidate.findUnique({
+      where: { id: candidateId },
+    });
+
+    if (!candidate) {
+      throw new AppError('候选人不存在', 404);
+    }
+
+    const offer = await prisma.offer.findUnique({
+      where: { candidateId },
+    });
+
+    if (!offer) {
+      throw new AppError('该候选人暂无 Offer', 404);
+    }
+
+    if (offer.status !== 'pending_approval') {
+      throw new AppError('仅审批中的 Offer 可以审批', 400);
+    }
+
+    return { candidate, offer };
+  }
+
+  /**
+   * 审批权限校验：仅 admin 或被指定的审批人可以审批
+   */
+  private assertApprover(offer: Offer, userId: string, isAdmin: boolean): void {
+    if (!isAdmin && offer.approverId !== userId) {
+      throw new AppError('仅管理员或指定审批人可以审批', 403);
+    }
+  }
+
+  /**
+   * 写入操作日志（日志失败不阻断主流程）
+   */
+  private async logOperation(
+    userId: string,
+    targetId: string,
+    action: string,
+    detail: Prisma.InputJsonValue
+  ): Promise<void> {
+    try {
+      await prisma.operationLog.create({
+        data: {
+          userId,
+          targetType: 'Offer',
+          targetId,
+          action,
+          detail,
+        },
+      });
+    } catch (e) {
+      console.error('[OperationLog] Offer 操作日志写入失败:', e);
+    }
   }
 
   /**

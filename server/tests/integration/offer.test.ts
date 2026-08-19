@@ -15,6 +15,10 @@ vi.mock('../../src/services/offer.service', () => ({
     updateOfferResult: vi.fn(),
     markAsJoined: vi.fn(),
     deleteOffer: vi.fn(),
+    submitOfferApproval: vi.fn(),
+    approveOffer: vi.fn(),
+    rejectOffer: vi.fn(),
+    markOfferSent: vi.fn(),
   },
 }));
 
@@ -303,6 +307,191 @@ describe('Offer 模块 API 测试', () => {
       const res = await request(app)
         .patch('/api/offers/clh12345678901234567890123/join')
         .send({ actualJoinDate: '2024-02-01T00:00:00Z' })
+        .expect(400);
+
+      expect(res.body).toBeDefined();
+    });
+  });
+
+  describe('POST /api/offers/:candidateId/submit - 提交审批', () => {
+    it('应成功提交审批', async () => {
+      vi.mocked(offerService.submitOfferApproval).mockResolvedValue({
+        id: 'offer-1',
+        status: 'pending_approval',
+        approverId: 'clh12345678901234567890001',
+      } as any);
+
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/submit')
+        .send({ approverId: 'clh12345678901234567890001' })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(offerService.submitOfferApproval).toHaveBeenCalledWith(
+        'clh12345678901234567890123',
+        'clh12345678901234567890001',
+        'user-1',
+        expect.objectContaining({ userId: 'user-1', isAdmin: true })
+      );
+    });
+
+    it('应验证审批人ID必填', async () => {
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/submit')
+        .send({})
+        .expect(400);
+
+      expect(res.body).toBeDefined();
+    });
+
+    it('应验证审批人ID格式', async () => {
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/submit')
+        .send({ approverId: 'invalid-id' })
+        .expect(400);
+
+      expect(res.body).toBeDefined();
+    });
+
+    it('非法状态跳转应返回 400', async () => {
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(offerService.submitOfferApproval).mockRejectedValue(
+        new AppError('仅草稿或已驳回的 Offer 可提交审批', 400)
+      );
+
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/submit')
+        .send({ approverId: 'clh12345678901234567890001' })
+        .expect(400);
+
+      expect(res.body).toBeDefined();
+    });
+  });
+
+  describe('POST /api/offers/:candidateId/approve - 审批通过', () => {
+    it('应成功审批通过', async () => {
+      vi.mocked(offerService.approveOffer).mockResolvedValue({
+        id: 'offer-1',
+        status: 'approved',
+      } as any);
+
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/approve')
+        .send({ note: '同意' })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(offerService.approveOffer).toHaveBeenCalledWith(
+        'clh12345678901234567890123',
+        'user-1',
+        true,
+        '同意'
+      );
+    });
+
+    it('note 为选填', async () => {
+      vi.mocked(offerService.approveOffer).mockResolvedValue({ id: 'offer-1', status: 'approved' } as any);
+
+      await request(app)
+        .post('/api/offers/clh12345678901234567890123/approve')
+        .send({})
+        .expect(200);
+
+      expect(offerService.approveOffer).toHaveBeenCalledWith(
+        expect.any(String),
+        'user-1',
+        true,
+        undefined
+      );
+    });
+
+    it('非审批人审批应返回 403', async () => {
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(offerService.approveOffer).mockRejectedValue(
+        new AppError('仅管理员或指定审批人可以审批', 403)
+      );
+
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/approve')
+        .send({})
+        .expect(403);
+
+      expect(res.body).toBeDefined();
+    });
+  });
+
+  describe('POST /api/offers/:candidateId/reject - 审批驳回', () => {
+    it('应成功驳回', async () => {
+      vi.mocked(offerService.rejectOffer).mockResolvedValue({
+        id: 'offer-1',
+        status: 'rejected',
+      } as any);
+
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/reject')
+        .send({ note: '薪资超预算' })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(offerService.rejectOffer).toHaveBeenCalledWith(
+        'clh12345678901234567890123',
+        'user-1',
+        true,
+        '薪资超预算'
+      );
+    });
+
+    it('驳回意见不能为空', async () => {
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/reject')
+        .send({ note: '' })
+        .expect(400);
+
+      expect(res.body).toBeDefined();
+    });
+
+    it('非审批人驳回应返回 403', async () => {
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(offerService.rejectOffer).mockRejectedValue(
+        new AppError('仅管理员或指定审批人可以审批', 403)
+      );
+
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/reject')
+        .send({ note: '不同意' })
+        .expect(403);
+
+      expect(res.body).toBeDefined();
+    });
+  });
+
+  describe('POST /api/offers/:candidateId/send - 标记已发送', () => {
+    it('应成功标记为已发送', async () => {
+      vi.mocked(offerService.markOfferSent).mockResolvedValue({
+        id: 'offer-1',
+        status: 'sent',
+      } as any);
+
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/send')
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(offerService.markOfferSent).toHaveBeenCalledWith(
+        'clh12345678901234567890123',
+        'user-1',
+        expect.objectContaining({ userId: 'user-1', isAdmin: true })
+      );
+    });
+
+    it('未审批通过时标记发送应返回 400', async () => {
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(offerService.markOfferSent).mockRejectedValue(
+        new AppError('仅审批通过的 Offer 可标记为已发送', 400)
+      );
+
+      const res = await request(app)
+        .post('/api/offers/clh12345678901234567890123/send')
         .expect(400);
 
       expect(res.body).toBeDefined();

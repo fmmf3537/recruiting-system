@@ -114,6 +114,29 @@ router.get(
 );
 
 /**
+ * GET /api/users/approver-options
+ * 获取可选审批人列表（管理员基础信息），供 Offer 提交审批时选择审批人
+ * 权限：登录用户（仅返回 id/name/email，不含敏感信息）
+ * 注意：必须注册在 /:id 之前，避免被当作 id 匹配
+ */
+router.get(
+  '/approver-options',
+  authenticate,
+  asyncHandler(async (_req, res) => {
+    const admins = await prisma.user.findMany({
+      where: { role: 'admin' },
+      select: { id: true, name: true, email: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    res.json({
+      success: true,
+      data: admins,
+    });
+  })
+);
+
+/**
  * GET /api/users/:id
  * 获取单个成员信息
  */

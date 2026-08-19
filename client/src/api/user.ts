@@ -66,6 +66,26 @@ export function getUserList(params?: UserListParams): Promise<UserListData> {
   return request.get('/users', { params }) as Promise<UserListData>;
 }
 
+// 审批人选项（Offer 提交审批时可选的审批人）
+export interface ApproverOption {
+  id: string;
+  name: string;
+  email: string;
+}
+
+// 审批人选项响应
+export interface ApproverOptionsData {
+  success: boolean;
+  data: ApproverOption[];
+}
+
+/**
+ * 获取可选审批人列表（管理员基础信息，所有登录用户可见）
+ */
+export function getApproverOptions(): Promise<ApproverOptionsData> {
+  return request.get('/users/approver-options') as Promise<ApproverOptionsData>;
+}
+
 /**
  * 获取用户详情
  * @param id 用户ID

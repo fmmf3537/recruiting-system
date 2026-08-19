@@ -18,7 +18,20 @@ vi.mock('../../src/lib/prisma', () => ({
       findFirst: vi.fn(),
       create: vi.fn(),
     },
+    user: {
+      findUnique: vi.fn(),
+    },
+    operationLog: {
+      create: vi.fn(),
+    },
   },
+}));
+
+// Mock 站内通知服务，避免审批通知影响主流程断言
+// 注意：用普通函数而非 vi.fn，因为 afterEach 的 resetAllMocks 会清空 mock 实现
+vi.mock('../../src/services/notification.service', () => ({
+  createNotification: () => Promise.resolve({}),
+  createNotificationForUsers: () => Promise.resolve([]),
 }));
 
 import { OfferService } from '../../src/services/offer.service';
@@ -100,7 +113,8 @@ describe('OfferService - Offer 服务单元测试', () => {
 
     it('result=accepted 时应自动设置 joined 和入职日期', async () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
-      vi.mocked(prisma.offer.findUnique).mockResolvedValue({ id: 'offer-1', result: 'pending' } as any);
+      // 历史 Offer（status=sent）可直接录入答复，不受审批流限制
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({ id: 'offer-1', result: 'pending', status: 'sent' } as any);
       vi.mocked(prisma.offer.update).mockResolvedValue({
         id: 'offer-1',
         result: 'accepted',
@@ -122,6 +136,201 @@ describe('OfferService - Offer 服务单元测试', () => {
       await expect(service.updateOffer('non-existent', { salary: '30000' }))
         .rejects
         .toThrow('候选人不存在');
+    });
+
+    it('Offer 未审批通过时录入候选人答复应被拒绝', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({
+        id: 'offer-1',
+        result: 'pending',
+        status: 'pending_approval',
+      } as any);
+
+      await expect(service.updateOffer('candidate-1', { result: 'accepted' }))
+        .rejects
+        .toThrow('Offer 审批通过后才能录入候选人答复');
+    });
+  });
+
+  describe('submitOfferApproval - 提交审批', () => {
+    it('草稿状态应成功提交审批并写入操作日志', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        createdById: 'user-1',
+      } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({ id: 'offer-1', status: 'draft' } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'admin-1' } as any);
+      vi.mocked(prisma.offer.update).mockResolvedValue({
+        id: 'offer-1',
+        status: 'pending_approval',
+        approverId: 'admin-1',
+      } as any);
+      vi.mocked(prisma.operationLog.create).mockResolvedValue({} as any);
+
+      const result = await service.submitOfferApproval('candidate-1', 'admin-1', 'user-1');
+
+      expect(result.status).toBe('pending_approval');
+      expect(prisma.operationLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ action: 'offer_submitted', targetType: 'Offer' }),
+        })
+      );
+    });
+
+    it('已驳回状态可重新提交审批', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({ id: 'offer-1', status: 'rejected' } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'admin-1' } as any);
+      vi.mocked(prisma.offer.update).mockResolvedValue({ id: 'offer-1', status: 'pending_approval' } as any);
+      vi.mocked(prisma.operationLog.create).mockResolvedValue({} as any);
+
+      const result = await service.submitOfferApproval('candidate-1', 'admin-1', 'user-1');
+
+      expect(result.status).toBe('pending_approval');
+    });
+
+    it('非法状态跳转（approved → pending_approval）应被拒绝', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({ id: 'offer-1', status: 'approved' } as any);
+
+      await expect(service.submitOfferApproval('candidate-1', 'admin-1', 'user-1'))
+        .rejects
+        .toThrow('仅草稿或已驳回的 Offer 可提交审批');
+    });
+
+    it('审批人不存在时应抛出错误', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({ id: 'offer-1', status: 'draft' } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue(null);
+
+      await expect(service.submitOfferApproval('candidate-1', 'admin-x', 'user-1'))
+        .rejects
+        .toThrow('审批人不存在');
+    });
+  });
+
+  describe('approveOffer - 审批通过', () => {
+    const pendingMocks = () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        createdById: 'user-1',
+      } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({
+        id: 'offer-1',
+        status: 'pending_approval',
+        approverId: 'admin-1',
+      } as any);
+    };
+
+    it('admin 应能审批通过', async () => {
+      pendingMocks();
+      vi.mocked(prisma.offer.update).mockResolvedValue({ id: 'offer-1', status: 'approved' } as any);
+      vi.mocked(prisma.operationLog.create).mockResolvedValue({} as any);
+
+      const result = await service.approveOffer('candidate-1', 'other-admin', true, '同意');
+
+      expect(result.status).toBe('approved');
+      expect(prisma.operationLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ action: 'offer_approved' }),
+        })
+      );
+    });
+
+    it('被指定的审批人（非 admin）应能审批通过', async () => {
+      pendingMocks();
+      vi.mocked(prisma.offer.update).mockResolvedValue({ id: 'offer-1', status: 'approved' } as any);
+      vi.mocked(prisma.operationLog.create).mockResolvedValue({} as any);
+
+      const result = await service.approveOffer('candidate-1', 'admin-1', false);
+
+      expect(result.status).toBe('approved');
+    });
+
+    it('非审批人且非 admin 审批应被拒绝（403）', async () => {
+      pendingMocks();
+
+      await expect(service.approveOffer('candidate-1', 'user-2', false))
+        .rejects
+        .toThrow('仅管理员或指定审批人可以审批');
+    });
+
+    it('非法状态跳转（draft 直接审批）应被拒绝', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({ id: 'offer-1', status: 'draft' } as any);
+
+      await expect(service.approveOffer('candidate-1', 'admin-1', true))
+        .rejects
+        .toThrow('仅审批中的 Offer 可以审批');
+    });
+  });
+
+  describe('rejectOffer - 审批驳回', () => {
+    it('应成功驳回并写入操作日志', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        createdById: 'user-1',
+      } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({
+        id: 'offer-1',
+        status: 'pending_approval',
+        approverId: 'admin-1',
+      } as any);
+      vi.mocked(prisma.offer.update).mockResolvedValue({ id: 'offer-1', status: 'rejected' } as any);
+      vi.mocked(prisma.operationLog.create).mockResolvedValue({} as any);
+
+      const result = await service.rejectOffer('candidate-1', 'admin-1', false, '薪资超预算');
+
+      expect(result.status).toBe('rejected');
+      expect(prisma.operationLog.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ action: 'offer_rejected' }),
+        })
+      );
+    });
+
+    it('驳回未填写意见应被拒绝', async () => {
+      await expect(service.rejectOffer('candidate-1', 'admin-1', true, ''))
+        .rejects
+        .toThrow('驳回必须填写审批意见');
+    });
+
+    it('非审批人且非 admin 驳回应被拒绝（403）', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({
+        id: 'offer-1',
+        status: 'pending_approval',
+        approverId: 'admin-1',
+      } as any);
+
+      await expect(service.rejectOffer('candidate-1', 'user-2', false, '不同意'))
+        .rejects
+        .toThrow('仅管理员或指定审批人可以审批');
+    });
+  });
+
+  describe('markOfferSent - 标记已发送', () => {
+    it('审批通过后应成功标记为已发送', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({ id: 'offer-1', status: 'approved' } as any);
+      vi.mocked(prisma.offer.update).mockResolvedValue({ id: 'offer-1', status: 'sent' } as any);
+      vi.mocked(prisma.operationLog.create).mockResolvedValue({} as any);
+
+      const result = await service.markOfferSent('candidate-1', 'user-1');
+
+      expect(result.status).toBe('sent');
+    });
+
+    it('非法状态跳转（draft 直接标记发送）应被拒绝', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
+      vi.mocked(prisma.offer.findUnique).mockResolvedValue({ id: 'offer-1', status: 'draft' } as any);
+
+      await expect(service.markOfferSent('candidate-1', 'user-1'))
+        .rejects
+        .toThrow('仅审批通过的 Offer 可标记为已发送');
     });
   });
 

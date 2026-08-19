@@ -160,6 +160,8 @@ async function main() {
       expectedJoinDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30天后
       result: 'pending',
       joined: false,
+      // 种子数据直接置为已发送，保持示例数据原有行为（绕过审批流）
+      status: 'sent',
       note: '薪资已确认，等待候选人回复',
     },
   });
