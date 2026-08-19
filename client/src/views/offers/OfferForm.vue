@@ -199,6 +199,12 @@
 
             <!-- 操作按钮 -->
             <div class="form-actions">
+              <el-alert
+                type="info"
+                :closable="false"
+                title="Offer 创建后为草稿状态，需提交审批通过后才能发送并录入候选人答复"
+                style="margin-bottom: 16px"
+              />
               <el-button type="primary" size="large" @click="handleSubmit" :loading="submitting" style="width: 100%">
                 创建 Offer
               </el-button>
@@ -233,6 +239,9 @@ const candidateOptions = ref<CandidateItem[]>([]);
 const selectedCandidate = ref<CandidateItem | null>(null);
 const candidateLoading = ref(false);
 const jobList = ref<JobItem[]>([]);
+
+// 从路由 query 读取预填候选人（候选人详情/Offer 详情页跳转携带 ?candidateId=）
+const initialCandidateId = (route.query.candidateId as string) || '';
 
 const formData = reactive<CreateOfferParams & { 
   stock: string;
@@ -343,7 +352,7 @@ async function handleSubmit() {
       note: formData.note,
     });
     if (res.success) {
-      ElMessage.success('Offer创建成功');
+      ElMessage.success('Offer创建成功（草稿），请在详情页提交审批');
       router.push('/offers');
     }
   } catch (error: any) {
