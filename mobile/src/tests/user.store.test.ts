@@ -45,7 +45,7 @@ describe('useUserStore', () => {
   it('should clear user info after logout', () => {
     const store = useUserStore();
     store.setToken('test-token');
-    store.setUserInfo({ id: '1', email: 'a@b.com', name: 'Test', role: 'member', createdAt: '' });
+    store.setUserInfo({ id: '1', email: 'a@b.com', name: 'Test', role: 'member', department: null, createdAt: '' });
     store.logout();
     expect(store.isLogin).toBe(false);
     expect(store.userInfo).toBeNull();

@@ -14,6 +14,7 @@ export interface LoginResult {
     email: string;
     name: string;
     role: string;
+    department: string | null;
     createdAt: string;
   };
   error?: string;
