@@ -18,6 +18,7 @@ import communicationRoutes from './communications';
 import automationRuleRoutes from './automation-rule';
 import notificationRoutes from './notification';
 import hcRequestRoutes from './hc-requests';
+import pipelineTemplateRoutes from './pipeline-templates';
 
 const router: RouterType = Router();
 
@@ -53,5 +54,6 @@ router.use('/communications', communicationRoutes);
 router.use('/automation-rules', automationRuleRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/hc-requests', hcRequestRoutes);
+router.use('/pipeline-templates', pipelineTemplateRoutes);
 
 export default router;

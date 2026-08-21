@@ -14,9 +14,22 @@ async function main() {
   await prisma.candidateJob.deleteMany();
   await prisma.candidate.deleteMany();
   await prisma.job.deleteMany();
+  await prisma.pipelineTemplate.deleteMany();
   await prisma.user.deleteMany();
 
   console.log('已清空旧数据\n');
+
+  // 0. 创建默认招聘流程模板（与历史七阶段一致，作为全局默认）
+  await prisma.pipelineTemplate.create({
+    data: {
+      name: '标准招聘流程',
+      type: '社招',
+      stages: ['入库', '初筛', '复试', '终面', '拟录用', 'Offer', '入职'],
+      enabled: true,
+      isDefault: true,
+    },
+  });
+  console.log('✅ 默认招聘流程模板创建成功（标准七阶段）\n');
 
   // 1. 创建管理员账号
   const adminPassword = await bcrypt.hash('admin123', 10);

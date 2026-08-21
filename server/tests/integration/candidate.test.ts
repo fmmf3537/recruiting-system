@@ -353,11 +353,29 @@ describe('候选人模块 API 测试', () => {
       expect(res.body.success).toBe(true);
     });
 
-    it('应验证阶段枚举值', async () => {
+    it('推进到模板外阶段应返回 400（阶段合法性由 Pipeline 模板校验）', async () => {
+      // stage 不再是固定枚举（支持模板自定义阶段），合法性由 service 按候选人适用的 Pipeline 模板校验
+      const { AppError } = await import('../../src/middleware/errorHandler');
+      vi.mocked(candidateService.advanceStage).mockRejectedValue(
+        new AppError('无效的阶段', 400)
+      );
+
       const res = await request(app)
         .post('/api/candidates/clh12345678901234567890123/stage')
         .send({
-          stage: '无效阶段',
+          stage: '笔试', // 模板外阶段（该候选人模板不含此阶段）
+          status: 'in_progress',
+        })
+        .expect(400);
+
+      expect(res.body).toBeDefined();
+    });
+
+    it('应验证阶段不能为空', async () => {
+      const res = await request(app)
+        .post('/api/candidates/clh12345678901234567890123/stage')
+        .send({
+          stage: '',
           status: 'in_progress',
         })
         .expect(400);

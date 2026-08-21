@@ -28,6 +28,7 @@ export interface CreateJobInput {
   requirements: string;
   status?: string;
   tagIds?: string[];
+  pipelineTemplateId?: string | null; // 关联招聘流程模板（空则使用该 type 的默认模板）
 }
 
 // 更新职位参数类型
@@ -42,6 +43,7 @@ export interface UpdateJobInput {
   requirements?: string;
   status?: string;
   tagIds?: string[];
+  pipelineTemplateId?: string | null;
 }
 
 // 职位列表返回类型
@@ -73,6 +75,7 @@ export class JobService {
         status: data.status || 'open',
         description: sanitizeHtml(data.description),
         requirements: sanitizeHtml(data.requirements),
+        pipelineTemplateId: data.pipelineTemplateId || null,
         createdById,
       },
       select: {
@@ -90,6 +93,7 @@ export class JobService {
         createdAt: true,
         updatedAt: true,
         hcRequestId: true,
+        pipelineTemplateId: true,
       },
     });
 
@@ -193,6 +197,7 @@ export class JobService {
           createdAt: true,
           updatedAt: true,
         hcRequestId: true,
+        pipelineTemplateId: true,
           _count: {
             select: {
               candidateJobs: true,
@@ -255,6 +260,7 @@ export class JobService {
         createdAt: true,
         updatedAt: true,
         hcRequestId: true,
+        pipelineTemplateId: true,
         createdBy: {
           select: {
             id: true,
@@ -330,6 +336,12 @@ export class JobService {
     if (data.description !== undefined) updateData.description = sanitizeHtml(data.description);
     if (data.requirements !== undefined) updateData.requirements = sanitizeHtml(data.requirements);
     if (data.status !== undefined) updateData.status = data.status;
+    // 允许显式传 null 解除模板关联（回退到该 type 默认模板）
+    if (data.pipelineTemplateId !== undefined) {
+      updateData.pipelineTemplate = data.pipelineTemplateId
+        ? { connect: { id: data.pipelineTemplateId } }
+        : { disconnect: true };
+    }
 
     const job = await prisma.job.update({
       where: { id },
@@ -349,6 +361,7 @@ export class JobService {
         createdAt: true,
         updatedAt: true,
         hcRequestId: true,
+        pipelineTemplateId: true,
       },
     });
 
@@ -409,6 +422,7 @@ export class JobService {
         createdAt: true,
         updatedAt: true,
         hcRequestId: true,
+        pipelineTemplateId: true,
       },
     });
 
@@ -457,6 +471,7 @@ export class JobService {
         createdAt: true,
         updatedAt: true,
         hcRequestId: true,
+        pipelineTemplateId: true,
       },
     });
 

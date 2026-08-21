@@ -358,7 +358,8 @@ pnpm test:report      # show-report
 - **ORM**：Prisma
 - **核心模型**：
   - `User`（用户，角色 admin / member）
-  - `Job`（职位）
+  - `Job`（职位；`pipelineTemplateId` 可空，关联招聘流程模板，空则使用该 type 的默认模板）
+  - `PipelineTemplate`（招聘流程模板：`name`/`type`（社招/校招/实习生）/`stages` Json 有序阶段数组/`enabled`/`isDefault`（该 type 的默认模板））
   - `Candidate`（候选人；`gender` 选填，`consentAt`/`consentNote` 记录授权同意，`anonymizedAt` 标记匿名化）
   - `CandidateJob`（候选人与职位多对多关联）
   - `WorkHistory`（工作经历）
@@ -443,6 +444,7 @@ Nginx (:80)
   - 职位列表按部门过滤（`job.controller.ts` 的 `getUserDepartment`）。
 - **Offer 审批流**：Offer 创建后为 `draft`，需提交审批（`POST /api/offers/:candidateId/submit`，指定 `approverId`）进入 `pending_approval`；审批通过/驳回（`/approve`、`/reject`，仅 admin 或被指定审批人，service 层校验，驳回必须填写意见）后状态变为 `approved`/`rejected`；`approved` 后可标记已发送（`/send` → `sent`）。仅 `approved`/`sent` 状态允许录入候选人答复（`result`）；历史 Offer 迁移后 `status='sent'`，保持原有行为。提交/通过/驳回均写 `OperationLog`（action: `offer_submitted`/`offer_approved`/`offer_rejected`/`offer_sent`）并发送站内通知（提交通知审批人，结果通知候选人创建者）。可选审批人列表接口：`GET /api/users/approver-options`（登录用户可见，返回 admin 基础信息）。
 - **结构化面试评估**：面试创建时按 `interviewers` 自动为每位面试官生成待填评估（`interview-evaluation.service.ts` 的 `createPendingEvaluations`，挂在 `interview-scheduler.service.ts` 的 `createInterview` 中）；面试官本人通过 `PUT /api/evaluations/:id` 提交/修改（仅本人，越权 403），`GET /api/evaluations/my` 为面试官视角的待评/已评列表，`GET /api/interviews/:id/evaluations` 聚合各面试官评估明细（登录可见）；评估维度由字典 `evaluation_dimension` 配置。面试结束（`scheduledAt + duration`）24 小时未提交评估的面试官由催收定时任务（`EVALUATION_REMINDER_CRON` 控制开关与调度，见 `server/src/lib/cron.ts` → `sendEvaluationReminders`）发送站内通知（type: `evaluation_reminder`），每条评估仅催收一次（`remindedAt` 标记）。原 `InterviewFeedback`（富文本+手填面试官姓名）保留兼容历史数据，新评估走 `InterviewEvaluation`。
+- **招聘流程模板（Pipeline）**：阶段不再全局硬编码。`PipelineTemplate` 按职位类型自定义阶段序列（如校招含「笔试」、实习仅一轮）；候选人推进阶段时，目标阶段合法选项由 `pipeline-template.service.ts` 的 `getCandidatePipelineStages` 解析（职位指定模板 → 该 type 默认模板 → 全局默认模板 → `STAGE_ORDER` 常量兜底），`candidate.service.ts` 的 `advanceStage` 按模板校验与顺序判断（存量老阶段值仍可展示，不在模板中时非 admin 仅能推进到模板第一个阶段）；路由层 `stage` 已放开为自由字符串（合法性由 service 校验，模板外阶段返回 400）。`Job.pipelineTemplateId` 可在职位创建/更新时指定。管理入口：`GET /api/pipeline-templates/stages?candidateId=`（登录用户，推进弹窗下拉用）+ 模板 CRUD（admin），前端设置页「流程模板」（`/settings/pipeline-templates`，阶段上移/下移排序、启停用）。seed 内置与历史七阶段一致的默认模板「标准招聘流程」。淘汰/通过及 Offer/入职联动逻辑不变。
 - **统一提醒调度器**：`REMINDER_CRON_ENABLED=true` 开启后，node-cron 每小时扫描一次（`0 * * * *`，见 `server/src/lib/cron.ts` → `reminder.service.ts` 的 `runReminderScan`，单类失败仅记日志不影响其他类），生成三类站内通知：跟进到期（`CommunicationLog.followUpAt` 已过 → 通知创建人，type: `followup_reminder`）、面试前提醒（`Interview.scheduledAt` 在未来 2 小时内且 status=scheduled → 通知创建人及所有面试官，type: `interview_reminder`）、阶段停留超时（`StageRecord` 处于 `in_progress` 且 `enteredAt` 超过阈值 → 通知 assignee 及同部门 admin，type: `stage_overdue_reminder`；阈值由 `STAGE_OVERDUE_DAYS` 配置，默认 7 天）。防重复：`Notification.dedupeKey`（String? 唯一索引）幂等去重，写入前查重、唯一索引 P2002 兜底。
 - **JWT 吊销**：`User.tokenVersion` 写入 JWT payload，`authenticate` 中间件与数据库比对，不一致即 401；修改密码、管理员重置密码（`POST /api/users/:id/reset-password`，仅 admin，返回 12 位临时密码并写 OperationLog）、管理员直接改密时 `tokenVersion +1`，实现“改密即全端下线”。
 - **密码策略**：新密码至少 8 位且同时包含字母和数字，统一由 `server/src/middleware/validate.ts` 的 `passwordSchema` 校验（登录/绑定飞书等校验既有密码的场景不适用）。

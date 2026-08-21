@@ -79,6 +79,9 @@ model Job {
   description  String   @db.Text  // 富文本
   requirements String   @db.Text  // 富文本
   hcRequestId  String?  // 关联的编制申请ID
+  // 关联的招聘流程模板（空则使用该 type 的默认模板）
+  pipelineTemplateId String?
+  pipelineTemplate   PipelineTemplate? @relation(fields: [pipelineTemplateId], references: [id], onDelete: SetNull)
 
   createdById  String
   createdBy    User     @relation("CreatedJobs", fields: [createdById], references: [id])
@@ -104,7 +107,27 @@ model Job {
   @@index([status, createdAt])
   @@index([type, createdAt])
   @@index([location, createdAt])
+  @@index([pipelineTemplateId])
   @@map("job")
+}
+
+// ==================== 招聘流程模板表 ====================
+// 按职位类型自定义招聘阶段流程（如校招含「笔试」、实习仅一轮面试）
+model PipelineTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  type      String   // 社招/校招/实习生
+  stages    Json     // 有序阶段数组，如 ["入库","初筛","笔试","复试","Offer","入职"]
+  enabled   Boolean  @default(true)
+  isDefault Boolean  @default(false) // 是否为该 type 的默认模板（职位未指定模板时使用）
+
+  jobs Job[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, isDefault])
+  @@map("pipeline_template")
 }
 
 // ==================== 候选人表 ====================

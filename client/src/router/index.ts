@@ -265,6 +265,17 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: '/settings/pipeline-templates',
+        name: 'PipelineTemplates',
+        component: () => import('@/views/settings/PipelineTemplates.vue'),
+        meta: {
+          title: '流程模板',
+          icon: Setting,
+          requireAdmin: true,
+          hidden: true,
+        },
+      },
+      {
         path: '/profile',
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),

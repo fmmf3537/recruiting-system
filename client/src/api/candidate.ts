@@ -4,7 +4,8 @@ import request from '@/utils/request';
 export type Gender = '男' | '女';
 
 // 候选人流转阶段
-export type CandidateStage = '入库' | '初筛' | '复试' | '终面' | '拟录用' | 'Offer' | '入职';
+// 不再限定固定枚举：阶段由 Pipeline 模板按职位类型动态配置（存量七阶段值仍可正常展示）
+export type CandidateStage = string;
 
 // 阶段状态
 export type StageStatus = 'in_progress' | 'passed' | 'rejected';

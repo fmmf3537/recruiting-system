@@ -10,7 +10,7 @@ import { interviewController } from '../controllers/interview.controller';
 import { communicationController } from '../controllers/communication.controller';
 import { authenticate } from '../middleware/auth';
 import { validate } from '../middleware/validate';
-import { STAGE_ORDER, STAGE_STATUS, INTERVIEW_ROUNDS } from '../constants';
+import { STAGE_STATUS, INTERVIEW_ROUNDS } from '../constants';
 
 const router: RouterType = Router();
 
@@ -95,10 +95,9 @@ const candidateIdParamSchema = z.object({
 });
 
 // 推进阶段验证 Schema
+// 注意：stage 不再限制为固定枚举，合法选项由候选人适用职位的 Pipeline 模板决定（service 层校验）
 const advanceStageSchema = z.object({
-  stage: z.enum([...STAGE_ORDER] as [string, ...string[]], {
-    errorMap: () => ({ message: '无效的阶段' }),
-  }),
+  stage: z.string().min(1, '阶段不能为空'),
   status: z.enum([...STAGE_STATUS] as [string, ...string[]], {
     errorMap: () => ({ message: '状态必须是：in_progress, passed 或 rejected' }),
   }),
@@ -135,9 +134,8 @@ const listInterviewsQuerySchema = z.object({
 // 批量推进阶段验证 Schema
 const batchAdvanceSchema = z.object({
   candidateIds: z.array(z.string().cuid('无效的候选人ID')).min(1, '至少选择一个候选人'),
-  stage: z.enum([...STAGE_ORDER] as [string, ...string[]], {
-    errorMap: () => ({ message: '无效的阶段' }),
-  }),
+  // 与单条推进一致：stage 合法性由 service 层按各候选人适用的 Pipeline 模板校验
+  stage: z.string().min(1, '阶段不能为空'),
   status: z.enum([...STAGE_STATUS] as [string, ...string[]], {
     errorMap: () => ({ message: '状态必须是：in_progress, passed 或 rejected' }),
   }),

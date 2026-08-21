@@ -196,6 +196,7 @@ const menuItems = computed(() => {
     items.push({ path: '/users', title: '成员管理', icon: User });
     items.push({ path: '/settings/dictionary', title: '字典管理', icon: Setting });
     items.push({ path: '/settings/tags', title: '标签管理', icon: Setting });
+    items.push({ path: '/settings/pipeline-templates', title: '流程模板', icon: Setting });
     items.push({ path: '/settings/automation-rules', title: '自动化邮件', icon: Setting });
   }
   

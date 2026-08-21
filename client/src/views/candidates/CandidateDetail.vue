@@ -537,6 +537,7 @@ import {
   type InterviewFeedbackParams,
   type ResumeParseResult,
 } from '@/api/candidate';
+import { getPipelineStages } from '@/api/pipeline-template';
 import { getTags, setCandidateTags, type Tag } from '@/api/tag';
 import { getEmailTemplates, sendEmail, type EmailTemplate } from '@/api/email';
 import { getTasksByCandidate, updateTask, generateDefaultTasks, type OnboardingTask } from '@/api/onboarding-task';
@@ -637,23 +638,26 @@ async function handleDelete() {
 const advanceDialogVisible = ref(false);
 const advanceSubmitting = ref(false);
 const advanceFormRef = ref<FormInstance>();
-const stageOrder = ['入库', '初筛', '复试', '终面', '拟录用', 'Offer', '入职'];
+// 阶段选项不再硬编码：按候选人适用职位的 Pipeline 模板动态获取
+const candidateStages = ref<string[]>([]);
 
 const availableStages = computed(() => {
   if (!candidate.value) return [];
-  const currentIndex = stageOrder.indexOf(candidate.value.currentStage);
+  const currentIndex = candidateStages.value.indexOf(candidate.value.currentStage);
   if (authStore.isAdmin) {
-    return stageOrder;
+    return candidateStages.value;
   }
   const stages: string[] = [];
-  stages.push(stageOrder[currentIndex]);
-  const nextStage = stageOrder[currentIndex + 1];
+  // 存量老阶段可能不在模板中（index=-1），此时仅提供模板第一个阶段作为推进目标
+  const current = candidateStages.value[currentIndex];
+  if (current) stages.push(current);
+  const nextStage = candidateStages.value[currentIndex + 1];
   if (nextStage) stages.push(nextStage);
   return stages;
 });
 
 const advanceForm = reactive<AdvanceStageParams>({
-  stage: '' as any,
+  stage: '',
   status: 'passed',
   rejectReason: '',
   note: '',
@@ -806,11 +810,15 @@ function goToList() {
 
 function handleAdvance() {
   if (!candidate.value) return;
-  advanceForm.stage = candidate.value.currentStage as any;
+  advanceForm.stage = candidate.value.currentStage;
   advanceForm.status = 'passed';
   advanceForm.rejectReason = '';
   advanceForm.note = '';
   advanceDialogVisible.value = true;
+  // 拉取该候选人适用的 Pipeline 模板阶段（按关联职位的模板/默认模板）
+  getPipelineStages(candidate.value.id)
+    .then((res) => { candidateStages.value = res.data; })
+    .catch(() => { candidateStages.value = []; });
 }
 
 async function handleAdvanceSubmit() {

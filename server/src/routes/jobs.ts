@@ -22,6 +22,8 @@ const createJobSchema = z.object({
   requirements: z.string().min(1, '职位要求不能为空'),
   status: z.enum([...JOB_STATUS] as [string, ...string[]]).optional().default('open'),
   tagIds: z.array(z.string()).max(20, '最多设置20个标签').optional(),
+  // 关联招聘流程模板（可空，空则使用该 type 的默认模板）
+  pipelineTemplateId: z.string().nullable().optional(),
 });
 
 // 更新职位验证 Schema（所有字段可选）
@@ -36,6 +38,7 @@ const updateJobSchema = z.object({
   requirements: z.string().optional(),
   status: z.enum([...JOB_STATUS] as [string, ...string[]]).optional(),
   tagIds: z.array(z.string()).max(20, '最多设置20个标签').optional(),
+  pipelineTemplateId: z.string().nullable().optional(),
 });
 
 // 职位 ID 参数验证

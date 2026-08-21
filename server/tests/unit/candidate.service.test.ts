@@ -15,7 +15,11 @@ vi.mock('../../src/lib/prisma', () => {
     },
     candidateJob: {
       findMany: vi.fn(),
+      findFirst: vi.fn(), // Pipeline 模板解析（getCandidatePipelineStages）
       createMany: vi.fn(),
+    },
+    pipelineTemplate: {
+      findFirst: vi.fn(), // 默认模板查询
     },
     stageRecord: {
       create: vi.fn(),
@@ -269,6 +273,114 @@ describe('CandidateService - 候选人服务单元测试', () => {
         status: 'passed',
       }, 'user-2')).rejects.toThrow('无权操作此候选人');
       expect(prisma.stageRecord.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('advanceStage - Pipeline 模板阶段校验', () => {
+    // 校招模板：含「笔试」、无「初筛/终面/拟录用」
+    const campusStages = ['入库', '笔试', '复试', 'Offer', '入职'];
+
+    beforeEach(() => {
+      // 候选人关联了指定校招模板的职位
+      vi.mocked(prisma.candidateJob.findFirst).mockResolvedValue({
+        job: {
+          type: '校招',
+          pipelineTemplate: { enabled: true, stages: campusStages },
+        },
+      } as any);
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        createdById: 'user-1',
+        stageRecords: [{ stage: '入库', status: 'in_progress', enteredAt: new Date() }],
+      } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
+      vi.mocked(prisma.stageRecord.create).mockResolvedValue({} as any);
+    });
+
+    it('模板内的自定义阶段（笔试）应允许推进', async () => {
+      await service.advanceStage('candidate-1', {
+        stage: '笔试',
+        status: 'in_progress',
+      }, 'user-1');
+
+      expect(prisma.stageRecord.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ stage: '笔试' }),
+        })
+      );
+    });
+
+    it('模板外的阶段（初筛）应返回无效阶段', async () => {
+      await expect(service.advanceStage('candidate-1', {
+        stage: '初筛',
+        status: 'in_progress',
+      }, 'user-1')).rejects.toThrow('无效的阶段');
+      expect(prisma.stageRecord.create).not.toHaveBeenCalled();
+    });
+
+    it('顺序校验按模板顺序（入库→笔试→复试，不可跳到 Offer）', async () => {
+      await expect(service.advanceStage('candidate-1', {
+        stage: 'Offer',
+        status: 'in_progress',
+      }, 'user-1')).rejects.toThrow('阶段推进必须按顺序');
+    });
+  });
+
+  describe('advanceStage - 无模板时回退默认七阶段', () => {
+    it('未关联职位且库中无默认模板时，回退到 STAGE_ORDER 常量', async () => {
+      // 无关联职位、无默认模板 → 走常量兼底
+      vi.mocked(prisma.candidateJob.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.pipelineTemplate.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        createdById: 'user-1',
+        stageRecords: [{ stage: '入库', status: 'in_progress', enteredAt: new Date() }],
+      } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
+      vi.mocked(prisma.stageRecord.create).mockResolvedValue({} as any);
+
+      await service.advanceStage('candidate-1', {
+        stage: '初筛',
+        status: 'passed',
+      }, 'user-1');
+
+      expect(prisma.stageRecord.create).toHaveBeenCalled();
+    });
+
+    it('职位未指定模板时，使用该 type 的默认模板', async () => {
+      // 职位 pipelineTemplate 为空 → 查 type 默认模板
+      vi.mocked(prisma.candidateJob.findFirst).mockResolvedValue({
+        job: { type: '实习生', pipelineTemplate: null },
+      } as any);
+      vi.mocked(prisma.pipelineTemplate.findFirst).mockResolvedValue({
+        type: '实习生',
+        isDefault: true,
+        enabled: true,
+        stages: ['入库', '面试', 'Offer', '入职'],
+      } as any);
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        name: '张三',
+        createdById: 'user-1',
+        stageRecords: [{ stage: '入库', status: 'in_progress', enteredAt: new Date() }],
+      } as any);
+      vi.mocked(prisma.user.findUnique).mockResolvedValue({ id: 'user-1', role: 'member' } as any);
+      vi.mocked(prisma.stageRecord.create).mockResolvedValue({} as any);
+
+      // 默认模板查询应带 type 条件
+      await service.advanceStage('candidate-1', {
+        stage: '面试',
+        status: 'in_progress',
+      }, 'user-1');
+
+      expect(prisma.pipelineTemplate.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { type: '实习生', isDefault: true, enabled: true },
+        })
+      );
+      expect(prisma.stageRecord.create).toHaveBeenCalled();
     });
   });
 

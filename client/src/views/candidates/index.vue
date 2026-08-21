@@ -330,7 +330,7 @@
       <el-form ref="batchAdvanceFormRef" :model="batchAdvanceForm" :rules="advanceRules" label-width="100px">
         <el-form-item label="目标阶段" prop="stage">
           <el-select v-model="batchAdvanceForm.stage" placeholder="请选择目标阶段" style="width: 100%">
-            <el-option v-for="stage in stageOrder" :key="stage" :label="stage" :value="stage" />
+            <el-option v-for="stage in defaultStages" :key="stage" :label="stage" :value="stage" />
           </el-select>
         </el-form-item>
 
@@ -407,6 +407,7 @@ import {
   type AdvanceStageParams,
   type ResumeParseResult,
 } from '@/api/candidate';
+import { getPipelineStages } from '@/api/pipeline-template';
 import { getTags, type Tag } from '@/api/tag';
 import { useAuthStore } from '@/stores/auth';
 import { useDictionaryStore } from '@/stores/dictionary';
@@ -450,24 +451,29 @@ const advanceDialogVisible = ref(false);
 const advanceSubmitting = ref(false);
 const advanceFormRef = ref<FormInstance>();
 const currentCandidate = ref<CandidateItem | null>(null);
-const stageOrder = ['入库', '初筛', '复试', '终面', '拟录用', 'Offer', '入职'];
+// 阶段选项不再硬编码：按候选人适用职位的 Pipeline 模板动态获取
+const candidateStages = ref<string[]>([]);
+// 批量推进针对多个候选人，统一使用全局默认模板阶段
+const defaultStages = ref<string[]>([]);
 
 const availableStages = computed(() => {
   if (!currentCandidate.value) return [];
-  const currentIndex = stageOrder.indexOf(currentCandidate.value.currentStage);
+  const currentIndex = candidateStages.value.indexOf(currentCandidate.value.currentStage);
   // Admin 用户可以跳到任意阶段
   if (authStore.isAdmin) {
-    return stageOrder;
+    return candidateStages.value;
   }
   const stages: string[] = [];
-  stages.push(stageOrder[currentIndex]);
-  const nextStage = stageOrder[currentIndex + 1];
+  // 存量老阶段可能不在模板中（index=-1），此时仅提供模板第一个阶段作为推进目标
+  const current = candidateStages.value[currentIndex];
+  if (current) stages.push(current);
+  const nextStage = candidateStages.value[currentIndex + 1];
   if (nextStage) stages.push(nextStage);
   return stages;
 });
 
 const advanceForm = reactive<AdvanceStageParams>({
-  stage: '' as any,
+  stage: '',
   status: 'passed',
   rejectReason: '',
   note: '',
@@ -601,11 +607,15 @@ function handleDetail(row: CandidateItem) { router.push(`/candidates/${row.id}`)
 
 function handleAdvance(row: CandidateItem) {
   currentCandidate.value = row;
-  advanceForm.stage = row.currentStage as any;
+  advanceForm.stage = row.currentStage;
   advanceForm.status = 'passed';
   advanceForm.rejectReason = '';
   advanceForm.note = '';
   advanceDialogVisible.value = true;
+  // 拉取该候选人适用的 Pipeline 模板阶段（按关联职位的模板/默认模板）
+  getPipelineStages(row.id)
+    .then((res) => { candidateStages.value = res.data; })
+    .catch(() => { candidateStages.value = []; });
 }
 
 async function handleAdvanceSubmit() {
@@ -667,11 +677,15 @@ function clearSelection() {
 }
 
 function showBatchAdvance() {
-  batchAdvanceForm.stage = '' as any;
+  batchAdvanceForm.stage = '';
   batchAdvanceForm.status = 'passed';
   batchAdvanceForm.rejectReason = '';
   batchAdvanceForm.note = '';
   batchAdvanceVisible.value = true;
+  // 批量推进不针对单个候选人，使用全局默认模板阶段（后端会按各候选人模板逐条校验）
+  getPipelineStages()
+    .then((res) => { defaultStages.value = res.data; })
+    .catch(() => { defaultStages.value = []; });
 }
 
 async function handleBatchAdvanceSubmit() {

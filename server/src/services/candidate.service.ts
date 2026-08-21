@@ -6,12 +6,9 @@ import { AppError } from '../middleware/errorHandler';
 import { sanitizeHtml } from '../utils/sanitize';
 import { autoSendEmailOnStageTransition } from './email-auto-sender.service';
 import * as notificationService from './notification.service';
-import {
-  STAGE_ORDER,
-  DEFAULT_STAGE,
-  DEFAULT_STAGE_STATUS,
-} from '../constants';
+import { DEFAULT_STAGE, DEFAULT_STAGE_STATUS } from '../constants';
 import type { Stage } from '../constants';
+import { getCandidatePipelineStages } from './pipeline-template.service';
 import { checkDuplicate, isPhoneUsed, isEmailUsed } from './duplicate-checker.service';
 import {
   assertCandidateVisible,
@@ -807,8 +804,10 @@ export class CandidateService {
       throw new AppError('候选人不存在', 404);
     }
 
-    // 验证阶段是否有效
-    const targetStageIndex = STAGE_ORDER.indexOf(stage as Stage);
+    // 验证阶段是否有效：按候选人适用的 Pipeline 模板校验
+    // （关联职位用职位模板/该 type 默认模板，未关联职位用全局默认模板）
+    const pipelineStages = await getCandidatePipelineStages(id);
+    const targetStageIndex = pipelineStages.indexOf(stage);
     if (targetStageIndex === -1) {
       throw new AppError('无效的阶段', 400);
     }
@@ -816,7 +815,8 @@ export class CandidateService {
     // 获取当前阶段
     const currentStage =
       candidate.stageRecords[0]?.stage || (DEFAULT_STAGE as Stage);
-    const currentStageIndex = STAGE_ORDER.indexOf(currentStage as Stage);
+    // 存量老阶段值可能不在新模板中（indexOf=-1）：此时非 admin 仅能推进到模板第一个阶段
+    const currentStageIndex = pipelineStages.indexOf(currentStage);
     const currentStatus = candidate.stageRecords[0]?.status || DEFAULT_STAGE_STATUS;
 
     // 检查是否为 admin（批量场景由调用方传入，避免每次推进都查一次用户表）
@@ -867,7 +867,7 @@ export class CandidateService {
 
       // 如果要推进到新阶段，必须是下一个阶段
       if (targetStageIndex > currentStageIndex && targetStageIndex !== currentStageIndex + 1) {
-        throw new AppError(`阶段推进必须按顺序：${STAGE_ORDER.join('→')}`, 400);
+        throw new AppError(`阶段推进必须按顺序：${pipelineStages.join('→')}`, 400);
       }
     }
 
