@@ -1,6 +1,7 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { interviewController } from '../controllers/interview.controller';
+import { interviewEvaluationController } from '../controllers/interview-evaluation.controller';
 import { authenticate } from '../middleware/auth';
 import { validate, validateAll } from '../middleware/validate';
 import { INTERVIEW_TYPES, INTERVIEW_STATUS, INTERVIEW_ROUNDS } from '../constants';
@@ -117,6 +118,17 @@ router.get(
   authenticate,
   validate(interviewIdSchema, 'params'),
   interviewController.getInterviewById
+);
+
+/**
+ * GET /api/interviews/:id/evaluations
+ * 面试详情聚合各面试官评估（登录即可查看）
+ */
+router.get(
+  '/:id/evaluations',
+  authenticate,
+  validate(interviewIdSchema, 'params'),
+  interviewEvaluationController.getInterviewEvaluations
 );
 
 /**

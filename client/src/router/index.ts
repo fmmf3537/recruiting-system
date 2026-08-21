@@ -120,6 +120,24 @@ const routes: RouteRecordRaw[] = [
           hidden: true,
         },
       },
+      // 注意：/interviews/my 必须放在 /interviews/:id 之前，否则会被动态路由吞掉
+      {
+        path: '/interviews/my',
+        name: 'MyInterviews',
+        component: () => import('@/views/interviews/my.vue'),
+        meta: {
+          title: '我的面试',
+        },
+      },
+      {
+        path: '/interviews/:id',
+        name: 'InterviewDetail',
+        component: () => import('@/views/interviews/detail.vue'),
+        meta: {
+          title: '面试详情',
+          hidden: true,
+        },
+      },
       {
         path: '/offers',
         name: 'Offers',

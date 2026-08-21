@@ -72,6 +72,7 @@ services:
       X_ACCEL_REDIRECT: "true"
       # 候选人超期匿名化定时任务（cron 表达式；留空/false 关闭）
       ANONYMIZE_CRON: ${ANONYMIZE_CRON:-}
+      EVALUATION_REMINDER_CRON: ${EVALUATION_REMINDER_CRON:-}
     depends_on:
       postgres:
         condition: service_healthy

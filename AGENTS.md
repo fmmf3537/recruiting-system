@@ -365,6 +365,7 @@ pnpm test:report      # show-report
   - `StageRecord`（招聘阶段记录）
   - `InterviewFeedback`（面试反馈）
   - `Offer`（Offer 记录；含审批流字段 `status`/`approverId`/`approveNote`/`approvedAt`/`rejectedAt`）
+  - `InterviewEvaluation`（结构化面试评估；关联 `Interview` 与面试官 `User`，`dimensions` Json 存维度评分 `[{name,score,comment?}]`、`overallScore`、`conclusion`、`submittedAt`（null=待填写）、`remindedAt`（催收标记）；评估维度由字典 `evaluation_dimension` 配置）
   - `OperationLog`（操作日志）
 
 ### 日常操作
@@ -441,6 +442,7 @@ Nginx (:80)
   - 各 controller 仅通过 `scopeFromUser(req.user!)` 组装可见性范围透传，不过滤逻辑不写进 controller。
   - 职位列表按部门过滤（`job.controller.ts` 的 `getUserDepartment`）。
 - **Offer 审批流**：Offer 创建后为 `draft`，需提交审批（`POST /api/offers/:candidateId/submit`，指定 `approverId`）进入 `pending_approval`；审批通过/驳回（`/approve`、`/reject`，仅 admin 或被指定审批人，service 层校验，驳回必须填写意见）后状态变为 `approved`/`rejected`；`approved` 后可标记已发送（`/send` → `sent`）。仅 `approved`/`sent` 状态允许录入候选人答复（`result`）；历史 Offer 迁移后 `status='sent'`，保持原有行为。提交/通过/驳回均写 `OperationLog`（action: `offer_submitted`/`offer_approved`/`offer_rejected`/`offer_sent`）并发送站内通知（提交通知审批人，结果通知候选人创建者）。可选审批人列表接口：`GET /api/users/approver-options`（登录用户可见，返回 admin 基础信息）。
+- **结构化面试评估**：面试创建时按 `interviewers` 自动为每位面试官生成待填评估（`interview-evaluation.service.ts` 的 `createPendingEvaluations`，挂在 `interview-scheduler.service.ts` 的 `createInterview` 中）；面试官本人通过 `PUT /api/evaluations/:id` 提交/修改（仅本人，越权 403），`GET /api/evaluations/my` 为面试官视角的待评/已评列表，`GET /api/interviews/:id/evaluations` 聚合各面试官评估明细（登录可见）；评估维度由字典 `evaluation_dimension` 配置。面试结束（`scheduledAt + duration`）24 小时未提交评估的面试官由催收定时任务（`EVALUATION_REMINDER_CRON` 控制开关与调度，见 `server/src/lib/cron.ts` → `sendEvaluationReminders`）发送站内通知（type: `evaluation_reminder`），每条评估仅催收一次（`remindedAt` 标记）。原 `InterviewFeedback`（富文本+手填面试官姓名）保留兼容历史数据，新评估走 `InterviewEvaluation`。
 - **JWT 吊销**：`User.tokenVersion` 写入 JWT payload，`authenticate` 中间件与数据库比对，不一致即 401；修改密码、管理员重置密码（`POST /api/users/:id/reset-password`，仅 admin，返回 12 位临时密码并写 OperationLog）、管理员直接改密时 `tokenVersion +1`，实现“改密即全端下线”。
 - **密码策略**：新密码至少 8 位且同时包含字母和数字，统一由 `server/src/middleware/validate.ts` 的 `passwordSchema` 校验（登录/绑定飞书等校验既有密码的场景不适用）。
 

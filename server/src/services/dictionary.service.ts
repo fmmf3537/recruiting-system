@@ -65,6 +65,14 @@ const DEFAULT_DICTIONARIES: Record<string, Array<{ code: string; name: string; s
     { code: 'docker', name: 'Docker', sortOrder: 11 },
     { code: 'kubernetes', name: 'Kubernetes', sortOrder: 12 },
   ],
+  // 面试评估维度（结构化评估表单的评分维度）
+  evaluation_dimension: [
+    { code: 'professional', name: '专业能力', sortOrder: 1 },
+    { code: 'communication', name: '沟通表达', sortOrder: 2 },
+    { code: 'logic', name: '逻辑思维', sortOrder: 3 },
+    { code: 'culture_fit', name: '文化匹配', sortOrder: 4 },
+    { code: 'motivation', name: '求职动机', sortOrder: 5 },
+  ],
 };
 
 export interface DictionaryItem {

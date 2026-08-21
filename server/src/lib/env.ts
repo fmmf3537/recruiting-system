@@ -50,6 +50,10 @@ const envSchema = z.object({
   // 候选人数据匿名化定时任务（个保法合规）
   // 值为 cron 表达式（如 0 3 * * * 每日凌晨 3 点）；设为 false 或留空则关闭
   ANONYMIZE_CRON: z.string().optional().transform((val) => (val && val !== 'false' ? val : null)),
+
+  // 面试评估催收定时任务（面试结束 24 小时后未提交评估的面试官发站内通知）
+  // 值为 cron 表达式（如 0 * * * * 每小时）；设为 false 或留空则关闭
+  EVALUATION_REMINDER_CRON: z.string().optional().transform((val) => (val && val !== 'false' ? val : null)),
 });
 
 // 验证环境变量

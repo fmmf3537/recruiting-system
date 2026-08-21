@@ -605,7 +605,7 @@ async function handleCancel(row: InterviewItem) {
 }
 
 function handleViewDetail(row: InterviewItem) {
-  router.push(`/candidates/${row.candidateId}`);
+  router.push(`/interviews/${row.id}`);
 }
 
 function goToCandidate(row: InterviewItem) {

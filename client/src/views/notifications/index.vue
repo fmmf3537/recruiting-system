@@ -19,6 +19,7 @@
         <el-radio-button label="interview_scheduled">面试提醒</el-radio-button>
         <el-radio-button label="offer_status">Offer</el-radio-button>
         <el-radio-button label="hc_request">编制审批</el-radio-button>
+        <el-radio-button label="evaluation_reminder">评估催收</el-radio-button>
       </el-radio-group>
     </el-card>
 
@@ -109,7 +110,7 @@ function handleItemClick(item: NotificationItem) {
     } else if (item.businessType === 'offer') {
       router.push(`/offers/${item.businessId}`);
     } else if (item.businessType === 'interview') {
-      router.push(`/candidates/${item.businessId}`);
+      router.push(`/interviews/${item.businessId}`);
     } else if (item.businessType === 'hc_request') {
       router.push(`/hc-requests/${item.businessId}`);
     }
@@ -129,6 +130,7 @@ function getTypeLabel(type: string): string {
     offer_status: 'Offer',
     onboarding_reminder: '入职提醒',
     hc_request: '编制审批',
+    evaluation_reminder: '评估催收',
   };
   return map[type] || type;
 }
@@ -140,6 +142,7 @@ function getTypeTag(type: string): string {
     offer_status: 'success',
     onboarding_reminder: 'warning',
     hc_request: 'danger',
+    evaluation_reminder: 'warning',
   };
   return map[type] || 'info';
 }

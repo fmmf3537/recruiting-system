@@ -3,7 +3,7 @@ import path from 'path';
 import app from './app';
 import { env } from './lib/env';
 import { redis } from './lib/redis';
-import { registerAnonymizeCron } from './lib/cron';
+import { registerAnonymizeCron, registerEvaluationReminderCron } from './lib/cron';
 import './workers/resume-parser.worker';
 
 const PORT = env.PORT;
@@ -39,6 +39,9 @@ Available endpoints:
 
 // 注册候选人匿名化定时任务（个保法合规，ANONYMIZE_CRON 控制开关）
 registerAnonymizeCron();
+
+// 注册面试评估催收定时任务（EVALUATION_REMINDER_CRON 控制开关）
+registerEvaluationReminderCron();
 
 // 优雅关闭
 process.on('SIGTERM', async () => {

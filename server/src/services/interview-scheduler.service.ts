@@ -3,6 +3,7 @@ import prisma from '../lib/prisma';
 import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 import * as notificationService from './notification.service';
+import { interviewEvaluationService } from './interview-evaluation.service';
 import {
   assertCandidateVisible,
   buildCandidateVisibilityWhere,
@@ -170,6 +171,9 @@ export class InterviewSchedulerService {
     });
 
     await clearListCache('interviews:list:*');
+
+    // 按 interviewers 为每位面试官生成待填的结构化评估记录
+    await interviewEvaluationService.createPendingEvaluations(interview.id, data.interviewers);
 
     // 异步发送面试安排通知
     const interviewTime = scheduledAt.toLocaleString('zh-CN', {

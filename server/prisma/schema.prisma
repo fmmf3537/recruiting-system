@@ -57,6 +57,9 @@ model User {
   // 关系：一个 User 上传多个文件
   uploadRecords     UploadRecord[] @relation("UploadedFiles")
 
+  // 关系：一个 User 作为面试官有多条面试评估
+  interviewEvaluations InterviewEvaluation[] @relation("InterviewEvaluations")
+
   @@index([email])
   @@index([role])
   @@index([createdAt])
@@ -297,8 +300,34 @@ model Interview {
   @@index([scheduledAt])
   @@index([status])
   @@index([createdById])
+  // 关系：一个 Interview 有多条面试官评估
+  evaluations   InterviewEvaluation[]
+
   @@index([scheduledAt, status])
   @@map("interview")
+}
+
+// ==================== 面试评估表（结构化评估，面试官本人填写） ====================
+model InterviewEvaluation {
+  id            String   @id @default(cuid())
+  interviewId   String
+  interview     Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  interviewerId String
+  interviewer   User      @relation("InterviewEvaluations", fields: [interviewerId], references: [id])
+
+  dimensions    Json?     // 维度评分 [{name, score, comment?}]，维度由字典 evaluation_dimension 配置
+  overallScore  Int?      // 综合评分 1-5
+  conclusion    String?   // pass, reject, pending
+  submittedAt   DateTime? // 提交时间，null = 待填写
+  remindedAt    DateTime? // 上次催收时间，避免重复催收
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([interviewId, interviewerId])
+  @@index([interviewId])
+  @@index([interviewerId, submittedAt])
+  @@map("interview_evaluation")
 }
 
 // ==================== Offer记录表 ====================

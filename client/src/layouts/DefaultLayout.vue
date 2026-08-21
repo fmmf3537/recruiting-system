@@ -137,6 +137,7 @@ import {
   SwitchButton,
   Bell,
   Tickets,
+  Calendar,
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -179,6 +180,7 @@ const menuItems = computed(() => {
     { path: '/dashboard', title: '仪表盘', icon: Odometer },
     { path: '/jobs', title: '职位管理', icon: Briefcase },
     { path: '/candidates', title: '候选人管理', icon: UserFilled },
+    { path: '/interviews/my', title: '我的面试', icon: Calendar },
     { path: '/offers', title: 'Offer管理', icon: DocumentChecked },
     { path: '/stats', title: '数据统计', icon: TrendCharts },
   ];
@@ -234,7 +236,8 @@ function handleNotificationClick(item: NotificationItem) {
     } else if (item.businessType === 'offer') {
       router.push(`/offers/${item.businessId}`);
     } else if (item.businessType === 'interview') {
-      router.push(`/candidates/${item.businessId}`);
+      // businessId 为面试 ID，跳面试详情页
+      router.push(`/interviews/${item.businessId}`);
     }
   }
 }
