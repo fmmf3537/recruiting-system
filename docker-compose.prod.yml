@@ -73,6 +73,9 @@ services:
       # 候选人超期匿名化定时任务（cron 表达式；留空/false 关闭）
       ANONYMIZE_CRON: ${ANONYMIZE_CRON:-}
       EVALUATION_REMINDER_CRON: ${EVALUATION_REMINDER_CRON:-}
+      # 统一提醒定时任务开关（跟进到期/面试前提醒/阶段超时）与超时阈值（天）
+      REMINDER_CRON_ENABLED: ${REMINDER_CRON_ENABLED:-false}
+      STAGE_OVERDUE_DAYS: ${STAGE_OVERDUE_DAYS:-7}
     depends_on:
       postgres:
         condition: service_healthy

@@ -20,6 +20,9 @@
         <el-radio-button label="offer_status">Offer</el-radio-button>
         <el-radio-button label="hc_request">编制审批</el-radio-button>
         <el-radio-button label="evaluation_reminder">评估催收</el-radio-button>
+        <el-radio-button label="followup_reminder">跟进提醒</el-radio-button>
+        <el-radio-button label="interview_reminder">面试临近</el-radio-button>
+        <el-radio-button label="stage_overdue_reminder">阶段超时</el-radio-button>
       </el-radio-group>
     </el-card>
 
@@ -131,6 +134,9 @@ function getTypeLabel(type: string): string {
     onboarding_reminder: '入职提醒',
     hc_request: '编制审批',
     evaluation_reminder: '评估催收',
+    followup_reminder: '跟进提醒',
+    interview_reminder: '面试临近',
+    stage_overdue_reminder: '阶段超时',
   };
   return map[type] || type;
 }
@@ -143,6 +149,9 @@ function getTypeTag(type: string): string {
     onboarding_reminder: 'warning',
     hc_request: 'danger',
     evaluation_reminder: 'warning',
+    followup_reminder: 'warning',
+    interview_reminder: 'primary',
+    stage_overdue_reminder: 'danger',
   };
   return map[type] || 'info';
 }

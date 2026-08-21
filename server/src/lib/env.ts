@@ -54,6 +54,12 @@ const envSchema = z.object({
   // 面试评估催收定时任务（面试结束 24 小时后未提交评估的面试官发站内通知）
   // 值为 cron 表达式（如 0 * * * * 每小时）；设为 false 或留空则关闭
   EVALUATION_REMINDER_CRON: z.string().optional().transform((val) => (val && val !== 'false' ? val : null)),
+
+  // 统一提醒定时任务（跟进到期 / 面试前提醒 / 阶段停留超时）
+  // true 开启，固定每小时扫描一次（0 * * * *）；false 或留空则关闭
+  REMINDER_CRON_ENABLED: z.string().optional().transform((val) => val === 'true'),
+  // 阶段停留超时阈值（天数）：StageRecord 处于 in_progress 且 enteredAt 超过该天数触发提醒
+  STAGE_OVERDUE_DAYS: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 7)),
 });
 
 // 验证环境变量

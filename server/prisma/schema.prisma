@@ -562,9 +562,10 @@ model Notification {
   recipient    User     @relation(fields: [recipientId], references: [id], onDelete: Cascade)
   title        String   // 通知标题
   content      String   @db.Text // 通知内容
-  type         String   // stage_advance | interview_scheduled | offer_status | onboarding_reminder
+  type         String   // stage_advance | interview_scheduled | offer_status | onboarding_reminder | followup_reminder | interview_reminder | stage_overdue_reminder
   businessId   String?  // 关联业务ID
   businessType String?  // candidate | interview | offer
+  dedupeKey    String?  @unique // 幂等去重键（提醒类通知防重复发送）
   isRead       Boolean  @default(false)
   readAt       DateTime?
   createdAt    DateTime @default(now())

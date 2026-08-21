@@ -3,7 +3,11 @@ import path from 'path';
 import app from './app';
 import { env } from './lib/env';
 import { redis } from './lib/redis';
-import { registerAnonymizeCron, registerEvaluationReminderCron } from './lib/cron';
+import {
+  registerAnonymizeCron,
+  registerEvaluationReminderCron,
+  registerReminderCron,
+} from './lib/cron';
 import './workers/resume-parser.worker';
 
 const PORT = env.PORT;
@@ -42,6 +46,9 @@ registerAnonymizeCron();
 
 // 注册面试评估催收定时任务（EVALUATION_REMINDER_CRON 控制开关）
 registerEvaluationReminderCron();
+
+// 注册统一提醒定时任务（跟进/面试/阶段超时，REMINDER_CRON_ENABLED 控制开关）
+registerReminderCron();
 
 // 优雅关闭
 process.on('SIGTERM', async () => {

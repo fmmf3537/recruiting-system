@@ -13,6 +13,8 @@ export interface CreateNotificationInput {
   type: string;
   businessId?: string;
   businessType?: string;
+  // 幂等去重键（提醒类通知防重复发送），写入前由调用方检查/唯一索引兜底
+  dedupeKey?: string;
 }
 
 /**
@@ -27,6 +29,7 @@ export async function createNotification(data: CreateNotificationInput) {
       type: data.type,
       businessId: data.businessId || null,
       businessType: data.businessType || null,
+      dedupeKey: data.dedupeKey || null,
     },
   });
 }

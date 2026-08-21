@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { env } from '../lib/env';
 import { anonymizeExpiredCandidates } from '../services/anonymize.service';
 import { interviewEvaluationService } from '../services/interview-evaluation.service';
+import { runReminderScan } from '../services/reminder.service';
 
 /**
  * 注册候选人匿名化定时任务（个保法合规）
@@ -45,4 +46,29 @@ export function registerEvaluationReminderCron(): void {
   });
 
   console.log(`[评估催收任务] 已注册定时任务：${env.EVALUATION_REMINDER_CRON}`);
+}
+
+/**
+ * 注册统一提醒定时任务（跟进到期 / 面试前提醒 / 阶段停留超时）
+ * 由 REMINDER_CRON_ENABLED 环境变量控制开关（true 开启），固定每小时扫描一次（0 * * * *）
+ */
+export function registerReminderCron(): void {
+  if (!env.REMINDER_CRON_ENABLED) {
+    return;
+  }
+
+  cron.schedule('0 * * * *', async () => {
+    try {
+      const result = await runReminderScan();
+      console.log(
+        `[提醒任务] 执行完成：跟进提醒 ${result.followUp} 条，` +
+          `面试提醒 ${result.interview} 条，阶段超时提醒 ${result.stageOverdue} 条`
+      );
+    } catch (error) {
+      // 扫描失败仅记录日志，不拖垮主进程
+      console.error('[提醒任务] 执行失败:', error);
+    }
+  });
+
+  console.log('[提醒任务] 已注册定时任务：每小时扫描（0 * * * *）');
 }
