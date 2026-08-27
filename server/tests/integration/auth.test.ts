@@ -12,6 +12,30 @@ vi.hoisted(() => {
   process.env.NODE_ENV = 'test';
 });
 
+const { cacheStore, redisDel } = vi.hoisted(() => {
+  const store = new Map<string, string>();
+  return {
+    cacheStore: store,
+    redisDel: vi.fn(async (key: string) => {
+      store.delete(key);
+      return 1;
+    }),
+  };
+});
+
+vi.mock('../../src/lib/redis', () => ({
+  redis: { del: redisDel },
+  getFromCache: vi.fn(async (key: string) => {
+    const raw = cacheStore.get(key);
+    return raw ? JSON.parse(raw) : null;
+  }),
+  setCache: vi.fn(async (key: string, value: unknown) => {
+    cacheStore.set(key, JSON.stringify(value));
+  }),
+  clearListCache: vi.fn(),
+  connectRedis: vi.fn(),
+}));
+
 // Mock Prisma（不依赖真实数据库）
 vi.mock('../../src/lib/prisma', () => ({
   default: {
@@ -83,6 +107,7 @@ describe('认证与账号安全 API 测试', () => {
     app.use('/api/auth', authRoutes);
     app.use('/api/users', usersRoutes);
     app.use(errorHandler);
+    cacheStore.clear();
     vi.clearAllMocks();
   });
 

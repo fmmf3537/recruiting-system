@@ -1,7 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
+
 import { env } from '../lib/env';
 import prisma from '../lib/prisma';
+import { getFromCache, setCache } from '../lib/redis';
 import { AppError } from './errorHandler';
 
 // JWT Payload 类型
@@ -22,6 +24,54 @@ declare global {
   }
 }
 
+type CachedAuthUser = {
+  id: string;
+  email: string;
+  role: string;
+  department: string | null;
+  tokenVersion: number;
+};
+
+const AUTH_USER_CACHE_TTL_SECONDS = 60;
+
+/** 进程内 in-flight 合并，避免缓存击穿时并发重复查 DB（不是 LRU） */
+const inflightAuthUserLoads = new Map<string, Promise<CachedAuthUser | null>>();
+
+export function authUserCacheKey(userId: string): string {
+  return `auth:user:${userId}`;
+}
+
+async function loadAuthUser(userId: string): Promise<CachedAuthUser | null> {
+  const cacheKey = authUserCacheKey(userId);
+  const cached = await getFromCache<CachedAuthUser>(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const pending = inflightAuthUserLoads.get(userId);
+  if (pending) {
+    return pending;
+  }
+
+  const load = (async (): Promise<CachedAuthUser | null> => {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, email: true, role: true, department: true, tokenVersion: true,
+      },
+    });
+    if (user) {
+      await setCache(cacheKey, user, AUTH_USER_CACHE_TTL_SECONDS);
+    }
+    return user;
+  })().finally(() => {
+    inflightAuthUserLoads.delete(userId);
+  });
+
+  inflightAuthUserLoads.set(userId, load);
+  return load;
+}
+
 async function loadUserFromToken(token: string): Promise<JwtPayload> {
   let decoded: JwtPayload;
   try {
@@ -36,10 +86,7 @@ async function loadUserFromToken(token: string): Promise<JwtPayload> {
     throw new AppError('认证过程中发生错误', 500);
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: decoded.userId },
-    select: { id: true, email: true, role: true, department: true, tokenVersion: true },
-  });
+  const user = await loadAuthUser(decoded.userId);
 
   if (!user) {
     throw new AppError('用户不存在或已被禁用', 401);

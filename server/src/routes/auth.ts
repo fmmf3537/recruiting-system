@@ -4,8 +4,9 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { env } from '../lib/env';
-import prisma from '../lib/prisma';
 import { resolveFeishuEmployeeId } from '../lib/feishu-auth';
+import prisma from '../lib/prisma';
+import { redis } from '../lib/redis';
 import { authenticate } from '../middleware/auth';
 import { feishuLimiter, bindFeishuLimiter } from '../middleware/rate-limit';
 import { validate, passwordSchema } from '../middleware/validate';
@@ -353,6 +354,11 @@ router.post(
       where: { id: userId },
       data: { password: hashedPassword, tokenVersion: { increment: 1 } },
     });
+    try {
+      await redis.del(`auth:user:${userId}`);
+    } catch (error) {
+      console.error('Failed to invalidate auth user cache:', error);
+    }
 
     res.json({
       success: true,

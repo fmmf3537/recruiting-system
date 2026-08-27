@@ -3,7 +3,7 @@ import { Router, type Router as RouterType } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
-import { getFromCache, setCache, clearListCache } from '../lib/redis';
+import { redis, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate, commonSchemas, passwordSchema } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
@@ -300,6 +300,11 @@ router.post(
       where: { id },
       data: { password: hashedPassword, tokenVersion: { increment: 1 } },
     });
+    try {
+      await redis.del(`auth:user:${id}`);
+    } catch (error) {
+      console.error('Failed to invalidate auth user cache:', error);
+    }
 
     // 写入操作日志
     await prisma.operationLog.create({
