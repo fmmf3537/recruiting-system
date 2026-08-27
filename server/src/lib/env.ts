@@ -67,6 +67,13 @@ const envSchema = z.object({
     z.string().url().optional()
   ),
   OTEL_SAMPLING_RATIO: z.string().optional().transform((val) => (val ? parseFloat(val) : 1.0)),
+
+  // Sentry（留空则禁用）
+  SENTRY_DSN: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+    z.string().url().optional()
+  ),
+  SENTRY_TRACES_SAMPLE_RATE: z.string().optional().transform((v) => (v ? parseFloat(v) : 0.1)),
 });
 
 // 验证环境变量

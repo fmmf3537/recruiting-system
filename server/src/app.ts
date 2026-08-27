@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import * as Sentry from '@sentry/node';
 import compression from 'compression';
 import cors from 'cors';
 import express, { type Application } from 'express';
@@ -10,9 +11,12 @@ import pinoHttp from 'pino-http';
 import { env } from './lib/env';
 import { logger } from './lib/logger';
 import { httpRequestDuration, httpRequestTotal } from './lib/metrics';
+import { initSentry, isSentryEnabled, shouldHandleSentryError } from './lib/sentry';
 import { setupSwagger } from './lib/swagger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import routes from './routes';
+
+initSentry();
 
 // 创建 Express 应用
 const app: Application = express();
@@ -104,6 +108,11 @@ if (env.NODE_ENV !== 'production') {
 
 // 404 处理
 app.use(notFoundHandler);
+
+// Sentry 错误处理（仅 5xx；未配置 DSN 时跳过）
+if (isSentryEnabled()) {
+  Sentry.setupExpressErrorHandler(app, { shouldHandleError: shouldHandleSentryError });
+}
 
 // 全局错误处理
 app.use(errorHandler);

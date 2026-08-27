@@ -1,6 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 
+import * as Sentry from '@sentry/node';
+
 import app from './app';
 import {
   registerAnonymizeCron,
@@ -10,6 +12,7 @@ import {
 import { env } from './lib/env';
 import { logger } from './lib/logger';
 import { redis } from './lib/redis';
+import { isSentryEnabled } from './lib/sentry';
 import './workers/resume-parser.worker';
 
 const PORT = env.PORT;
@@ -74,10 +77,20 @@ process.on('SIGINT', async () => {
 // 未捕获的错误处理
 process.on('uncaughtException', (error) => {
   logger.error({ err: error }, 'Uncaught Exception');
-  process.exit(1);
+  if (isSentryEnabled()) {
+    Sentry.captureException(error);
+    void Sentry.flush(2000).finally(() => process.exit(1));
+  } else {
+    process.exit(1);
+  }
 });
 
 process.on('unhandledRejection', (reason) => {
   logger.error({ err: reason }, 'Unhandled Rejection');
-  process.exit(1);
+  if (isSentryEnabled()) {
+    Sentry.captureException(reason);
+    void Sentry.flush(2000).finally(() => process.exit(1));
+  } else {
+    process.exit(1);
+  }
 });
