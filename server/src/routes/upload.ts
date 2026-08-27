@@ -3,6 +3,7 @@ import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+import { mkdirSync } from 'fs';
 import fs from 'fs/promises';
 import { env } from '../lib/env';
 import { authenticate } from '../middleware/auth';
@@ -25,11 +26,15 @@ const uploadLimiter = rateLimit({
 });
 
 const uploadDir = path.resolve(process.cwd(), env.UPLOAD_DIR);
-await fs.mkdir(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    cb(null, uploadDir);
+    try {
+      mkdirSync(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    } catch (err) {
+      cb(err as Error);
+    }
   },
   filename: (_req, _file, cb) => {
     // 临时文件名，后续按 magic bytes 重命名
