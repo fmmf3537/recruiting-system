@@ -65,6 +65,8 @@ const limiter = rateLimit({
   max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
+  // K8s 探针高频访问，健康检查不计入全局限流
+  skip: (req) => req.path === '/api/health',
   message: {
     success: false,
     error: '请求过于频繁，请稍后再试',

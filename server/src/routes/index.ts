@@ -1,4 +1,7 @@
 import { Router, type Router as RouterType } from 'express';
+
+import { getHealthSnapshot } from '../services/health.service';
+
 import authRoutes from './auth';
 import userRoutes from './users';
 import jobRoutes from './jobs';
@@ -22,16 +25,11 @@ import pipelineTemplateRoutes from './pipeline-templates';
 
 const router: RouterType = Router();
 
-// 健康检查
-router.get('/health', (_req, res) => {
-  res.json({
-    success: true,
-    data: {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      version: '1.0.0',
-    },
-  });
+// 健康检查（DB / Redis / BullMQ；DB 失败 503，其余 200）
+router.get('/health', async (_req, res) => {
+  const result = await getHealthSnapshot();
+  const httpStatus = result.status === 'fail' ? 503 : 200;
+  res.status(httpStatus).json({ success: result.status === 'ok', data: result });
 });
 
 // 挂载各模块路由
