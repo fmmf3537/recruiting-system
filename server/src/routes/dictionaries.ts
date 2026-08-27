@@ -8,32 +8,32 @@ const router: RouterType = Router();
 
 // 查询参数验证
 const listQuerySchema = z.object({
-  category: z.string().optional(),
+  category: z.string().max(50).optional(),
   includeDisabled: z.enum(['true', 'false']).optional(),
 });
 
 // 创建字典项验证
 const createSchema = z.object({
-  category: z.string().min(1, '分类不能为空'),
-  code: z.string().min(1, '编码不能为空').optional(),
-  name: z.string().min(1, '名称不能为空'),
-  sortOrder: z.number().int().optional(),
+  category: z.string().min(1, '分类不能为空').max(50),
+  code: z.string().min(1, '编码不能为空').max(50).optional(),
+  name: z.string().min(1, '名称不能为空').max(50),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
   enabled: z.boolean().optional(),
-  description: z.string().optional(),
+  description: z.string().max(500).optional(),
 });
 
 // 更新字典项验证
 const updateSchema = z.object({
-  code: z.string().min(1).optional(),
-  name: z.string().min(1).optional(),
-  sortOrder: z.number().int().optional(),
+  code: z.string().min(1).max(50).optional(),
+  name: z.string().min(1).max(50).optional(),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
   enabled: z.boolean().optional(),
-  description: z.string().optional(),
+  description: z.string().max(500).optional(),
 });
 
 // ID 参数验证
 const idParamSchema = z.object({
-  id: z.string().cuid('无效的字典项ID'),
+  id: z.string().max(50).cuid('无效的字典项ID'),
 });
 
 /**

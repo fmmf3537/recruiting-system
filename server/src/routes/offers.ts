@@ -11,22 +11,22 @@ const router: RouterType = Router();
 
 // 创建 Offer 验证 Schema
 const createOfferSchema = z.object({
-  candidateId: z.string().cuid('无效的候选人ID'),
-  salary: z.string().min(1, '薪资不能为空'),
-  offerDate: z.string().datetime('无效的日期格式'),
-  expectedJoinDate: z.string().datetime('无效的日期格式').optional(),
-  note: z.string().optional(),
+  candidateId: z.string().max(50).cuid('无效的候选人ID'),
+  salary: z.string().min(1, '薪资不能为空').max(50),
+  offerDate: z.string().max(50).datetime('无效的日期格式'),
+  expectedJoinDate: z.string().max(50).datetime('无效的日期格式').optional(),
+  note: z.string().max(500).optional(),
 });
 
 // 更新 Offer 验证 Schema
 const updateOfferSchema = z.object({
-  salary: z.string().optional(),
-  offerDate: z.string().datetime('无效的日期格式').optional(),
-  expectedJoinDate: z.string().datetime('无效的日期格式').optional(),
+  salary: z.string().max(50).optional(),
+  offerDate: z.string().max(50).datetime('无效的日期格式').optional(),
+  expectedJoinDate: z.string().max(50).datetime('无效的日期格式').optional(),
   result: z.enum([...OFFER_RESULTS] as [string, ...string[]], {
     errorMap: () => ({ message: '结果必须是：pending, accepted 或 rejected' }),
   }).optional(),
-  note: z.string().optional(),
+  note: z.string().max(500).optional(),
 });
 
 // 更新 Offer 结果验证 Schema
@@ -38,33 +38,33 @@ const updateResultSchema = z.object({
 
 // 标记入职验证 Schema
 const markAsJoinedSchema = z.object({
-  actualJoinDate: z.string().datetime('无效的日期格式'),
+  actualJoinDate: z.string().max(50).datetime('无效的日期格式'),
 });
 
 // 提交审批验证 Schema
 const submitApprovalSchema = z.object({
-  approverId: z.string().cuid('无效的审批人ID'),
+  approverId: z.string().max(50).cuid('无效的审批人ID'),
 });
 
 // 审批通过验证 Schema
 const approveOfferSchema = z.object({
-  note: z.string().optional(),
+  note: z.string().max(500).optional(),
 });
 
 // 审批驳回验证 Schema（驳回必须填写意见）
 const rejectOfferSchema = z.object({
-  note: z.string().min(1, '驳回意见不能为空'),
+  note: z.string().min(1, '驳回意见不能为空').max(500),
 });
 
 // 候选人 ID 参数验证
 const candidateIdParamSchema = z.object({
-  candidateId: z.string().cuid('无效的候选人ID'),
+  candidateId: z.string().max(50).cuid('无效的候选人ID'),
 });
 
 // 列表查询验证 Schema
 const listOffersQuerySchema = z.object({
-  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
-  pageSize: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 10)),
+  page: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  pageSize: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 10)),
   result: z.enum([...OFFER_RESULTS] as [string, ...string[]]).optional(),
 });
 

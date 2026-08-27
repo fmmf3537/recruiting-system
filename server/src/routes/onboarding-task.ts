@@ -13,29 +13,29 @@ import {
 const router: RouterType = Router();
 
 const candidateIdParamSchema = z.object({
-  candidateId: z.string().cuid('无效的候选人ID'),
+  candidateId: z.string().max(50).cuid('无效的候选人ID'),
 });
 
 const taskIdParamSchema = z.object({
-  id: z.string().cuid('无效的任务ID'),
+  id: z.string().max(50).cuid('无效的任务ID'),
 });
 
 const createTaskSchema = z.object({
-  candidateId: z.string().cuid('无效的候选人ID'),
-  title: z.string().min(1, '任务名称不能为空'),
-  category: z.string().min(1, '分类不能为空'),
-  assigneeId: z.string().optional(),
-  dueDate: z.string().optional(),
-  note: z.string().optional(),
+  candidateId: z.string().max(50).cuid('无效的候选人ID'),
+  title: z.string().min(1, '任务名称不能为空').max(200),
+  category: z.string().min(1, '分类不能为空').max(50),
+  assigneeId: z.string().max(50).optional(),
+  dueDate: z.string().max(50).optional(),
+  note: z.string().max(500).optional(),
 });
 
 const updateTaskSchema = z.object({
-  title: z.string().min(1).optional(),
-  category: z.string().optional(),
-  assigneeId: z.string().optional(),
+  title: z.string().min(1).max(200).optional(),
+  category: z.string().max(50).optional(),
+  assigneeId: z.string().max(50).optional(),
   status: z.enum(['pending', 'in_progress', 'completed']).optional(),
-  dueDate: z.string().optional(),
-  note: z.string().optional(),
+  dueDate: z.string().max(50).optional(),
+  note: z.string().max(500).optional(),
 });
 
 // 获取候选人的入职任务

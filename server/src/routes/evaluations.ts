@@ -12,9 +12,9 @@ const submitEvaluationSchema = z.object({
   dimensions: z
     .array(
       z.object({
-        name: z.string().min(1, '维度名称不能为空'),
+        name: z.string().min(1, '维度名称不能为空').max(50),
         score: z.number().int().min(1).max(5),
-        comment: z.string().optional(),
+        comment: z.string().max(500).optional(),
       })
     )
     .min(1, '至少需要一个评估维度'),
@@ -26,14 +26,15 @@ const submitEvaluationSchema = z.object({
 
 // 评估ID参数验证
 const evaluationIdSchema = z.object({
-  id: z.string().cuid('无效的评估ID'),
+  id: z.string().max(50).cuid('无效的评估ID'),
 });
 
 // 我的评估列表查询验证
 const myEvaluationQuerySchema = z.object({
-  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  page: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 1)),
   pageSize: z
     .string()
+    .max(10)
     .optional()
     .transform((val) => (val ? parseInt(val, 10) : 10)),
   status: z.enum(['pending', 'submitted']).optional(),

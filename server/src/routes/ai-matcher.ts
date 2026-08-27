@@ -7,11 +7,11 @@ import { getRecommendations } from '../controllers/ai-matcher.controller';
 const router: RouterType = Router();
 
 const jobIdParamSchema = z.object({
-  jobId: z.string().cuid('无效的职位ID'),
+  jobId: z.string().max(50).cuid('无效的职位ID'),
 });
 
 const querySchema = z.object({
-  limit: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 5)),
+  limit: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 5)),
 });
 
 /**

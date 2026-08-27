@@ -8,12 +8,12 @@ const router: RouterType = Router();
 
 // 标记已读验证 Schema
 const markReadSchema = z.object({
-  notificationId: z.string().cuid('无效的通知ID'),
+  notificationId: z.string().max(50).cuid('无效的通知ID'),
 });
 
 // 通知 ID 参数验证
 const notificationIdParamSchema = z.object({
-  id: z.string().cuid('无效的通知ID'),
+  id: z.string().max(50).cuid('无效的通知ID'),
 });
 
 /**

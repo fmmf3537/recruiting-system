@@ -9,7 +9,7 @@ const router: RouterType = Router();
 // 标签创建/更新验证 schema
 const tagSchema = z.object({
   name: z.string().min(1, '标签名不能为空').max(50, '标签名最多50个字符'),
-  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, '颜色格式必须为 #RRGGBB').optional(),
+  color: z.string().max(7).regex(/^#[0-9A-Fa-f]{6}$/, '颜色格式必须为 #RRGGBB').optional(),
   category: z.enum(['preset', 'custom']).optional(),
 });
 

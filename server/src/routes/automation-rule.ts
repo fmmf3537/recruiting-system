@@ -14,7 +14,7 @@ const createRuleSchema = z.object({
   triggerStatus: z.literal('passed', {
     errorMap: () => ({ message: '触发状态只能是 passed' }),
   }),
-  templateId: z.string().cuid('无效的模板ID'),
+  templateId: z.string().max(50).cuid('无效的模板ID'),
   enabled: z.boolean().optional().default(true),
   description: z.string().max(200, '描述不超过200字').optional(),
 });
@@ -23,14 +23,14 @@ const createRuleSchema = z.object({
 const updateRuleSchema = z.object({
   triggerStage: z.enum(['初筛', 'Offer', '入职']).optional(),
   triggerStatus: z.literal('passed').optional(),
-  templateId: z.string().cuid('无效的模板ID').optional(),
+  templateId: z.string().max(50).cuid('无效的模板ID').optional(),
   enabled: z.boolean().optional(),
   description: z.string().max(200, '描述不超过200字').optional(),
 });
 
 // 规则 ID 参数验证
 const ruleIdParamSchema = z.object({
-  id: z.string().cuid('无效的规则ID'),
+  id: z.string().max(50).cuid('无效的规则ID'),
 });
 
 /**

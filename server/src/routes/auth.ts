@@ -29,13 +29,13 @@ const loginLimiter = rateLimit({
 
 // 登录请求验证 schema
 const loginSchema = z.object({
-  email: z.string().email('请输入有效的邮箱地址'),
-  password: z.string().min(6, '密码至少6位字符'),
+  email: z.string().email('请输入有效的邮箱地址').max(254),
+  password: z.string().min(6, '密码至少6位字符').max(100),
 });
 
 // 注册请求验证 schema
 const registerSchema = z.object({
-  email: z.string().email('请输入有效的邮箱地址'),
+  email: z.string().email('请输入有效的邮箱地址').max(254),
   password: passwordSchema,
   name: z.string().min(2, '姓名至少2位字符').max(50, '姓名最多50位字符'),
   role: z.enum(['admin', 'member']).default('member'),
@@ -43,18 +43,18 @@ const registerSchema = z.object({
 
 // 修改密码请求验证 schema
 const changePasswordSchema = z.object({
-  oldPassword: z.string().min(1, '请输入当前密码'),
+  oldPassword: z.string().min(1, '请输入当前密码').max(100),
   newPassword: passwordSchema,
 });
 
 const bindFeishuSchema = z.object({
-  email: z.string().email('请输入有效的邮箱地址'),
-  password: z.string().min(6, '密码至少6位字符'),
-  authCode: z.string().min(1, '缺少飞书授权码'),
+  email: z.string().email('请输入有效的邮箱地址').max(254),
+  password: z.string().min(6, '密码至少6位字符').max(100),
+  authCode: z.string().min(1, '缺少飞书授权码').max(500),
 });
 
 const feishuLoginSchema = z.object({
-  authCode: z.string().min(1, '缺少 authCode'),
+  authCode: z.string().min(1, '缺少 authCode').max(500),
 });
 
 /**

@@ -34,17 +34,17 @@ function generateTempPassword(): string {
 // 更新用户信息验证 schema
 const updateUserSchema = z.object({
   name: z.string().min(2).max(50).optional(),
-  email: z.string().email().optional(),
+  email: z.string().email().max(254).optional(),
   password: passwordSchema.optional(),
   role: z.enum(['admin', 'member']).optional(),
-  department: z.string().optional().nullable(),
+  department: z.string().max(50).optional().nullable(),
 });
 
 // 分页查询验证 schema
 const listQuerySchema = z.object({
-  page: z.string().optional().default('1').transform(Number),
-  limit: z.string().optional().default('10').transform(Number),
-  search: z.string().optional(),
+  page: z.string().max(10).optional().default('1').transform(Number),
+  limit: z.string().max(10).optional().default('10').transform(Number),
+  search: z.string().max(100).optional(),
 });
 
 /**

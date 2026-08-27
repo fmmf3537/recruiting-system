@@ -97,18 +97,18 @@ export const passwordSchema = z
 export const commonSchemas = {
   // ID 参数验证
   idParam: z.object({
-    id: z.string().cuid(),
+    id: z.string().max(50).cuid(),
   }),
 
   // 分页参数验证
   pagination: z.object({
-    page: z.string().optional().default('1').transform(Number),
-    limit: z.string().optional().default('10').transform(Number),
+    page: z.string().max(10).optional().default('1').transform(Number),
+    limit: z.string().max(10).optional().default('10').transform(Number),
   }),
 
   // 排序参数验证
   sorting: z.object({
-    sortBy: z.string().optional(),
+    sortBy: z.string().max(50).optional(),
     sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
   }),
 };

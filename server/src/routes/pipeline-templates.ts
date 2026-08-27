@@ -8,9 +8,9 @@ const router: RouterType = Router();
 
 // 新建/更新模板验证 Schema（stages 为有序字符串数组）
 const templateBodySchema = z.object({
-  name: z.string().min(1, '模板名称不能为空'),
-  type: z.string().min(1, '职位类型不能为空'),
-  stages: z.array(z.string().min(1, '阶段名称不能为空')).min(1, '阶段列表不能为空'),
+  name: z.string().min(1, '模板名称不能为空').max(200),
+  type: z.string().min(1, '职位类型不能为空').max(50),
+  stages: z.array(z.string().min(1, '阶段名称不能为空').max(50)).min(1, '阶段列表不能为空'),
   enabled: z.boolean().optional(),
   isDefault: z.boolean().optional(),
 });
@@ -18,7 +18,7 @@ const templateBodySchema = z.object({
 const templateUpdateSchema = templateBodySchema.partial();
 
 const idParamSchema = z.object({
-  id: z.string().cuid('无效的模板ID'),
+  id: z.string().max(50).cuid('无效的模板ID'),
 });
 
 /**
@@ -35,7 +35,7 @@ router.get('/', authenticate, authorize('admin'), pipelineTemplateController.get
 router.get(
   '/stages',
   authenticate,
-  validate(z.object({ candidateId: z.string().optional() }), 'query'),
+  validate(z.object({ candidateId: z.string().max(50).optional() }), 'query'),
   pipelineTemplateController.getStages
 );
 

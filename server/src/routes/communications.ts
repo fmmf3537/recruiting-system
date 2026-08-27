@@ -11,14 +11,15 @@ const router: RouterType = Router();
 
 // 创建沟通记录验证
 const createCommunicationSchema = z.object({
-  candidateId: z.string().cuid('无效的候选人ID'),
+  candidateId: z.string().max(50).cuid('无效的候选人ID'),
   type: z.enum([...COMMUNICATION_TYPES] as [string, ...string[]], {
     errorMap: () => ({ message: '沟通方式无效' }),
   }),
-  content: z.string().min(1, '沟通内容不能为空'),
-  result: z.string().optional(),
+  content: z.string().min(1, '沟通内容不能为空').max(5000),
+  result: z.string().max(500).optional(),
   followUpAt: z
     .string()
+    .max(50)
     .refine((val) => !isNaN(Date.parse(val)), { message: '无效的跟进时间' })
     .optional(),
 });
@@ -26,10 +27,11 @@ const createCommunicationSchema = z.object({
 // 更新沟通记录验证
 const updateCommunicationSchema = z.object({
   type: z.enum([...COMMUNICATION_TYPES] as [string, ...string[]]).optional(),
-  content: z.string().min(1).optional(),
-  result: z.string().optional(),
+  content: z.string().min(1).max(5000).optional(),
+  result: z.string().max(500).optional(),
   followUpAt: z
     .string()
+    .max(50)
     .refine((val) => !isNaN(Date.parse(val)), { message: '无效的时间格式' })
     .optional()
     .nullable(),
@@ -37,7 +39,7 @@ const updateCommunicationSchema = z.object({
 
 // ID 参数验证
 const idParamSchema = z.object({
-  id: z.string().cuid('无效的ID'),
+  id: z.string().max(50).cuid('无效的ID'),
 });
 
 /**

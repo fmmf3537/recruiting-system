@@ -13,8 +13,8 @@ const router: RouterType = Router();
 
 // 日期范围查询验证 Schema
 const dateRangeQuerySchema = z.object({
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式必须为 YYYY-MM-DD').optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式必须为 YYYY-MM-DD').optional(),
+  startDate: z.string().max(10).regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式必须为 YYYY-MM-DD').optional(),
+  endDate: z.string().max(10).regex(/^\d{4}-\d{2}-\d{2}$/, '日期格式必须为 YYYY-MM-DD').optional(),
 });
 
 // ============ 辅助函数 ============

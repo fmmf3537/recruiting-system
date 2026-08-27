@@ -12,50 +12,50 @@ const router: RouterType = Router();
 
 // 创建职位验证 Schema
 const createJobSchema = z.object({
-  title: z.string().min(2, '职位名称至少2个字符').max(100, '职位名称最多100个字符'),
-  departments: z.array(z.string()).min(1, '至少选择一个部门'),
-  level: z.string().min(1, '职级不能为空'),
-  skills: z.array(z.string()).default([]),
-  location: z.string().min(1, '地域不能为空'),
-  type: z.string().min(1, '招聘类型不能为空'),
-  description: z.string().min(1, '职位描述不能为空'),
-  requirements: z.string().min(1, '职位要求不能为空'),
+  title: z.string().min(2, '职位名称至少2个字符').max(200, '职位名称最多200个字符'),
+  departments: z.array(z.string().max(50)).min(1, '至少选择一个部门'),
+  level: z.string().min(1, '职级不能为空').max(50),
+  skills: z.array(z.string().max(50)).default([]),
+  location: z.string().min(1, '地域不能为空').max(50),
+  type: z.string().min(1, '招聘类型不能为空').max(50),
+  description: z.string().min(1, '职位描述不能为空').max(5000),
+  requirements: z.string().min(1, '职位要求不能为空').max(5000),
   status: z.enum([...JOB_STATUS] as [string, ...string[]]).optional().default('open'),
-  tagIds: z.array(z.string()).max(20, '最多设置20个标签').optional(),
+  tagIds: z.array(z.string().max(50)).max(20, '最多设置20个标签').optional(),
   // 关联招聘流程模板（可空，空则使用该 type 的默认模板）
-  pipelineTemplateId: z.string().nullable().optional(),
+  pipelineTemplateId: z.string().max(50).nullable().optional(),
 });
 
 // 更新职位验证 Schema（所有字段可选）
 const updateJobSchema = z.object({
-  title: z.string().min(2).max(100).optional(),
-  departments: z.array(z.string()).optional(),
-  level: z.string().optional(),
-  skills: z.array(z.string()).optional(),
-  location: z.string().optional(),
-  type: z.string().optional(),
-  description: z.string().optional(),
-  requirements: z.string().optional(),
+  title: z.string().min(2).max(200).optional(),
+  departments: z.array(z.string().max(50)).optional(),
+  level: z.string().max(50).optional(),
+  skills: z.array(z.string().max(50)).optional(),
+  location: z.string().max(50).optional(),
+  type: z.string().max(50).optional(),
+  description: z.string().max(5000).optional(),
+  requirements: z.string().max(5000).optional(),
   status: z.enum([...JOB_STATUS] as [string, ...string[]]).optional(),
-  tagIds: z.array(z.string()).max(20, '最多设置20个标签').optional(),
-  pipelineTemplateId: z.string().nullable().optional(),
+  tagIds: z.array(z.string().max(50)).max(20, '最多设置20个标签').optional(),
+  pipelineTemplateId: z.string().max(50).nullable().optional(),
 });
 
 // 职位 ID 参数验证
 const jobIdParamSchema = z.object({
-  id: z.string().cuid('无效的职位ID'),
+  id: z.string().max(50).cuid('无效的职位ID'),
 });
 
 // 列表查询验证 Schema
 const listJobsQuerySchema = z.object({
-  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
-  pageSize: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 10)),
-  keyword: z.string().optional(),
+  page: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  pageSize: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 10)),
+  keyword: z.string().max(100).optional(),
   status: z.enum(['open', 'paused', 'closed']).optional(),
-  type: z.string().optional(),
-  location: z.string().optional(),
-  department: z.string().optional(),
-  createdBy: z.string().optional(),
+  type: z.string().max(50).optional(),
+  location: z.string().max(50).optional(),
+  department: z.string().max(50).optional(),
+  createdBy: z.string().max(50).optional(),
 });
 
 // ============ 路由定义 ============
@@ -149,7 +149,7 @@ router.delete(
 // ============ 职位标签 ============
 
 const setTagsSchema = z.object({
-  tagIds: z.array(z.string()).max(20, '最多设置20个标签'),
+  tagIds: z.array(z.string().max(50)).max(20, '最多设置20个标签'),
 });
 
 /**

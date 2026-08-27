@@ -48,62 +48,80 @@ const upload = multer({
 const updateCandidateSchema = z.object({
   name: z.string().min(2).max(50).optional(),
   phone: z.string().min(11).max(20).optional(),
-  email: z.string().email().optional().or(z.literal('')),
+  email: z.string().email().max(254).optional().or(z.literal('')),
   gender: z.enum(['男', '女']).optional(),
   age: z.number().int().min(18).max(70).optional(),
-  education: z.string().optional(),
-  school: z.string().optional(),
-  workYears: z.number().int().min(0).optional(),
-  currentCompany: z.string().optional(),
-  currentPosition: z.string().optional(),
-  expectedSalary: z.string().optional(),
-  resumeUrl: z.string().url().optional(),
-  source: z.string().optional(),
-  sourceNote: z.string().optional(),
-  referrer: z.string().optional(),
-  intro: z.string().optional(),
-  tagIds: z.array(z.string()).max(20, '最多设置20个标签').optional(),
-  skills: z.array(z.string()).max(50, '最多设置50个技能').optional(),
+  education: z.string().max(50).optional(),
+  school: z.string().max(100).optional(),
+  workYears: z.number().int().min(0).max(80).optional(),
+  currentCompany: z.string().max(100).optional(),
+  currentPosition: z.string().max(100).optional(),
+  expectedSalary: z.string().max(50).optional(),
+  resumeUrl: z.string().url().max(2048).optional(),
+  source: z.string().max(50).optional(),
+  sourceNote: z.string().max(500).optional(),
+  referrer: z.string().max(50).optional(),
+  intro: z.string().max(5000).optional(),
+  tagIds: z.array(z.string().max(50)).max(20, '最多设置20个标签').optional(),
+  skills: z.array(z.string().max(50)).max(50, '最多设置50个技能').optional(),
   // 授权同意（个保法合规）：null 表示撤销授权记录
-  consentAt: z.string().datetime('无效的授权时间格式').optional().nullable(),
+  consentAt: z.string().max(50).datetime('无效的授权时间格式').optional().nullable(),
   consentNote: z.string().max(200, '授权备注不能超过200字').optional().nullable(),
 });
 
+// 创建候选人：仅补长度上限，不新增必填校验（现有集成测试依赖 Service 处理必填）
+const createCandidateSchema = z.object({
+  name: z.string().max(50).optional(),
+  phone: z.string().max(20).optional(),
+  email: z.string().max(254).optional(),
+  education: z.string().max(50).optional(),
+  school: z.string().max(100).optional(),
+  currentCompany: z.string().max(100).optional(),
+  currentPosition: z.string().max(100).optional(),
+  expectedSalary: z.string().max(50).optional(),
+  resumeUrl: z.string().max(2048).optional(),
+  source: z.string().max(50).optional(),
+  sourceNote: z.string().max(500).optional(),
+  referrer: z.string().max(50).optional(),
+  intro: z.string().max(5000).optional(),
+  consentNote: z.string().max(200).optional().nullable(),
+}).passthrough();
+
 // 列表查询验证 Schema
 const listCandidatesQuerySchema = z.object({
-  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
-  pageSize: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 10)),
-  keyword: z.string().optional(),
-  source: z.string().optional(),
-  stage: z.string().optional(),
+  page: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  pageSize: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 10)),
+  keyword: z.string().max(100).optional(),
+  source: z.string().max(50).optional(),
+  stage: z.string().max(50).optional(),
   status: z.enum([...STAGE_STATUS] as [string, ...string[]]).optional(),
-  education: z.string().optional(),
-  workYearsMin: z.string().optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
-  workYearsMax: z.string().optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
-  jobId: z.string().optional(),
-  tagIds: z.union([z.string(), z.array(z.string())]).optional()
+  education: z.string().max(50).optional(),
+  workYearsMin: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
+  workYearsMax: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : undefined)),
+  jobId: z.string().max(50).optional(),
+  tagIds: z.union([z.string().max(50), z.array(z.string().max(50))]).optional()
     .transform((val) => {
       if (!val) return undefined;
       return Array.isArray(val) ? val : [val];
     }),
-  hasNoJob: z.string().optional().transform((val) => val === 'true'),
+  hasNoJob: z.string().max(10).optional().transform((val) => val === 'true'),
 });
 
 // 候选人 ID 参数验证
 const candidateIdParamSchema = z.object({
-  id: z.string().cuid('无效的候选人ID'),
+  id: z.string().max(50).cuid('无效的候选人ID'),
 });
 
 // 推进阶段验证 Schema
 // 注意：stage 不再限制为固定枚举，合法选项由候选人适用职位的 Pipeline 模板决定（service 层校验）
 const advanceStageSchema = z.object({
-  stage: z.string().min(1, '阶段不能为空'),
+  stage: z.string().min(1, '阶段不能为空').max(50),
   status: z.enum([...STAGE_STATUS] as [string, ...string[]], {
     errorMap: () => ({ message: '状态必须是：in_progress, passed 或 rejected' }),
   }),
-  rejectReason: z.string().optional(),
-  assigneeId: z.string().optional(),
-  note: z.string().optional(),
+  rejectReason: z.string().max(500).optional(),
+  assigneeId: z.string().max(50).optional(),
+  note: z.string().max(500).optional(),
 });
 
 // 面试反馈验证 Schema
@@ -111,42 +129,42 @@ const interviewFeedbackSchema = z.object({
   round: z.enum([...INTERVIEW_ROUNDS] as [string, ...string[]], {
     errorMap: () => ({ message: '轮次必须是：初试, 复试 或 终面' }),
   }),
-  interviewerName: z.string().min(1, '面试官姓名不能为空'),
-  interviewTime: z.string().datetime('无效的日期格式'),
+  interviewerName: z.string().min(1, '面试官姓名不能为空').max(50),
+  interviewTime: z.string().max(50).datetime('无效的日期格式'),
   conclusion: z.enum(['pass', 'reject', 'pending'], {
     errorMap: () => ({ message: '结论必须是：pass, reject 或 pending' }),
   }),
-  feedbackContent: z.string().min(1, '反馈内容不能为空'),
-  rejectReason: z.string().optional(),
+  feedbackContent: z.string().min(1, '反馈内容不能为空').max(5000),
+  rejectReason: z.string().max(500).optional(),
 });
 
 // 面试列表查询验证 Schema
 const listInterviewsQuerySchema = z.object({
-  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
-  pageSize: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 10)),
-  keyword: z.string().optional(),
-  round: z.string().optional(),
-  conclusion: z.string().optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  page: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  pageSize: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 10)),
+  keyword: z.string().max(100).optional(),
+  round: z.string().max(50).optional(),
+  conclusion: z.string().max(50).optional(),
+  startDate: z.string().max(50).optional(),
+  endDate: z.string().max(50).optional(),
 });
 
 // 批量推进阶段验证 Schema
 const batchAdvanceSchema = z.object({
-  candidateIds: z.array(z.string().cuid('无效的候选人ID')).min(1, '至少选择一个候选人'),
+  candidateIds: z.array(z.string().max(50).cuid('无效的候选人ID')).min(1, '至少选择一个候选人'),
   // 与单条推进一致：stage 合法性由 service 层按各候选人适用的 Pipeline 模板校验
-  stage: z.string().min(1, '阶段不能为空'),
+  stage: z.string().min(1, '阶段不能为空').max(50),
   status: z.enum([...STAGE_STATUS] as [string, ...string[]], {
     errorMap: () => ({ message: '状态必须是：in_progress, passed 或 rejected' }),
   }),
-  rejectReason: z.string().optional(),
-  note: z.string().optional(),
+  rejectReason: z.string().max(500).optional(),
+  note: z.string().max(500).optional(),
 });
 
 // 批量设置标签验证 Schema
 const batchSetTagsSchema = z.object({
-  candidateIds: z.array(z.string().cuid('无效的候选人ID')).min(1, '至少选择一个候选人'),
-  tagIds: z.array(z.string()).max(20, '最多设置20个标签'),
+  candidateIds: z.array(z.string().max(50).cuid('无效的候选人ID')).min(1, '至少选择一个候选人'),
+  tagIds: z.array(z.string().max(50)).max(20, '最多设置20个标签'),
 });
 
 /**
@@ -169,6 +187,7 @@ router.get(
 router.post(
   '/',
   authenticate,
+  validate(createCandidateSchema),
   candidateController.createCandidate
 );
 
@@ -216,7 +235,7 @@ router.post(
 router.get(
   '/parse-resume/:jobId',
   authenticate,
-  validate(z.object({ jobId: z.string() }), 'params'),
+  validate(z.object({ jobId: z.string().max(50) }), 'params'),
   candidateController.getParseResumeStatus
 );
 
@@ -310,7 +329,7 @@ router.delete(
 // ============ 候选人标签 ============
 
 const setTagsSchema = z.object({
-  tagIds: z.array(z.string()).max(20, '最多设置20个标签'),
+  tagIds: z.array(z.string().max(50)).max(20, '最多设置20个标签'),
 });
 
 /**

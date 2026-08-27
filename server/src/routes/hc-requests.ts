@@ -9,49 +9,49 @@ const router: RouterType = Router();
 
 // 创建编制验证 Schema
 const createHCSchema = z.object({
-  title: z.string().min(2, '岗位名称至少2个字').max(50),
-  department: z.string().min(1, '需求部门不能为空'),
-  level: z.string().min(1, '职级不能为空'),
+  title: z.string().min(2, '岗位名称至少2个字').max(200),
+  department: z.string().min(1, '需求部门不能为空').max(50),
+  level: z.string().min(1, '职级不能为空').max(50),
   headcount: z.preprocess(
     (v) => (typeof v === 'string' ? parseInt(v, 10) : v),
     z.number().int().min(1, '需求人数至少为1').max(999)
   ),
   urgency: z.enum(HC_URGENCY as unknown as [string, ...string[]]),
-  expectedDate: z.string().optional(),
-  salaryMin: z.string().optional(),
-  salaryMax: z.string().optional(),
+  expectedDate: z.string().max(50).optional(),
+  salaryMin: z.string().max(50).optional(),
+  salaryMax: z.string().max(50).optional(),
   reason: z.enum(HC_REASONS as unknown as [string, ...string[]]),
-  reasonNote: z.string().optional(),
+  reasonNote: z.string().max(500).optional(),
 });
 
 // 更新编制验证 Schema
 const updateHCSchema = z.object({
-  title: z.string().min(2).max(50).optional(),
-  department: z.string().optional(),
-  level: z.string().optional(),
+  title: z.string().min(2).max(200).optional(),
+  department: z.string().max(50).optional(),
+  level: z.string().max(50).optional(),
   headcount: z.preprocess(
     (v) => (typeof v === 'string' ? parseInt(v, 10) : v),
     z.number().int().min(1).max(999)
   ).optional(),
   urgency: z.enum(HC_URGENCY as unknown as [string, ...string[]]).optional(),
-  expectedDate: z.string().optional().nullable(),
-  salaryMin: z.string().optional().nullable(),
-  salaryMax: z.string().optional().nullable(),
+  expectedDate: z.string().max(50).optional().nullable(),
+  salaryMin: z.string().max(50).optional().nullable(),
+  salaryMax: z.string().max(50).optional().nullable(),
   reason: z.enum(HC_REASONS as unknown as [string, ...string[]]).optional(),
-  reasonNote: z.string().optional().nullable(),
+  reasonNote: z.string().max(500).optional().nullable(),
 });
 
 // 审批验证 Schema
 const approveSchema = z.object({
-  note: z.string().optional(),
+  note: z.string().max(500).optional(),
 });
 
 const rejectSchema = z.object({
-  note: z.string().min(1, '驳回意见不能为空'),
+  note: z.string().min(1, '驳回意见不能为空').max(500),
 });
 
 // ID 参数验证
-const idParamSchema = z.object({ id: z.string().cuid('无效的ID') });
+const idParamSchema = z.object({ id: z.string().max(50).cuid('无效的ID') });
 
 /**
  * GET /api/hc-requests — 列表

@@ -10,8 +10,8 @@ const router: RouterType = Router();
 
 // 创建面试验证 Schema
 const createInterviewSchema = z.object({
-  candidateId: z.string().cuid('无效的候选人ID'),
-  jobId: z.string().cuid().optional(),
+  candidateId: z.string().max(50).cuid('无效的候选人ID'),
+  jobId: z.string().max(50).cuid().optional(),
   round: z.enum([...INTERVIEW_ROUNDS] as [string, ...string[]], {
     errorMap: () => ({ message: '面试轮次必须是：初试、复试或终面' }),
   }),
@@ -21,17 +21,17 @@ const createInterviewSchema = z.object({
   interviewers: z
     .array(
       z.object({
-        id: z.string().min(1, '面试官ID不能为空'),
-        name: z.string().min(1, '面试官姓名不能为空'),
+        id: z.string().min(1, '面试官ID不能为空').max(50),
+        name: z.string().min(1, '面试官姓名不能为空').max(50),
       })
     )
     .min(1, '至少需要一位面试官'),
-  scheduledAt: z.string().refine((val) => !isNaN(Date.parse(val)), {
+  scheduledAt: z.string().max(50).refine((val) => !isNaN(Date.parse(val)), {
     message: '无效的面试时间格式',
   }),
   duration: z.number().int().min(15).max(480).optional().default(60),
-  location: z.string().optional(),
-  notes: z.string().optional(),
+  location: z.string().max(200).optional(),
+  notes: z.string().max(5000).optional(),
 });
 
 // 更新面试验证 Schema
@@ -41,38 +41,40 @@ const updateInterviewSchema = z.object({
   interviewers: z
     .array(
       z.object({
-        id: z.string().min(1),
-        name: z.string().min(1),
+        id: z.string().min(1).max(50),
+        name: z.string().min(1).max(50),
       })
     )
     .min(1)
     .optional(),
   scheduledAt: z
     .string()
+    .max(50)
     .refine((val) => !isNaN(Date.parse(val)), { message: '无效的时间格式' })
     .optional(),
   duration: z.number().int().min(15).max(480).optional(),
-  location: z.string().optional(),
-  notes: z.string().optional(),
+  location: z.string().max(200).optional(),
+  notes: z.string().max(5000).optional(),
 });
 
 // 面试ID参数验证
 const interviewIdSchema = z.object({
-  id: z.string().cuid('无效的面试ID'),
+  id: z.string().max(50).cuid('无效的面试ID'),
 });
 
 // 列表查询验证
 const listInterviewQuerySchema = z.object({
-  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  page: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 1)),
   pageSize: z
     .string()
+    .max(10)
     .optional()
     .transform((val) => (val ? parseInt(val, 10) : 10)),
-  candidateId: z.string().optional(),
-  jobId: z.string().optional(),
+  candidateId: z.string().max(50).optional(),
+  jobId: z.string().max(50).optional(),
   status: z.enum([...INTERVIEW_STATUS] as [string, ...string[]]).optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
+  startDate: z.string().max(50).optional(),
+  endDate: z.string().max(50).optional(),
 });
 
 // ============ 路由定义 ============

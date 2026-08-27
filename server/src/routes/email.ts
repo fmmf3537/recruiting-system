@@ -19,36 +19,36 @@ const router: RouterType = Router();
 // ============ 验证 Schema ============
 
 const templateIdParamSchema = z.object({
-  id: z.string().cuid('无效的模板ID'),
+  id: z.string().max(50).cuid('无效的模板ID'),
 });
 
 const createTemplateSchema = z.object({
-  name: z.string().min(1, '模板名称不能为空').max(100),
+  name: z.string().min(1, '模板名称不能为空').max(200),
   subject: z.string().min(1, '邮件主题不能为空').max(200),
-  body: z.string().min(1, '邮件正文不能为空'),
-  variables: z.array(z.string()).default([]),
+  body: z.string().min(1, '邮件正文不能为空').max(5000),
+  variables: z.array(z.string().max(100)).default([]),
 });
 
 const updateTemplateSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name: z.string().min(1).max(200).optional(),
   subject: z.string().min(1).max(200).optional(),
-  body: z.string().min(1).optional(),
-  variables: z.array(z.string()).optional(),
+  body: z.string().min(1).max(5000).optional(),
+  variables: z.array(z.string().max(100)).optional(),
 });
 
 const sendEmailSchema = z.object({
-  templateId: z.string().optional(),
-  to: z.string().email('无效的邮箱地址'),
-  subject: z.string().optional(),
-  body: z.string().optional(),
-  variables: z.record(z.string()).optional(),
-  candidateId: z.string().optional(),
+  templateId: z.string().max(50).optional(),
+  to: z.string().email('无效的邮箱地址').max(254),
+  subject: z.string().max(200).optional(),
+  body: z.string().max(5000).optional(),
+  variables: z.record(z.string().max(500)).optional(),
+  candidateId: z.string().max(50).optional(),
 });
 
 const listLogsQuerySchema = z.object({
-  page: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 1)),
-  pageSize: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 20)),
-  candidateId: z.string().optional(),
+  page: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  pageSize: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 20)),
+  candidateId: z.string().max(50).optional(),
 });
 
 // ============ 路由定义 ============
