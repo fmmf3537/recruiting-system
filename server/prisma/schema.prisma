@@ -365,6 +365,8 @@ model Interview {
   evaluations   InterviewEvaluation[]
 
   @@index([scheduledAt, status])
+  // 冲突检测：status 等值 + scheduledAt 范围，等值列在前才能进 Index Cond
+  @@index([status, scheduledAt])
   @@map("interview")
 }
 
