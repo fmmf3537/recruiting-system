@@ -60,6 +60,13 @@ const envSchema = z.object({
   REMINDER_CRON_ENABLED: z.string().optional().transform((val) => val === 'true'),
   // 阶段停留超时阈值（天数）：StageRecord 处于 in_progress 且 enteredAt 超过该天数触发提醒
   STAGE_OVERDUE_DAYS: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 7)),
+
+  // OpenTelemetry（留空则禁用 tracing）
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+    z.string().url().optional()
+  ),
+  OTEL_SAMPLING_RATIO: z.string().optional().transform((val) => (val ? parseFloat(val) : 1.0)),
 });
 
 // 验证环境变量
