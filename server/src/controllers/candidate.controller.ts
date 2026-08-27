@@ -1,7 +1,8 @@
-import type { Response, NextFunction } from 'express';
-import { candidateService } from '../services/candidate.service';
+import type { Request, Response, NextFunction } from 'express';
+
+import { logger } from '../lib/logger';
 import { scopeFromUser } from '../services/candidate-visibility.service';
-import type { Request } from 'express';
+import { candidateService } from '../services/candidate.service';
 
 /**
  * 候选人控制器
@@ -53,7 +54,7 @@ export class CandidateController {
         message: '候选人创建成功',
       });
     } catch (error) {
-      console.error('【创建候选人错误】', error);
+      logger.error({ err: error }, '【创建候选人错误】');
       next(error);
     }
   }
@@ -302,7 +303,7 @@ export class CandidateController {
       });
     } catch (error) {
       const errorMsg = `【简历解析错误】${new Date().toISOString()}`;
-      console.error(errorMsg, error);
+      logger.error({ err: error }, errorMsg);
       next(error);
     }
   }

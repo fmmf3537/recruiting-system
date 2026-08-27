@@ -1,13 +1,17 @@
-import express, { type Application } from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
+import { randomUUID } from 'node:crypto';
+
 import compression from 'compression';
+import cors from 'cors';
+import express, { type Application } from 'express';
 import rateLimit from 'express-rate-limit';
-import routes from './routes';
+import helmet from 'helmet';
+import pinoHttp from 'pino-http';
+
 import { env } from './lib/env';
-import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import { logger } from './lib/logger';
 import { setupSwagger } from './lib/swagger';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler';
+import routes from './routes';
 
 // 创建 Express 应用
 const app: Application = express();
@@ -24,12 +28,23 @@ app.use(cors({
   credentials: true,
 }));
 
-// 日志中间件
-if (env.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
-} else {
-  app.use(morgan('combined'));
-}
+// 请求日志（替代 morgan）：自带 requestId，响应结束时如有 user 则带 userId
+app.use(pinoHttp({
+  logger,
+  genReqId: (req, res) => {
+    const existing = req.headers['x-request-id'];
+    if (typeof existing === 'string' && existing) {
+      return existing;
+    }
+    const id = randomUUID();
+    res.setHeader('X-Request-Id', id);
+    return id;
+  },
+  customProps: (req) => {
+    const { userId } = req.user ?? {};
+    return userId ? { userId } : {};
+  },
+}));
 
 // 解析 JSON 请求体
 app.use(express.json({ limit: '10mb' }));

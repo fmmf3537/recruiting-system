@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import prisma from '../lib/prisma';
 import { env } from '../lib/env';
+import { logger } from '../lib/logger';
 
 /**
  * 候选人数据匿名化服务（个保法合规：数据保留与最小化）
@@ -83,7 +84,7 @@ export async function anonymizeExpiredCandidates(now = new Date()): Promise<numb
 
       anonymizedCount += 1;
     } catch (error) {
-      console.error(`[匿名化] 候选人 ${candidate.id} 匿名化失败:`, error);
+      logger.error({ err: error, candidateId: candidate.id }, '[匿名化] 候选人匿名化失败');
     }
   }
 

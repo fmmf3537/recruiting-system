@@ -1,13 +1,15 @@
 import fs from 'fs/promises';
 import path from 'path';
+
 import app from './app';
-import { env } from './lib/env';
-import { redis } from './lib/redis';
 import {
   registerAnonymizeCron,
   registerEvaluationReminderCron,
   registerReminderCron,
 } from './lib/cron';
+import { env } from './lib/env';
+import { logger } from './lib/logger';
+import { redis } from './lib/redis';
 import './workers/resume-parser.worker';
 
 const PORT = env.PORT;
@@ -15,7 +17,7 @@ const PORT = env.PORT;
 // 确保上传临时目录存在
 const tempDir = path.resolve(process.cwd(), 'uploads', 'temp');
 fs.mkdir(tempDir, { recursive: true }).catch((err) => {
-  console.error('创建上传临时目录失败:', err);
+  logger.error({ err }, '创建上传临时目录失败');
 });
 
 // 启动服务器
@@ -52,18 +54,18 @@ registerReminderCron();
 
 // 优雅关闭
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, closing server...');
+  logger.info('SIGTERM received, closing server...');
   server.close(async () => {
-    console.log('Server closed');
+    logger.info('Server closed');
     await redis.disconnect();
     process.exit(0);
   });
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, closing server...');
+  logger.info('SIGINT received, closing server...');
   server.close(async () => {
-    console.log('Server closed');
+    logger.info('Server closed');
     await redis.disconnect();
     process.exit(0);
   });
@@ -71,11 +73,11 @@ process.on('SIGINT', async () => {
 
 // 未捕获的错误处理
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  logger.error({ err: error }, 'Uncaught Exception');
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Rejection:', reason);
+  logger.error({ err: reason }, 'Unhandled Rejection');
   process.exit(1);
 });

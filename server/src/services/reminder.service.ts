@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { env } from '../lib/env';
+import { logger } from '../lib/logger';
 import * as notificationService from './notification.service';
 
 /**
@@ -205,7 +206,7 @@ export async function runReminderScan(now: Date = new Date()): Promise<ReminderS
       result[key] = await scan();
     } catch (error) {
       // 单类扫描失败仅记录日志，不阻断其他类提醒
-      console.error(`[提醒任务] ${key} 扫描失败:`, error);
+      logger.error({ err: error, scan: key }, '[提醒任务] 扫描失败');
     }
   }
 

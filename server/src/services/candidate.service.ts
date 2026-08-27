@@ -1,20 +1,21 @@
 import type { Candidate, WorkHistory } from '@prisma/client';
 import { Prisma } from '@prisma/client';
+import { DEFAULT_STAGE, DEFAULT_STAGE_STATUS } from '../constants';
+import type { Stage } from '../constants';
+import { logger } from '../lib/logger';
 import prisma from '../lib/prisma';
 import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 import { sanitizeHtml } from '../utils/sanitize';
-import { autoSendEmailOnStageTransition } from './email-auto-sender.service';
-import * as notificationService from './notification.service';
-import { DEFAULT_STAGE, DEFAULT_STAGE_STATUS } from '../constants';
-import type { Stage } from '../constants';
-import { getCandidatePipelineStages } from './pipeline-template.service';
-import { checkDuplicate, isPhoneUsed, isEmailUsed } from './duplicate-checker.service';
 import {
   assertCandidateVisible,
   buildCandidateVisibilityWhere,
   type CandidateVisibilityScope,
 } from './candidate-visibility.service';
+import { checkDuplicate, isPhoneUsed, isEmailUsed } from './duplicate-checker.service';
+import { autoSendEmailOnStageTransition } from './email-auto-sender.service';
+import * as notificationService from './notification.service';
+import { getCandidatePipelineStages } from './pipeline-template.service';
 
 // 候选人列表查询参数类型
 export interface CandidateListQuery {
@@ -960,7 +961,7 @@ export class CandidateService {
       type: 'stage_advance',
       businessId: id,
       businessType: 'candidate',
-    }).catch((e) => console.error('[Notification] 阶段通知发送失败:', e));
+    }).catch((e) => logger.error({ err: e }, '[Notification] 阶段通知发送失败'));
 
     await clearStatsCache();
     await clearListCache('candidates:list:*');
@@ -1308,9 +1309,9 @@ export class CandidateService {
           candidate: { select: { name: true } },
         },
       });
-      console.log('[getRecentActivities] stageRecords count:', stageRecords.length);
+      logger.info({ count: stageRecords.length }, '[getRecentActivities] stageRecords count');
     } catch (err) {
-      console.error('[getRecentActivities] stageRecords query failed:', err);
+      logger.error({ err }, '[getRecentActivities] stageRecords query failed');
     }
 
     // 2. 查询 Offer 作为补充（直接接受或入职）
@@ -1329,9 +1330,9 @@ export class CandidateService {
           candidate: { select: { name: true } },
         },
       });
-      console.log('[getRecentActivities] offers count:', offers.length);
+      logger.info({ count: offers.length }, '[getRecentActivities] offers count');
     } catch (err) {
-      console.error('[getRecentActivities] offers query failed:', err);
+      logger.error({ err }, '[getRecentActivities] offers query failed');
     }
 
     // 映射为统一的活动格式
@@ -1368,7 +1369,7 @@ export class CandidateService {
     // 合并并按时间倒序排列，取前 limit 条
     const allActivities = [...stageActivities, ...offerActivities];
     allActivities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-    console.log('[getRecentActivities] total returned:', allActivities.slice(0, limit).length);
+    logger.info({ count: allActivities.slice(0, limit).length }, '[getRecentActivities] total returned');
     return allActivities.slice(0, limit);
   }
 
@@ -1401,7 +1402,7 @@ export class CandidateService {
         await this.advanceStage(id, data, operatedById, isAdmin);
         success++;
       } catch (error) {
-        console.error(`[BatchAdvance] 候选人 ${id} 推进失败:`, error);
+        logger.error({ err: error, candidateId: id }, '[BatchAdvance] 候选人推进失败');
         failed++;
       }
     }
@@ -1441,7 +1442,7 @@ export class CandidateService {
         }
         success++;
       } catch (error) {
-        console.error(`[BatchSetTags] 候选人 ${candidateId} 设置标签失败:`, error);
+        logger.error({ err: error, candidateId }, '[BatchSetTags] 候选人设置标签失败');
         failed++;
       }
     }

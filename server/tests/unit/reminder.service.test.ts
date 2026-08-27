@@ -29,6 +29,7 @@ vi.mock('../../src/services/notification.service', () => ({
   createNotification: mockCreateNotification,
 }));
 
+import { logger } from '../../src/lib/logger';
 import {
   sendFollowUpReminders,
   sendInterviewReminders,
@@ -217,7 +218,7 @@ describe('sendStageOverdueReminders - 阶段停留超时提醒', () => {
 
 describe('runReminderScan - 统一扫描入口', () => {
   it('单类扫描失败不影响其他类，且不抛出异常', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => logger);
     mockPrisma.communicationLog.findMany.mockRejectedValue(new Error('DB 连接失败'));
     mockPrisma.interview.findMany.mockResolvedValue([]);
     mockPrisma.stageRecord.findMany.mockResolvedValue([]);
