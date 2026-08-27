@@ -1,5 +1,5 @@
 import type { Candidate } from '@prisma/client';
-import { Prisma } from '@prisma/client';
+import { InterviewConclusion, OfferResult, Prisma, StageStatus, UserRole } from '@prisma/client';
 import { DEFAULT_STAGE, DEFAULT_STAGE_STATUS } from '../constants';
 import type { Stage } from '../constants';
 import { logger } from '../lib/logger';
@@ -210,7 +210,7 @@ export class CandidateService {
       data: {
         candidateId: candidate.id,
         stage: DEFAULT_STAGE,
-        status: 'passed',
+        status: StageStatus.passed,
         enteredAt: new Date(),
         completedAt: new Date(),
       },
@@ -500,7 +500,7 @@ export class CandidateService {
     const formattedCandidates = candidates.map((candidate) => ({
       ...candidate,
       currentStage: stageMap.get(candidate.id)?.stage || '入库',
-      stageStatus: stageMap.get(candidate.id)?.status || 'in_progress',
+      stageStatus: stageMap.get(candidate.id)?.status || StageStatus.in_progress,
       candidateJobs: jobsMap.get(candidate.id) || [],
       tags: tagsMap.get(candidate.id)?.map((ct) => ct.tag) || [],
     }));
@@ -824,7 +824,7 @@ export class CandidateService {
     let isAdmin = isAdminOverride;
     if (isAdmin === undefined) {
       const user = await prisma.user.findUnique({ where: { id: operatedById } });
-      isAdmin = user?.role === 'admin';
+      isAdmin = user?.role === UserRole.admin;
     }
 
     // 权限校验：全员可读，但推进流程仅限创建者或管理员
@@ -845,21 +845,21 @@ export class CandidateService {
           throw new AppError('当前阶段记录不存在', 400);
         }
         // 验证淘汰时必须填写原因
-        if (status === 'rejected' && !rejectReason) {
+        if (status === StageStatus.rejected && !rejectReason) {
           throw new AppError('淘汰时必须填写原因', 400);
         }
         // 不能从非进行中状态改成进行中
-        if (currentStatus !== 'in_progress' && status === 'in_progress') {
+        if (currentStatus !== StageStatus.in_progress && status === StageStatus.in_progress) {
           throw new AppError('不能将已完成的阶段改回进行中', 400);
         }
         // 更新当前阶段记录的状态
         await prisma.stageRecord.update({
           where: { id: candidate.stageRecords[0].id },
           data: {
-            status,
+            status: status as StageStatus,
             rejectReason: rejectReason || null,
             note: note || null,
-            completedAt: status !== 'in_progress' ? new Date() : null,
+            completedAt: status !== StageStatus.in_progress ? new Date() : null,
           },
         });
         await clearListCache('candidates:activities');
@@ -873,7 +873,7 @@ export class CandidateService {
     }
 
     // 验证淘汰时必须填写原因
-    if (status === 'rejected' && !rejectReason) {
+    if (status === StageStatus.rejected && !rejectReason) {
       throw new AppError('淘汰时必须填写原因', 400);
     }
 
@@ -885,10 +885,10 @@ export class CandidateService {
       await prisma.stageRecord.update({
         where: { id: candidate.stageRecords[0].id },
         data: {
-          status,
+          status: status as StageStatus,
           rejectReason: rejectReason || null,
           note: note || null,
-          completedAt: status !== 'in_progress' ? new Date() : null,
+          completedAt: status !== StageStatus.in_progress ? new Date() : null,
         },
       });
       await clearListCache('candidates:activities');
@@ -903,17 +903,17 @@ export class CandidateService {
         data: {
           candidateId: id,
           stage,
-          status,
+          status: status as StageStatus,
           rejectReason: rejectReason || null,
           assigneeId: assigneeId || null,
           note: note || null,
           enteredAt: new Date(),
-          completedAt: status !== 'in_progress' ? new Date() : null,
+          completedAt: status !== StageStatus.in_progress ? new Date() : null,
         },
       });
 
       // 如果阶段是 "Offer" 且状态是通过，自动创建 Offer 记录
-      if (stage === 'Offer' && status === 'passed') {
+      if (stage === 'Offer' && status === StageStatus.passed) {
         const existingOffer = await tx.offer.findUnique({
           where: { candidateId: id },
         });
@@ -924,14 +924,14 @@ export class CandidateService {
               candidateId: id,
               salary: '',
               offerDate: new Date(),
-              result: 'pending',
+              result: OfferResult.pending,
             },
           });
         }
       }
 
       // 如果阶段是 "入职" 且状态是通过，更新 Offer 记录
-      if (stage === '入职' && status === 'passed') {
+      if (stage === '入职' && status === StageStatus.passed) {
         const existingOffer = await tx.offer.findUnique({
           where: { candidateId: id },
         });
@@ -942,7 +942,7 @@ export class CandidateService {
             data: {
               joined: true,
               actualJoinDate: new Date(),
-              result: 'accepted',
+              result: OfferResult.accepted,
             },
           });
         }
@@ -953,7 +953,7 @@ export class CandidateService {
     void autoSendEmailOnStageTransition(id, stage, status, operatedById);
 
     // 异步发送阶段推进通知
-    const statusLabel = status === 'passed' ? '通过' : status === 'rejected' ? '淘汰' : '进行中';
+    const statusLabel = status === StageStatus.passed ? '通过' : status === StageStatus.rejected ? '淘汰' : '进行中';
     void notificationService.createNotification({
       recipientId: candidate.createdById,
       title: `候选人「${candidate.name}」已进入${stage}阶段`,
@@ -986,7 +986,7 @@ export class CandidateService {
     }
 
     // 验证淘汰时必须填写原因
-    if (data.conclusion === 'reject' && !data.rejectReason) {
+    if (data.conclusion === InterviewConclusion.reject && !data.rejectReason) {
       throw new AppError('淘汰时必须填写原因', 400);
     }
 
@@ -996,7 +996,7 @@ export class CandidateService {
         round: data.round,
         interviewerName: data.interviewerName,
         interviewTime: new Date(data.interviewTime),
-        conclusion: data.conclusion,
+        conclusion: data.conclusion as InterviewConclusion,
         feedbackContent: sanitizeHtml(data.feedbackContent),
         rejectReason: data.rejectReason || null,
         createdById,
@@ -1192,7 +1192,7 @@ export class CandidateService {
     try {
       offers = await prisma.offer.findMany({
         where: {
-          OR: [{ result: 'accepted' }, { joined: true }],
+          OR: [{ result: OfferResult.accepted }, { joined: true }],
         },
         orderBy: { updatedAt: 'desc' },
         take: limit,
@@ -1213,12 +1213,12 @@ export class CandidateService {
     const stageActivities = stageRecords.map((s) => {
       const stageMap: Record<string, { action: string; stageKey: string }> = {
         入库: { action: '简历入库', stageKey: 'screening' },
-        初筛: { action: s.status === 'passed' ? '初筛通过' : s.status === 'rejected' ? '初筛未通过' : '进入初筛阶段', stageKey: 'screening' },
-        复试: { action: s.status === 'passed' ? '复试通过' : s.status === 'rejected' ? '复试未通过' : '进入复试阶段', stageKey: 'interview' },
-        终面: { action: s.status === 'passed' ? '终面通过' : s.status === 'rejected' ? '终面未通过' : '进入终面阶段', stageKey: 'interview' },
-        拟录用: { action: s.status === 'passed' ? '拟录用通过' : s.status === 'rejected' ? '拟录用未通过' : '进入拟录用阶段', stageKey: 'offer' },
-        Offer: { action: s.status === 'passed' ? 'Offer 审批通过' : s.status === 'rejected' ? 'Offer 审批未通过' : '进入 Offer 阶段', stageKey: 'offer' },
-        入职: { action: s.status === 'passed' ? '已入职' : s.status === 'rejected' ? '入职取消' : '进入入职阶段', stageKey: 'hired' },
+        初筛: { action: s.status === StageStatus.passed ? '初筛通过' : s.status === StageStatus.rejected ? '初筛未通过' : '进入初筛阶段', stageKey: 'screening' },
+        复试: { action: s.status === StageStatus.passed ? '复试通过' : s.status === StageStatus.rejected ? '复试未通过' : '进入复试阶段', stageKey: 'interview' },
+        终面: { action: s.status === StageStatus.passed ? '终面通过' : s.status === StageStatus.rejected ? '终面未通过' : '进入终面阶段', stageKey: 'interview' },
+        拟录用: { action: s.status === StageStatus.passed ? '拟录用通过' : s.status === StageStatus.rejected ? '拟录用未通过' : '进入拟录用阶段', stageKey: 'offer' },
+        Offer: { action: s.status === StageStatus.passed ? 'Offer 审批通过' : s.status === StageStatus.rejected ? 'Offer 审批未通过' : '进入 Offer 阶段', stageKey: 'offer' },
+        入职: { action: s.status === StageStatus.passed ? '已入职' : s.status === StageStatus.rejected ? '入职取消' : '进入入职阶段', stageKey: 'hired' },
       };
       const mapped = stageMap[s.stage] || { action: `${s.stage}更新`, stageKey: 'screening' };
       return {
@@ -1260,7 +1260,7 @@ export class CandidateService {
 
     // 操作人角色只查一次，避免每个候选人都重复查询用户表（N+1）
     const operator = await prisma.user.findUnique({ where: { id: operatedById } });
-    const isAdmin = operator?.role === 'admin';
+    const isAdmin = operator?.role === UserRole.admin;
 
     // 数据可见性过滤：member 只能批量操作其可见范围内的候选人
     // （一次批量查询出可见 ID，避免逐个查询）
@@ -1299,7 +1299,7 @@ export class CandidateService {
     const operator = await prisma.user.findUnique({ where: { id: operatedById } });
     const operableIds = await this.filterVisibleCandidateIds(candidateIds, {
       userId: operatedById,
-      isAdmin: operator?.role === 'admin',
+      isAdmin: operator?.role === UserRole.admin,
       department: operator?.department ?? null,
     });
     failed += candidateIds.length - operableIds.length;

@@ -1,4 +1,5 @@
 import type { InterviewEvaluation, Prisma } from '@prisma/client';
+import { InterviewStatus } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import * as notificationService from './notification.service';
@@ -166,7 +167,7 @@ export class InterviewEvaluationService {
         submittedAt: null,
         remindedAt: null,
         interview: {
-          status: { in: ['scheduled', 'completed'] },
+          status: { in: [InterviewStatus.scheduled, InterviewStatus.completed] },
           scheduledAt: { lt: new Date(now.getTime() - REMINDER_DELAY_MS) },
         },
       },

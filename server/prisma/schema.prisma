@@ -8,13 +8,51 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  admin
+  member
+}
+
+enum StageStatus {
+  in_progress
+  passed
+  rejected
+}
+
+enum InterviewConclusion {
+  pass
+  reject
+  pending
+}
+
+enum OfferResult {
+  pending
+  accepted
+  rejected
+}
+
+enum OfferStatus {
+  draft
+  pending_approval
+  approved
+  rejected
+  sent
+}
+
+enum InterviewStatus {
+  scheduled
+  completed
+  cancelled
+  no_show
+}
+
 // ==================== 成员表 ====================
 model User {
   id               String   @id @default(cuid())
   email            String   @unique
   password         String
   name             String
-  role             String   // admin, member
+  role             UserRole // admin, member
   feishuEmployeeId String?  @unique
   department       String?  // 所属部门，null = 无部门限制（管理员）
   tokenVersion     Int      @default(0) // JWT 吊销版本号：改密/重置密码时 +1，使旧 token 立即失效
@@ -242,7 +280,7 @@ model StageRecord {
   candidate    Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   
   stage        String    // 入库, 初筛, 复试, 终面, 拟录用, Offer, 入职
-  status       String    // in_progress, passed, rejected
+  status       StageStatus // in_progress, passed, rejected
   rejectReason String?
   
   assigneeId   String?
@@ -276,7 +314,7 @@ model InterviewFeedback {
   round            String    // 初试, 复试, 终面
   interviewerName  String
   interviewTime    DateTime
-  conclusion       String    // pass, reject, pending
+  conclusion       InterviewConclusion // pass, reject, pending
   feedbackContent  String    @db.Text  // 富文本
   rejectReason     String?
   
@@ -310,7 +348,7 @@ model Interview {
   duration      Int       @default(60) // 面试时长（分钟）
   location      String?   // 面试地点或会议链接
   notes         String?   @db.Text // 面试备注/准备事项
-  status        String    @default("scheduled") // scheduled, completed, cancelled, no_show
+  status        InterviewStatus @default(scheduled) // scheduled, completed, cancelled, no_show
 
   createdById   String
   createdBy     User      @relation("CreatedInterviews", fields: [createdById], references: [id])
@@ -362,13 +400,13 @@ model Offer {
   salary           String
   offerDate        DateTime
   expectedJoinDate DateTime?
-  result           String    // pending, accepted, rejected
+  result           OfferResult // pending, accepted, rejected
   joined           Boolean   @default(false)  // 是/否
   actualJoinDate   DateTime?
   note             String?   @db.Text
 
   // 审批流（参照 HCRequest）：draft | pending_approval | approved | rejected | sent
-  status           String    @default("draft")
+  status           OfferStatus @default(draft)
   approverId       String?
   approver         User?     @relation("OfferApprovals", fields: [approverId], references: [id])
   approveNote      String?   // 审批意见

@@ -1,4 +1,5 @@
 import type { Interview, Prisma } from '@prisma/client';
+import { InterviewStatus } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
@@ -115,7 +116,7 @@ export class InterviewSchedulerService {
     const interviewerIds = data.interviewers.map((i) => i.id);
     const conflicts = await prisma.interview.findMany({
       where: {
-        status: 'scheduled',
+        status: InterviewStatus.scheduled,
         AND: [
           { scheduledAt: { lt: scheduledEnd } },
           {
@@ -165,7 +166,7 @@ export class InterviewSchedulerService {
         duration,
         location: data.location || null,
         notes: data.notes || null,
-        status: 'scheduled',
+        status: InterviewStatus.scheduled,
         createdById,
       },
     });
@@ -261,7 +262,7 @@ export class InterviewSchedulerService {
 
     if (candidateId) where.candidateId = candidateId;
     if (jobId) where.jobId = jobId;
-    if (status) where.status = status;
+    if (status) where.status = status as InterviewStatus;
 
     // 数据可见性：member 仅可见范围内候选人的面试安排（admin 不过滤）
     const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
@@ -335,7 +336,7 @@ export class InterviewSchedulerService {
     // 数据可见性校验：member 只能操作可见范围内候选人的面试
     await assertCandidateVisible(existing.candidateId, scope);
 
-    if (existing.status !== 'scheduled') {
+    if (existing.status !== InterviewStatus.scheduled) {
       throw new AppError('只能修改待进行的面试安排', 400);
     }
 
@@ -374,18 +375,18 @@ export class InterviewSchedulerService {
     // 数据可见性校验：member 只能操作可见范围内候选人的面试
     await assertCandidateVisible(existing.candidateId, scope);
 
-    if (existing.status === 'cancelled') {
+    if (existing.status === InterviewStatus.cancelled) {
       throw new AppError('面试已经取消', 400);
     }
 
-    if (existing.status === 'completed') {
+    if (existing.status === InterviewStatus.completed) {
       throw new AppError('已完成的面试不能取消', 400);
     }
 
     const interview = await prisma.interview.update({
       where: { id },
       data: {
-        status: 'cancelled',
+        status: InterviewStatus.cancelled,
         notes: reason
           ? `${existing.notes || ''}\n取消原因：${reason}`.trim()
           : existing.notes,
@@ -405,13 +406,13 @@ export class InterviewSchedulerService {
       throw new AppError('面试安排不存在', 404);
     }
 
-    if (existing.status !== 'scheduled') {
+    if (existing.status !== InterviewStatus.scheduled) {
       throw new AppError('只能将待进行的面试标记为完成', 400);
     }
 
     const interview = await prisma.interview.update({
       where: { id },
-      data: { status: 'completed' },
+      data: { status: InterviewStatus.completed },
     });
 
     await clearListCache('interviews:list:*');
@@ -452,7 +453,7 @@ export class InterviewSchedulerService {
   ) {
     return prisma.interview.findMany({
       where: {
-        status: 'scheduled',
+        status: InterviewStatus.scheduled,
         scheduledAt: {
           gte: new Date(startDate),
           lte: new Date(endDate),

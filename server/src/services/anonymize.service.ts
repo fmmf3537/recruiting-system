@@ -1,5 +1,6 @@
 import path from 'path';
 import fs from 'fs/promises';
+import { StageStatus } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { env } from '../lib/env';
 import { logger } from '../lib/logger';
@@ -29,9 +30,9 @@ export async function anonymizeExpiredCandidates(now = new Date()): Promise<numb
   const candidates = await prisma.candidate.findMany({
     where: {
       anonymizedAt: null,
-      stageRecords: { some: { status: 'rejected', enteredAt: { lt: cutoff } } },
+      stageRecords: { some: { status: StageStatus.rejected, enteredAt: { lt: cutoff } } },
       NOT: [
-        { stageRecords: { some: { stage: '入职', status: 'passed' } } },
+        { stageRecords: { some: { stage: '入职', status: StageStatus.passed } } },
         { offer: { joined: true } },
       ],
     },
@@ -43,7 +44,7 @@ export async function anonymizeExpiredCandidates(now = new Date()): Promise<numb
 
   // 精确过滤：最新阶段为淘汰且进入时间超过保留期限
   const targets = candidates.filter(
-    (c) => c.stageRecords[0]?.status === 'rejected' && c.stageRecords[0].enteredAt < cutoff
+    (c) => c.stageRecords[0]?.status === StageStatus.rejected && c.stageRecords[0].enteredAt < cutoff
   );
 
   let anonymizedCount = 0;

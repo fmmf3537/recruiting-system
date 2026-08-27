@@ -1,4 +1,5 @@
 import type { Offer, Prisma } from '@prisma/client';
+import { OfferResult, OfferStatus, StageStatus } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
@@ -68,7 +69,7 @@ export class OfferService {
 
     const where: Prisma.OfferWhereInput = {};
     if (result) {
-      where.result = result;
+      where.result = result as OfferResult;
     }
 
     // 数据可见性：member 仅可见范围内候选人的 Offer（admin 不过滤）
@@ -217,7 +218,7 @@ export class OfferService {
         offerDate: new Date(data.offerDate),
         expectedJoinDate: data.expectedJoinDate ? new Date(data.expectedJoinDate) : null,
         note: data.note,
-        result: 'pending',
+        result: OfferResult.pending,
         joined: false,
       },
     });
@@ -259,7 +260,11 @@ export class OfferService {
 
     // 审批流约束：审批通过（approved/sent）后才允许录入候选人答复；
     // 历史 Offer 迁移后 status=sent，不受此限制
-    if (data.result !== undefined && !['approved', 'sent'].includes(existingOffer.status)) {
+    if (
+      data.result !== undefined
+      && existingOffer.status !== OfferStatus.approved
+      && existingOffer.status !== OfferStatus.sent
+    ) {
       throw new AppError('Offer 审批通过后才能录入候选人答复', 400);
     }
 
@@ -271,10 +276,10 @@ export class OfferService {
       updateData.expectedJoinDate = data.expectedJoinDate ? new Date(data.expectedJoinDate) : null;
     }
     if (data.note !== undefined) updateData.note = data.note;
-    if (data.result !== undefined) updateData.result = data.result;
+    if (data.result !== undefined) updateData.result = data.result as OfferResult;
 
     // 如果标记为已入职，自动设置 joined
-    if (data.result === 'accepted') {
+    if (data.result === OfferResult.accepted) {
       updateData.joined = true;
       updateData.actualJoinDate = new Date();
     }
@@ -285,7 +290,7 @@ export class OfferService {
     });
 
     // 如果 result=accepted，自动推进候选人到"入职"阶段
-    if (data.result === 'accepted') {
+    if (data.result === OfferResult.accepted) {
       // 检查是否已有入职阶段记录
       const existingStage = await prisma.stageRecord.findFirst({
         where: {
@@ -300,7 +305,7 @@ export class OfferService {
           data: {
             candidateId,
             stage: '入职',
-            status: 'passed',
+            status: StageStatus.passed,
             enteredAt: new Date(),
             completedAt: new Date(),
             note: 'Offer 已接受，自动推进到入职',
@@ -308,13 +313,13 @@ export class OfferService {
         });
 
         // 异步触发入职邮件
-        void autoSendEmailOnStageTransition(candidateId, '入职', 'passed', 'system');
+        void autoSendEmailOnStageTransition(candidateId, '入职', StageStatus.passed, 'system');
       }
     }
 
     // 异步发送 Offer 状态变更通知
     if (data.result) {
-      const resultLabel = data.result === 'accepted' ? '已接受' : data.result === 'rejected' ? '已拒绝' : '待确认';
+      const resultLabel = data.result === OfferResult.accepted ? '已接受' : data.result === OfferResult.rejected ? '已拒绝' : '待确认';
       void notificationService.createNotification({
         recipientId: candidate.createdById,
         title: `Offer 状态变更：${candidate.name}`,
@@ -369,7 +374,7 @@ export class OfferService {
       throw new AppError('该候选人暂无 Offer', 404);
     }
 
-    if (existingOffer.status !== 'draft' && existingOffer.status !== 'rejected') {
+    if (existingOffer.status !== OfferStatus.draft && existingOffer.status !== OfferStatus.rejected) {
       throw new AppError('仅草稿或已驳回的 Offer 可提交审批', 400);
     }
 
@@ -385,7 +390,7 @@ export class OfferService {
     const offer = await prisma.offer.update({
       where: { candidateId },
       data: {
-        status: 'pending_approval',
+        status: OfferStatus.pending_approval,
         approverId,
         // 重新提交时清空上一轮审批痕迹
         approveNote: null,
@@ -426,7 +431,7 @@ export class OfferService {
     const updated = await prisma.offer.update({
       where: { candidateId },
       data: {
-        status: 'approved',
+        status: OfferStatus.approved,
         approvedAt: new Date(),
         approveNote: note || null,
       },
@@ -468,7 +473,7 @@ export class OfferService {
     const updated = await prisma.offer.update({
       where: { candidateId },
       data: {
-        status: 'rejected',
+        status: OfferStatus.rejected,
         rejectedAt: new Date(),
         approveNote: note,
       },
@@ -518,13 +523,13 @@ export class OfferService {
       throw new AppError('该候选人暂无 Offer', 404);
     }
 
-    if (existingOffer.status !== 'approved') {
+    if (existingOffer.status !== OfferStatus.approved) {
       throw new AppError('仅审批通过的 Offer 可标记为已发送', 400);
     }
 
     const offer = await prisma.offer.update({
       where: { candidateId },
-      data: { status: 'sent' },
+      data: { status: OfferStatus.sent },
     });
 
     await this.logOperation(userId, offer.id, 'offer_sent', { candidateId });
@@ -555,7 +560,7 @@ export class OfferService {
       throw new AppError('该候选人暂无 Offer', 404);
     }
 
-    if (offer.status !== 'pending_approval') {
+    if (offer.status !== OfferStatus.pending_approval) {
       throw new AppError('仅审批中的 Offer 可以审批', 400);
     }
 
@@ -624,7 +629,7 @@ export class OfferService {
       throw new AppError('该候选人暂无 Offer', 404);
     }
 
-    if (existingOffer.result !== 'accepted') {
+    if (existingOffer.result !== OfferResult.accepted) {
       throw new AppError('候选人尚未接受 Offer，无法标记入职', 400);
     }
 
