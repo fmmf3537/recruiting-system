@@ -19,6 +19,7 @@ import interviewRoutes from './interviews';
 import evaluationRoutes from './evaluations';
 import communicationRoutes from './communications';
 import automationRuleRoutes from './automation-rule';
+import metricsRoutes from './metrics';
 import notificationRoutes from './notification';
 import hcRequestRoutes from './hc-requests';
 import pipelineTemplateRoutes from './pipeline-templates';
@@ -31,6 +32,9 @@ router.get('/health', async (_req, res) => {
   const httpStatus = result.status === 'fail' ? 503 : 200;
   res.status(httpStatus).json({ success: result.status === 'ok', data: result });
 });
+
+// Prometheus 抓取（不强制 JWT）
+router.use('/metrics', metricsRoutes);
 
 // 挂载各模块路由
 router.use('/auth', authRoutes);

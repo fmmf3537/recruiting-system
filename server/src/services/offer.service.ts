@@ -1,5 +1,6 @@
 import type { Offer, Prisma } from '@prisma/client';
 import { OfferResult, OfferStatus, StageStatus } from '@prisma/client';
+import { offerApprovalTotal } from '../lib/metrics';
 import prisma from '../lib/prisma';
 import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
@@ -450,6 +451,7 @@ export class OfferService {
     }).catch((e) => console.error('[Notification] Offer审批通知发送失败:', e));
 
     await clearListCache('offers:list:*');
+    offerApprovalTotal.inc({ action: 'approve', role: isAdmin ? 'admin' : 'member' });
     return updated;
   }
 
@@ -480,6 +482,7 @@ export class OfferService {
     });
 
     await this.logOperation(userId, updated.id, 'offer_rejected', { candidateId, note });
+    offerApprovalTotal.inc({ action: 'reject', role: isAdmin ? 'admin' : 'member' });
 
     // 站内通知创建人（候选人创建者）审批结果
     void notificationService.createNotification({

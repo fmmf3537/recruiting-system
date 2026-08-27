@@ -3,6 +3,7 @@ import { InterviewConclusion, OfferResult, Prisma, StageStatus, UserRole } from 
 import { DEFAULT_STAGE, DEFAULT_STAGE_STATUS } from '../constants';
 import type { Stage } from '../constants';
 import { logger } from '../lib/logger';
+import { candidateStageAdvanceTotal } from '../lib/metrics';
 import prisma from '../lib/prisma';
 import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
@@ -966,6 +967,8 @@ export class CandidateService {
     await clearStatsCache();
     await clearListCache('candidates:list:*');
     await clearListCache('candidates:activities');
+
+    candidateStageAdvanceTotal.inc({ from_stage: currentStage, to_stage: stage, status });
   }
 
   /**

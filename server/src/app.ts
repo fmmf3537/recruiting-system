@@ -9,6 +9,7 @@ import pinoHttp from 'pino-http';
 
 import { env } from './lib/env';
 import { logger } from './lib/logger';
+import { httpRequestDuration, httpRequestTotal } from './lib/metrics';
 import { setupSwagger } from './lib/swagger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import routes from './routes';
@@ -65,14 +66,33 @@ const limiter = rateLimit({
   max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  // K8s 探针高频访问，健康检查不计入全局限流
-  skip: (req) => req.path === '/api/health',
+  // K8s 探针 / Prometheus 抓取不计入全局限流
+  skip: (req) => req.path === '/api/health' || req.path === '/api/metrics',
   message: {
     success: false,
     error: '请求过于频繁，请稍后再试',
   },
 });
 app.use(limiter);
+
+// HTTP 指标：方法 / 路由模板 / 状态码（路径中的 cuid 脱敏为 :id，避免高基数）
+app.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+  res.on('finish', () => {
+    const duration = Number(process.hrtime.bigint() - start) / 1e9;
+    const matched = (req as { route?: { path?: string } }).route?.path;
+    const route = matched || req.path;
+    const safeRoute = route.replace(/[a-z0-9]{20,}/gi, ':id');
+    const labels = {
+      method: req.method,
+      route: safeRoute,
+      status_code: String(res.statusCode),
+    };
+    httpRequestDuration.observe(labels, duration);
+    httpRequestTotal.inc(labels);
+  });
+  next();
+});
 
 // 挂载 API 路由（上传文件改走 /api/files/:filename 鉴权下载）
 app.use('/api', routes);

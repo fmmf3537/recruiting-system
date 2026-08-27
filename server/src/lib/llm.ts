@@ -1,4 +1,5 @@
 import { env } from './env';
+import { llmCallDuration } from './metrics';
 
 const LLM_CONFIG = {
   provider: env.LLM_PROVIDER,
@@ -53,31 +54,36 @@ async function callLLM(prompt: string, systemPrompt?: string): Promise<LLMRespon
   }
   messages.push({ role: 'user', content: prompt });
 
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
-    method: 'POST',
-    signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: config.model,
-      messages,
-      temperature: 0.1,
-      max_tokens: 4000,
-    }),
-  });
+  const end = llmCallDuration.startTimer({ provider: LLM_CONFIG.provider, purpose: 'unknown' });
+  try {
+    const response = await fetch(`${config.baseUrl}/chat/completions`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        temperature: 0.1,
+        max_tokens: 4000,
+      }),
+    });
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`LLM API error: ${response.status} - ${error}`);
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`LLM API error: ${response.status} - ${error}`);
+    }
+
+    const data = await response.json() as { choices?: Array<{ message?: { content?: string } }>; usage?: { promptTokens: number; completionTokens: number; totalTokens: number } };
+    return {
+      content: data.choices?.[0]?.message?.content || '',
+      usage: data.usage,
+    };
+  } finally {
+    end();
   }
-
-  const data = await response.json() as { choices?: Array<{ message?: { content?: string } }>; usage?: { promptTokens: number; completionTokens: number; totalTokens: number } };
-  return {
-    content: data.choices?.[0]?.message?.content || '',
-    usage: data.usage,
-  };
 }
 
 export async function extractResumeInfo(resumeText: string): Promise<any> {
