@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 
 import { logger } from '../lib/logger';
+import { AppError } from '../middleware/errorHandler';
 import { scopeFromUser } from '../services/candidate-visibility.service';
 import { candidateService } from '../services/candidate.service';
 
@@ -492,6 +493,64 @@ export class CandidateController {
       });
     } catch (error) {
       next(error);
+    }
+  }
+
+  /**
+   * GET /api/candidates/recycle-bin
+   * 回收站（仅 admin）
+   */
+  async getRecycleBin(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      if (req.user!.role !== 'admin') {
+        throw new AppError('仅管理员可访问回收站', 403);
+      }
+      const { page = 1, pageSize = 20 } = req.query;
+      const result = await candidateService.listDeletedCandidates({
+        page: Number(page),
+        pageSize: Number(pageSize),
+      });
+      res.json({ success: true, data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * POST /api/candidates/:id/restore
+   * 从回收站恢复（仅 admin）
+   */
+  async restoreCandidate(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      const restored = await candidateService.restoreCandidate(req.params.id, req.user!);
+      res.json({ success: true, data: restored });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * DELETE /api/candidates/:id/purge
+   * 永久删除（仅 admin）
+   */
+  async purgeCandidate(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    try {
+      await candidateService.purgeCandidate(req.params.id, req.user!);
+      res.json({ success: true, message: '已永久删除' });
+    } catch (err) {
+      next(err);
     }
   }
 }

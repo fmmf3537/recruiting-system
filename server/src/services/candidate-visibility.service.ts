@@ -34,13 +34,16 @@ export function scopeFromUser(user: {
 
 /**
  * 构建候选人可见性 Prisma 查询条件
- * 返回 undefined 表示无限制（admin 或未传 scope）
+ * 始终带 `deletedAt: null`；admin 除此以外不限制范围
  */
 export function buildCandidateVisibilityWhere(
   scope: CandidateVisibilityScope
-): Prisma.CandidateWhereInput | undefined {
-  // admin 看全部，不附加任何条件
-  if (scope.isAdmin) return undefined;
+): Prisma.CandidateWhereInput {
+  // 所有角色默认排除软删除；admin 除此以外不限制可见范围
+  const notDeleted: Prisma.CandidateWhereInput = { deletedAt: null };
+  if (scope.isAdmin) {
+    return notDeleted;
+  }
 
   const or: Prisma.CandidateWhereInput[] = [
     // 1. 自己创建的候选人
@@ -62,20 +65,20 @@ export function buildCandidateVisibilityWhere(
     });
   }
 
-  return { OR: or };
+  return { AND: [{ OR: or }, notDeleted] };
 }
 
 /**
  * 校验候选人在当前用户可见范围内，越权抛出 403
- * admin（或未传 scope）直接放行；member 用一次 count 查询校验，无 N+1
+ * 未传 scope 直接放行；有 scope 时用一次 count（含 deletedAt: null）校验
  */
 export async function assertCandidateVisible(
   candidateId: string,
   scope?: CandidateVisibilityScope
 ): Promise<void> {
-  const where = scope ? buildCandidateVisibilityWhere(scope) : undefined;
-  if (!where) return;
+  if (!scope) return;
 
+  const where = buildCandidateVisibilityWhere(scope);
   const count = await prisma.candidate.count({
     where: { id: candidateId, AND: [where] },
   });

@@ -98,6 +98,9 @@ model User {
   // 关系：一个 User 作为面试官有多条面试评估
   interviewEvaluations InterviewEvaluation[] @relation("InterviewEvaluations")
 
+  // 关系：一个 User 软删除的候选人（回收站）
+  deletedCandidates Candidate[] @relation("DeletedCandidates")
+
   @@index([email])
   @@index([role])
   @@index([createdAt])
@@ -191,6 +194,9 @@ model Candidate {
   consentAt       DateTime? // 候选人授权同意时间（个保法合规）
   consentNote     String?   // 授权同意备注（授权方式/渠道等）
   anonymizedAt    DateTime? // 匿名化时间（淘汰超 2 年自动匿名化后写入）
+  deletedAt       DateTime? // 软删除时间（回收站）
+  deletedById     String?
+  deletedBy       User?     @relation("DeletedCandidates", fields: [deletedById], references: [id], onDelete: SetNull)
   
   createdById     String
   createdBy       User     @relation("CreatedCandidates", fields: [createdById], references: [id])
@@ -236,6 +242,7 @@ model Candidate {
   @@index([createdAt])
   @@index([source, createdAt])
   @@index([education, createdAt])
+  @@index([deletedAt])
   @@map("candidate")
 }
 

@@ -91,23 +91,38 @@ export interface ExportData {
  */
 export class StatsService {
   /**
-   * member 视角的可见候选人 ID 列表；admin 或未传 scope 返回 null（不过滤）
-   * 一次批量查询，供后续统计 SQL/ORM 条件复用，避免 N+1
+   * member 视角的可见候选人 ID 列表；admin 或未传 scope 返回 null（不按成员范围过滤）
+   * 软删除不在此拉全表 ID，由 liveCandidateWhere / visibleCandidateSql 统一加 deletedAt
    */
   private async getVisibleCandidateIds(scope?: CandidateVisibilityScope): Promise<string[] | null> {
     const where = scope ? buildCandidateVisibilityWhere(scope) : undefined;
-    if (!where) return null;
+    if (!scope || scope.isAdmin) return null;
     const rows = await prisma.candidate.findMany({ where, select: { id: true } });
     return rows.map((r) => r.id);
   }
 
+  /** Prisma：admin 排除软删；member 的 ID 列表已排除软删 */
+  private liveCandidateWhere(visibleIds: string[] | null): Prisma.CandidateWhereInput {
+    if (visibleIds) return { id: { in: visibleIds } };
+    return { deletedAt: null };
+  }
+
+  /** 关联表按 candidate 过滤软删 */
+  private liveCandidateRelation(visibleIds: string[] | null): {
+    candidate: Prisma.CandidateWhereInput;
+  } {
+    if (visibleIds) return { candidate: { id: { in: visibleIds } } };
+    return { candidate: { deletedAt: null } };
+  }
+
   /**
-   * 将可见候选人 ID 列表转换为 $queryRaw 的过滤片段；null 表示不过滤（admin）
+   * $queryRaw 可见范围 + 软删除。调用方 SQL 须 JOIN candidate 并使用别名 c。
    */
   private visibleCandidateSql(column: string, ids: string[] | null): Prisma.Sql {
-    if (ids === null) return Prisma.empty;
+    const notDeleted = Prisma.sql`AND c."deletedAt" IS NULL`;
+    if (ids === null) return notDeleted;
     if (ids.length === 0) return Prisma.sql`AND false`;
-    return Prisma.sql`AND ${Prisma.raw(column)} IN (${Prisma.join(ids)})`;
+    return Prisma.sql`AND ${Prisma.raw(column)} IN (${Prisma.join(ids)}) ${notDeleted}`;
   }
 
   /**
@@ -157,10 +172,10 @@ export class StatsService {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-    // member 视角：候选人相关指标仅统计其可见范围内的数据（admin 不过滤）
+    // member 按可见范围；admin 不按成员过滤，但仍排除软删除
     const visibleIds = await this.getVisibleCandidateIds(scope);
-    const candidateFilter = visibleIds ? { id: { in: visibleIds } } : {};
-    const candidateRelationFilter = visibleIds ? { candidate: { id: { in: visibleIds } } } : {};
+    const candidateFilter = this.liveCandidateWhere(visibleIds);
+    const candidateRelationFilter = this.liveCandidateRelation(visibleIds);
 
     // 本月新增候选人
     const newCandidatesThisMonth = await prisma.candidate.count({
@@ -258,9 +273,10 @@ export class StatsService {
         COALESCE(o.count, 0) as "offers"
       FROM "user" u
       LEFT JOIN (
-        SELECT "createdById", COUNT(*)::int as count FROM "candidate"
-        WHERE "createdAt" >= ${startDate} AND "createdAt" <= ${endDate}
-        GROUP BY "createdById"
+        SELECT c."createdById", COUNT(*)::int as count FROM "candidate" c
+        WHERE c."createdAt" >= ${startDate} AND c."createdAt" <= ${endDate}
+          AND c."deletedAt" IS NULL
+        GROUP BY c."createdById"
       ) c ON c."createdById" = u.id
       LEFT JOIN (
         SELECT "assigneeId", COUNT(*)::int as count FROM "stage_record"
@@ -276,6 +292,7 @@ export class StatsService {
         SELECT ca."createdById", COUNT(*)::int as count FROM "offer" o
         JOIN "candidate" ca ON o."candidateId" = ca.id
         WHERE o."offerDate" >= ${startDate} AND o."offerDate" <= ${endDate}
+          AND ca."deletedAt" IS NULL
         GROUP BY ca."createdById"
       ) o ON o."createdById" = u.id
       ${userFilter}
@@ -300,9 +317,8 @@ export class StatsService {
 
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
 
-    // member 视角：仅统计其可见范围内的候选人（admin 不过滤）
     const visibleIds = await this.getVisibleCandidateIds(scope);
-    const candidateFilter = visibleIds ? { id: { in: visibleIds } } : {};
+    const candidateFilter = this.liveCandidateWhere(visibleIds);
 
     // 获取所有候选人按来源分组统计
     const candidatesBySource = await prisma.candidate.groupBy({
@@ -361,9 +377,8 @@ export class StatsService {
 
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
 
-    // member 视角：候选人相关计数仅统计其可见范围内的候选人（admin 不过滤）
     const visibleIds = await this.getVisibleCandidateIds(scope);
-    const candidateFilter = this.visibleCandidateSql('cj."candidateId"', visibleIds);
+    const candidateFilter = this.visibleCandidateSql('c.id', visibleIds);
 
     const rawStats = await prisma.$queryRaw<Array<{
       jobId: string;
@@ -378,14 +393,15 @@ export class StatsService {
         j.id as "jobId",
         j.title as "jobTitle",
         j.departments,
-        COUNT(DISTINCT cj."candidateId")::int as "candidateCount",
+        COUNT(DISTINCT c.id)::int as "candidateCount",
         COUNT(DISTINCT CASE WHEN i."createdAt" >= ${startDate} AND i."createdAt" <= ${endDate} THEN i.id END)::int as "interviewCount",
         COUNT(DISTINCT CASE WHEN o."offerDate" >= ${startDate} AND o."offerDate" <= ${endDate} THEN o.id END)::int as "offerCount",
         COUNT(DISTINCT CASE WHEN o.joined = true AND o."actualJoinDate" >= ${startDate} AND o."actualJoinDate" <= ${endDate} THEN o.id END)::int as "hiredCount"
       FROM "job" j
       LEFT JOIN "candidate_job" cj ON cj."jobId" = j.id
-      LEFT JOIN "interview_feedback" i ON i."candidateId" = cj."candidateId"
-      LEFT JOIN "offer" o ON o."candidateId" = cj."candidateId"
+      LEFT JOIN "candidate" c ON c.id = cj."candidateId"
+      LEFT JOIN "interview_feedback" i ON i."candidateId" = c.id
+      LEFT JOIN "offer" o ON o."candidateId" = c.id
       WHERE TRUE ${candidateFilter}
       GROUP BY j.id, j.title, j.departments
     `;
@@ -427,10 +443,9 @@ export class StatsService {
 
     const { startDate, endDate } = dateRange || this.getDefaultDateRange();
 
-    // member 视角：仅统计其可见范围内的候选人（admin 不过滤）
     const visibleIds = await this.getVisibleCandidateIds(scope);
-    const candidateFilter = visibleIds ? { id: { in: visibleIds } } : {};
-    const candidateRelationFilter = visibleIds ? { candidate: { id: { in: visibleIds } } } : {};
+    const candidateFilter = this.liveCandidateWhere(visibleIds);
+    const candidateRelationFilter = this.liveCandidateRelation(visibleIds);
 
     // 简历入库：在日期范围内创建的候选人
     const newCandidates = await prisma.candidate.count({
@@ -569,7 +584,7 @@ export class StatsService {
     hireRate: number;
     topReferrers: Array<{ referrer: string; count: number; hired: number }>;
   }> {
-    const where: any = {};
+    const where: Prisma.CandidateWhereInput = { deletedAt: null };
     if (dateRange) {
       where.createdAt = {
         gte: dateRange.startDate,
@@ -577,7 +592,6 @@ export class StatsService {
       };
     }
 
-    // member 视角：仅统计其可见范围内的候选人（admin 不过滤）
     const visibleIds = await this.getVisibleCandidateIds(scope);
     if (visibleIds) {
       where.id = { in: visibleIds };
@@ -626,23 +640,23 @@ export class StatsService {
 
     const range = dateRange || this.getDefaultDateRange();
 
-    // member 视角：仅统计其可见范围内候选人的阶段记录（admin 不过滤）
     const visibleIds = await this.getVisibleCandidateIds(scope);
-    const candidateFilter = this.visibleCandidateSql('"candidateId"', visibleIds);
+    const candidateFilter = this.visibleCandidateSql('c.id', visibleIds);
 
     const result = await prisma.$queryRaw<CycleStat[]>`
-      SELECT stage,
-        ROUND(AVG(EXTRACT(EPOCH FROM ("completedAt" - "enteredAt")) / 86400)::numeric, 1) as "avgDays",
-        ROUND(MAX(EXTRACT(EPOCH FROM ("completedAt" - "enteredAt")) / 86400)::numeric, 1) as "maxDays",
-        ROUND(MIN(EXTRACT(EPOCH FROM ("completedAt" - "enteredAt")) / 86400)::numeric, 1) as "minDays",
+      SELECT sr.stage,
+        ROUND(AVG(EXTRACT(EPOCH FROM (sr."completedAt" - sr."enteredAt")) / 86400)::numeric, 1) as "avgDays",
+        ROUND(MAX(EXTRACT(EPOCH FROM (sr."completedAt" - sr."enteredAt")) / 86400)::numeric, 1) as "maxDays",
+        ROUND(MIN(EXTRACT(EPOCH FROM (sr."completedAt" - sr."enteredAt")) / 86400)::numeric, 1) as "minDays",
         COUNT(*)::int as "totalCount"
-      FROM stage_record
-      WHERE "completedAt" IS NOT NULL
-        AND "enteredAt" >= ${range.startDate} AND "enteredAt" <= ${range.endDate}
+      FROM stage_record sr
+      INNER JOIN candidate c ON c.id = sr."candidateId"
+      WHERE sr."completedAt" IS NOT NULL
+        AND sr."enteredAt" >= ${range.startDate} AND sr."enteredAt" <= ${range.endDate}
         ${candidateFilter}
-      GROUP BY stage
+      GROUP BY sr.stage
       ORDER BY
-        CASE stage
+        CASE sr.stage
           WHEN '入库' THEN 1 WHEN '初筛' THEN 2 WHEN '复试' THEN 3
           WHEN '终面' THEN 4 WHEN '拟录用' THEN 5 WHEN 'Offer' THEN 6
           WHEN '入职' THEN 7
@@ -664,7 +678,6 @@ export class StatsService {
 
     const range = dateRange || this.getDefaultDateRange();
 
-    // member 视角：候选人相关计数仅统计其可见范围内的候选人（admin 不过滤）
     const visibleIds = await this.getVisibleCandidateIds(scope);
     const candidateFilter = this.visibleCandidateSql('c.id', visibleIds);
 

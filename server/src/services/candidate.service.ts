@@ -138,6 +138,25 @@ export interface CandidateListResult {
   totalPages: number;
 }
 
+/** 写入操作日志（软删 / 恢复 / 永久删除） */
+async function writeOperationLog(entry: {
+  userId: string;
+  targetType: string;
+  targetId: string;
+  action: string;
+  detail: Prisma.InputJsonValue;
+}): Promise<void> {
+  await prisma.operationLog.create({
+    data: {
+      userId: entry.userId,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      action: entry.action,
+      detail: entry.detail,
+    },
+  });
+}
+
 /**
  * 候选人服务类
  * 封装所有候选人相关的业务逻辑
@@ -296,13 +315,15 @@ export class CandidateService {
 
     const skip = (page - 1) * pageSize;
 
-    // 构建查询条件
-    const where: Prisma.CandidateWhereInput = {};
+    // 构建查询条件：默认排除软删除（含关键词 OR 搜索）
+    const where: Prisma.CandidateWhereInput = {
+      AND: [{ deletedAt: null }],
+    };
 
     // 数据可见性：member 仅可见"我创建的 + 指派给我的阶段 + 本部门职位下"的候选人
     const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
     if (visibilityWhere) {
-      where.AND = [visibilityWhere];
+      where.AND = [{ deletedAt: null }, visibilityWhere];
     }
 
     // 关键词搜索（姓名、手机号、邮箱）
@@ -561,8 +582,8 @@ export class CandidateService {
       jobs: Array<{ id: string; title: string }>;
     }
   > {
-    const candidate = await prisma.candidate.findUnique({
-      where: { id },
+    const candidate = await prisma.candidate.findFirst({
+      where: { id, deletedAt: null },
       include: {
         stageRecords: {
           orderBy: { enteredAt: 'desc' },
@@ -1118,30 +1139,140 @@ export class CandidateService {
   }
 
   /**
-   * 删除候选人（只能删除自己创建的）
+   * 软删除候选人（创建者或管理员）；硬删走 purgeCandidate
    */
   async deleteCandidate(id: string, userId: string, isAdmin: boolean): Promise<void> {
-    // 检查候选人是否存在
-    const candidate = await prisma.candidate.findUnique({
+    const existing = await prisma.candidate.findUnique({
       where: { id },
     });
 
-    if (!candidate) {
+    if (!existing) {
       throw new AppError('候选人不存在', 404);
     }
+    if (existing.deletedAt) {
+      throw new AppError('候选人已删除', 410);
+    }
 
-    // 检查权限：只有创建者或管理员可以删除
-    if (candidate.createdById !== userId && !isAdmin) {
+    if (existing.createdById !== userId && !isAdmin) {
       throw new AppError('无权删除此候选人', 403);
     }
 
-    // 删除候选人（级联删除关联记录）
-    await prisma.candidate.delete({
+    await prisma.candidate.update({
       where: { id },
+      data: { deletedAt: new Date(), deletedById: userId },
+    });
+
+    await writeOperationLog({
+      userId,
+      targetType: 'Candidate',
+      targetId: id,
+      action: 'soft_delete',
+      detail: { previousCreatedBy: existing.createdById },
     });
 
     await clearStatsCache();
     await clearListCache('candidates:activities');
+    await clearListCache('candidates:list:*');
+  }
+
+  /**
+   * 回收站列表（仅已软删除）
+   */
+  async listDeletedCandidates(query: {
+    page?: number;
+    pageSize?: number;
+  }): Promise<CandidateListResult> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const skip = (page - 1) * pageSize;
+    const where: Prisma.CandidateWhereInput = { deletedAt: { not: null } };
+
+    const [candidates, total] = await Promise.all([
+      prisma.candidate.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { deletedAt: 'desc' },
+      }),
+      prisma.candidate.count({ where }),
+    ]);
+
+    return {
+      candidates,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  /**
+   * 从回收站恢复（仅 admin）
+   */
+  async restoreCandidate(
+    id: string,
+    user: { userId: string; role: string }
+  ): Promise<Candidate> {
+    if (user.role !== 'admin') {
+      throw new AppError('仅管理员可恢复候选人', 403);
+    }
+
+    const existing = await prisma.candidate.findUnique({ where: { id } });
+    if (!existing) {
+      throw new AppError('候选人不存在', 404);
+    }
+    if (!existing.deletedAt) {
+      throw new AppError('候选人未被删除', 400);
+    }
+
+    const restored = await prisma.candidate.update({
+      where: { id },
+      data: { deletedAt: null, deletedById: null },
+    });
+
+    await writeOperationLog({
+      userId: user.userId,
+      targetType: 'Candidate',
+      targetId: id,
+      action: 'restore',
+      detail: { restoredAt: new Date() } as Prisma.InputJsonValue,
+    });
+
+    await clearStatsCache();
+    await clearListCache('candidates:list:*');
+    return restored;
+  }
+
+  /**
+   * 回收站永久删除（仅 admin，且必须已软删）
+   */
+  async purgeCandidate(
+    id: string,
+    user: { userId: string; role: string }
+  ): Promise<void> {
+    if (user.role !== 'admin') {
+      throw new AppError('仅管理员可永久删除', 403);
+    }
+
+    const existing = await prisma.candidate.findUnique({ where: { id } });
+    if (!existing) {
+      throw new AppError('候选人不存在', 404);
+    }
+    if (!existing.deletedAt) {
+      throw new AppError('请先软删除，再走回收站永久删除', 400);
+    }
+
+    await prisma.candidate.delete({ where: { id } });
+
+    await writeOperationLog({
+      userId: user.userId,
+      targetType: 'Candidate',
+      targetId: id,
+      action: 'purge',
+      detail: { previousDeletedAt: existing.deletedAt } as Prisma.InputJsonValue,
+    });
+
+    await clearStatsCache();
     await clearListCache('candidates:list:*');
   }
 
@@ -1337,7 +1468,7 @@ export class CandidateService {
     scope: CandidateVisibilityScope
   ): Promise<string[]> {
     const visibilityWhere = buildCandidateVisibilityWhere(scope);
-    if (!visibilityWhere || candidateIds.length === 0) {
+    if (candidateIds.length === 0) {
       return candidateIds;
     }
     const visible = await prisma.candidate.findMany({

@@ -8,7 +8,7 @@ import { candidateController } from '../controllers/candidate.controller';
 import { tagController } from '../controllers/tag.controller';
 import { interviewController } from '../controllers/interview.controller';
 import { communicationController } from '../controllers/communication.controller';
-import { authenticate } from '../middleware/auth';
+import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 import { STAGE_STATUS, INTERVIEW_ROUNDS } from '../constants';
 
@@ -240,6 +240,17 @@ router.get(
 );
 
 /**
+ * GET /api/candidates/recycle-bin
+ * 回收站列表（仅 admin）
+ */
+router.get(
+  '/recycle-bin',
+  authenticate,
+  authorize('admin'),
+  candidateController.getRecycleBin
+);
+
+/**
  * GET /api/candidates/:id
  * 候选人详情（含流程记录、面试反馈、Offer 信息）
  * 权限：登录用户
@@ -324,6 +335,30 @@ router.delete(
   authenticate,
   validate(candidateIdParamSchema, 'params'),
   candidateController.deleteCandidate
+);
+
+/**
+ * POST /api/candidates/:id/restore
+ * 从回收站恢复（仅 admin）
+ */
+router.post(
+  '/:id/restore',
+  authenticate,
+  authorize('admin'),
+  validate(candidateIdParamSchema, 'params'),
+  candidateController.restoreCandidate
+);
+
+/**
+ * DELETE /api/candidates/:id/purge
+ * 永久删除（仅 admin）
+ */
+router.delete(
+  '/:id/purge',
+  authenticate,
+  authorize('admin'),
+  validate(candidateIdParamSchema, 'params'),
+  candidateController.purgeCandidate
 );
 
 // ============ 候选人标签 ============

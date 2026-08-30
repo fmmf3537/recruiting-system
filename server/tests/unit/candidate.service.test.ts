@@ -52,6 +52,9 @@ vi.mock('../../src/lib/prisma', () => {
       deleteMany: vi.fn(),
       groupBy: vi.fn(),
     },
+    operationLog: {
+      create: vi.fn(),
+    },
   };
   // $transaction 直接以同一 mock 作为 tx 执行回调，断言仍可命中各模型方法
   mock.$transaction = vi.fn(async (cb: (tx: unknown) => Promise<unknown>) => cb(mock));
@@ -183,7 +186,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
 
   describe('getCandidateById - 候选人详情', () => {
     it('应返回候选人详情（含关联数据）', async () => {
-      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+      vi.mocked(prisma.candidate.findFirst).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
         createdById: 'user-1',
@@ -202,7 +205,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
     });
 
     it('候选人不存在时应抛出错误', async () => {
-      vi.mocked(prisma.candidate.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.candidate.findFirst).mockResolvedValue(null);
 
       await expect(service.getCandidateById('non-existent'))
         .rejects
@@ -532,19 +535,30 @@ describe('CandidateService - 候选人服务单元测试', () => {
   });
 
   describe('deleteCandidate - 删除候选人', () => {
-    it('应成功删除候选人', async () => {
-      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({ id: 'candidate-1' } as any);
-      vi.mocked(prisma.candidate.delete).mockResolvedValue({} as any);
+    it('应成功软删除候选人', async () => {
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+        id: 'candidate-1',
+        createdById: 'user-1',
+        deletedAt: null,
+      } as any);
+      vi.mocked(prisma.candidate.update).mockResolvedValue({} as any);
+      vi.mocked(prisma.operationLog.create).mockResolvedValue({} as any);
 
-      await service.deleteCandidate('candidate-1');
+      await service.deleteCandidate('candidate-1', 'user-1', false);
 
-      expect(prisma.candidate.delete).toHaveBeenCalledWith({ where: { id: 'candidate-1' } });
+      expect(prisma.candidate.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'candidate-1' },
+          data: expect.objectContaining({ deletedById: 'user-1' }),
+        })
+      );
+      expect(prisma.candidate.delete).not.toHaveBeenCalled();
     });
 
     it('候选人不存在时应抛出错误', async () => {
       vi.mocked(prisma.candidate.findUnique).mockResolvedValue(null);
 
-      await expect(service.deleteCandidate('non-existent')).rejects.toThrow('候选人不存在');
+      await expect(service.deleteCandidate('non-existent', 'user-1', false)).rejects.toThrow('候选人不存在');
     });
   });
 
@@ -690,13 +704,13 @@ describe('CandidateService - 候选人服务单元测试', () => {
       vi.mocked(prisma.candidateJob.findMany).mockResolvedValue([] as any);
     };
 
-    it('admin 查看列表时不附加可见性条件（全量）', async () => {
+    it('admin 查看列表时仅附加软删除过滤（全量未删除）', async () => {
       mockEmptyList();
 
       await service.getCandidates({ page: 1, pageSize: 10 }, adminScope);
 
       const where = vi.mocked(prisma.candidate.findMany).mock.calls[0][0]?.where;
-      expect(where?.AND).toBeUndefined();
+      expect(where?.AND).toEqual([{ deletedAt: null }, { deletedAt: null }]);
     });
 
     it('member 查看列表时仅包含"我创建的 + 指派给我的 + 本部门职位下"的候选人', async () => {
@@ -706,15 +720,21 @@ describe('CandidateService - 候选人服务单元测试', () => {
 
       const where = vi.mocked(prisma.candidate.findMany).mock.calls[0][0]?.where;
       expect(where?.AND).toEqual([
+        { deletedAt: null },
         {
-          OR: [
-            { createdById: 'user-1' },
-            { stageRecords: { some: { assigneeId: 'user-1' } } },
+          AND: [
             {
-              candidateJobs: {
-                some: { job: { departments: { array_contains: ['技术部'] } } },
-              },
+              OR: [
+                { createdById: 'user-1' },
+                { stageRecords: { some: { assigneeId: 'user-1' } } },
+                {
+                  candidateJobs: {
+                    some: { job: { departments: { array_contains: ['技术部'] } } },
+                  },
+                },
+              ],
             },
+            { deletedAt: null },
           ],
         },
       ]);
@@ -730,17 +750,23 @@ describe('CandidateService - 候选人服务单元测试', () => {
 
       const where = vi.mocked(prisma.candidate.findMany).mock.calls[0][0]?.where;
       expect(where?.AND).toEqual([
+        { deletedAt: null },
         {
-          OR: [
-            { createdById: 'user-1' },
-            { stageRecords: { some: { assigneeId: 'user-1' } } },
+          AND: [
+            {
+              OR: [
+                { createdById: 'user-1' },
+                { stageRecords: { some: { assigneeId: 'user-1' } } },
+              ],
+            },
+            { deletedAt: null },
           ],
         },
       ]);
     });
 
     it('member 无权查看他人候选人详情时返回 403', async () => {
-      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+      vi.mocked(prisma.candidate.findFirst).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
         createdById: 'user-2',
@@ -754,7 +780,7 @@ describe('CandidateService - 候选人服务单元测试', () => {
     });
 
     it('member 在可见范围内时可正常查看详情', async () => {
-      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+      vi.mocked(prisma.candidate.findFirst).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
         createdById: 'user-1',
@@ -772,8 +798,8 @@ describe('CandidateService - 候选人服务单元测试', () => {
       expect(result.id).toBe('candidate-1');
     });
 
-    it('admin 查看详情时不做可见性校验', async () => {
-      vi.mocked(prisma.candidate.findUnique).mockResolvedValue({
+    it('admin 查看详情时仅过滤软删除、不做成员可见性校验', async () => {
+      vi.mocked(prisma.candidate.findFirst).mockResolvedValue({
         id: 'candidate-1',
         name: '张三',
         createdById: 'user-2',
@@ -784,11 +810,11 @@ describe('CandidateService - 候选人服务单元测试', () => {
         candidateTags: [],
         createdBy: { id: 'user-2', name: '成员', email: 'm@test.com' },
       } as any);
+      vi.mocked(prisma.candidate.count).mockResolvedValue(1);
 
       const result = await service.getCandidateById('candidate-1', adminScope);
 
       expect(result.id).toBe('candidate-1');
-      expect(prisma.candidate.count).not.toHaveBeenCalled();
     });
 
     it('跨部门不可见：member 批量打标签时仅操作可见范围内的候选人', async () => {
@@ -812,14 +838,19 @@ describe('CandidateService - 候选人服务单元测试', () => {
             id: { in: ['c1', 'c2'] },
             AND: [
               {
-                OR: [
-                  { createdById: 'user-1' },
-                  { stageRecords: { some: { assigneeId: 'user-1' } } },
+                AND: [
                   {
-                    candidateJobs: {
-                      some: { job: { departments: { array_contains: ['技术部'] } } },
-                    },
+                    OR: [
+                      { createdById: 'user-1' },
+                      { stageRecords: { some: { assigneeId: 'user-1' } } },
+                      {
+                        candidateJobs: {
+                          some: { job: { departments: { array_contains: ['技术部'] } } },
+                        },
+                      },
+                    ],
                   },
+                  { deletedAt: null },
                 ],
               },
             ],

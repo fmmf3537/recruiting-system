@@ -74,10 +74,15 @@ vi.mock('../../src/middleware/auth', () => ({
 
 // member（user-1 / 技术部）的可见性条件，与 candidate-visibility.service 的规则一致
 const memberVisibilityWhere = {
-  OR: [
-    { createdById: 'user-1' },
-    { stageRecords: { some: { assigneeId: 'user-1' } } },
-    { candidateJobs: { some: { job: { departments: { array_contains: ['技术部'] } } } } },
+  AND: [
+    {
+      OR: [
+        { createdById: 'user-1' },
+        { stageRecords: { some: { assigneeId: 'user-1' } } },
+        { candidateJobs: { some: { job: { departments: { array_contains: ['技术部'] } } } } },
+      ],
+    },
+    { deletedAt: null },
   ],
 };
 
@@ -147,7 +152,8 @@ describe('关联模块数据可见性（member 越权访问防护）', () => {
         .expect(403);
     });
 
-    it('admin 访问范围外候选人的 Offer 不受限制', async () => {
+    it('admin 访问范围外候选人的 Offer 不受成员可见性限制', async () => {
+      mockPrisma.candidate.count.mockResolvedValue(1);
       mockPrisma.offer.findUnique.mockResolvedValue({
         id: 'offer-1',
         candidateId: OUT_OF_SCOPE_CANDIDATE_ID,
@@ -159,8 +165,6 @@ describe('关联模块数据可见性（member 越权访问防护）', () => {
       const res = await request(app).get(`/api/offers/${OUT_OF_SCOPE_CANDIDATE_ID}`).expect(200);
 
       expect(res.body.success).toBe(true);
-      // admin 不触发可见性校验
-      expect(mockPrisma.candidate.count).not.toHaveBeenCalled();
     });
   });
 

@@ -30,6 +30,7 @@ export async function anonymizeExpiredCandidates(now = new Date()): Promise<numb
   const candidates = await prisma.candidate.findMany({
     where: {
       anonymizedAt: null,
+      deletedAt: null,
       stageRecords: { some: { status: StageStatus.rejected, enteredAt: { lt: cutoff } } },
       NOT: [
         { stageRecords: { some: { stage: '入职', status: StageStatus.passed } } },
