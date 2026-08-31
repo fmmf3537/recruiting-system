@@ -5,14 +5,25 @@ import offerRoutes from '../../src/routes/offers';
 import communicationRoutes from '../../src/routes/communications';
 import interviewRoutes from '../../src/routes/interviews';
 import onboardingTaskRoutes from '../../src/routes/onboarding-task';
+import candidateRoutes from '../../src/routes/candidates';
 import { errorHandler } from '../../src/middleware/errorHandler';
 
 // Mock prisma（使用真实 service 层，仅替换数据库访问）
 const mockPrisma = vi.hoisted(() => ({
   candidate: {
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
     findMany: vi.fn(),
     count: vi.fn(),
+  },
+  stageRecord: {
+    findMany: vi.fn(),
+  },
+  candidateJob: {
+    findMany: vi.fn(),
+  },
+  candidateTag: {
+    findMany: vi.fn(),
   },
   offer: {
     findMany: vi.fn(),
@@ -57,19 +68,20 @@ vi.mock('../../src/services/email-auto-sender.service', () => ({
   autoSendEmailOnStageTransition: vi.fn(),
 }));
 
-// Mock auth middleware：默认 admin，携带 x-test-role: member 时模拟 member（部门：技术部）
+// Mock auth middleware：默认 admin；x-test-role 透传 member / hiring_manager / interviewer 等
 vi.mock('../../src/middleware/auth', () => ({
-  authenticate: (req: any, res: any, next: any) => {
-    const role = req.headers['x-test-role'] === 'member' ? 'member' : 'admin';
+  authenticate: (req: any, _res: any, next: any) => {
+    const header = req.headers['x-test-role'];
+    const role = typeof header === 'string' ? header : 'admin';
     req.user = {
       userId: 'user-1',
       email: 'test@test.com',
       role,
-      department: role === 'member' ? '技术部' : null,
+      department: role === 'admin' ? null : '技术部',
     };
     next();
   },
-  authorize: () => (req: any, res: any, next: any) => next(),
+  authorize: () => (_req: any, _res: any, next: any) => next(),
 }));
 
 // member（user-1 / 技术部）的可见性条件，与 candidate-visibility.service 的规则一致
@@ -99,6 +111,7 @@ describe('关联模块数据可见性（member 越权访问防护）', () => {
     app.use('/api/communications', communicationRoutes);
     app.use('/api/interviews', interviewRoutes);
     app.use('/api/onboarding-tasks', onboardingTaskRoutes);
+    app.use('/api/candidates', candidateRoutes);
     app.use(errorHandler);
 
     vi.clearAllMocks();
@@ -110,7 +123,23 @@ describe('关联模块数据可见性（member 越权访问防护）', () => {
       candidateJobs: [],
       offer: null,
     });
+    mockPrisma.candidate.findFirst.mockResolvedValue({
+      id: OUT_OF_SCOPE_CANDIDATE_ID,
+      name: '张三',
+      createdById: 'user-2',
+      candidateJobs: [],
+      offer: null,
+      stageRecords: [],
+      interviewFeedbacks: [],
+      createdBy: { id: 'user-2', name: '他人', email: 'other@test.com' },
+      workHistories: [],
+      candidateTags: [],
+    });
+    mockPrisma.candidate.findMany.mockResolvedValue([]);
     mockPrisma.candidate.count.mockResolvedValue(0);
+    mockPrisma.stageRecord.findMany.mockResolvedValue([]);
+    mockPrisma.candidateJob.findMany.mockResolvedValue([]);
+    mockPrisma.candidateTag.findMany.mockResolvedValue([]);
     mockPrisma.offer.findMany.mockResolvedValue([]);
     mockPrisma.offer.count.mockResolvedValue(0);
     mockPrisma.communicationLog.findMany.mockResolvedValue([]);
@@ -274,6 +303,83 @@ describe('关联模块数据可见性（member 越权访问防护）', () => {
           category: '材料收集',
         })
         .expect(403);
+    });
+  });
+
+  describe('hiring_manager / interviewer 可见性与写权限', () => {
+    it('hiring_manager 列表仅注入本部门可见性过滤', async () => {
+      const res = await request(app)
+        .get('/api/candidates')
+        .set('x-test-role', 'hiring_manager')
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(mockPrisma.candidate.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: [{ deletedAt: null }, memberVisibilityWhere],
+          }),
+        })
+      );
+    });
+
+    it('hiring_manager 试图 PATCH 候选人返回 403', async () => {
+      const res = await request(app)
+        .patch(`/api/candidates/${OUT_OF_SCOPE_CANDIDATE_ID}`)
+        .set('x-test-role', 'hiring_manager')
+        .send({ name: '李四' })
+        .expect(403);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('没有权限：candidate:update');
+    });
+
+    it('interviewer 列表仅包含自己被指派面试的候选人', async () => {
+      const assignedId = 'clh11111111111111111111111';
+      mockPrisma.interview.findMany.mockResolvedValue([
+        {
+          candidateId: assignedId,
+          interviewers: [{ id: 'user-1', name: '面试官甲' }],
+        },
+        {
+          candidateId: 'clh22222222222222222222222',
+          interviewers: [{ id: 'user-2', name: '面试官乙' }],
+        },
+      ]);
+
+      const res = await request(app)
+        .get('/api/candidates')
+        .set('x-test-role', 'interviewer')
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(mockPrisma.candidate.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            AND: [
+              { deletedAt: null },
+              { AND: [{ id: { in: [assignedId] } }, { deletedAt: null }] },
+            ],
+          }),
+        })
+      );
+    });
+
+    it('interviewer 访问不相关候选人详情返回 403', async () => {
+      mockPrisma.interview.findMany.mockResolvedValue([
+        {
+          candidateId: 'clh11111111111111111111111',
+          interviewers: [{ id: 'user-1', name: '面试官甲' }],
+        },
+      ]);
+
+      const res = await request(app)
+        .get(`/api/candidates/${OUT_OF_SCOPE_CANDIDATE_ID}`)
+        .set('x-test-role', 'interviewer')
+        .expect(403);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toMatch(/无权/);
     });
   });
 });

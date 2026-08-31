@@ -74,7 +74,7 @@ export class OfferService {
     }
 
     // 数据可见性：member 仅可见范围内候选人的 Offer（admin 不过滤）
-    const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    const visibilityWhere = scope ? await buildCandidateVisibilityWhere(scope) : undefined;
     if (visibilityWhere) {
       where.candidate = visibilityWhere;
     }

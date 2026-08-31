@@ -95,7 +95,7 @@ export class StatsService {
    * 软删除不在此拉全表 ID，由 liveCandidateWhere / visibleCandidateSql 统一加 deletedAt
    */
   private async getVisibleCandidateIds(scope?: CandidateVisibilityScope): Promise<string[] | null> {
-    const where = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    const where = scope ? await buildCandidateVisibilityWhere(scope) : undefined;
     if (!scope || scope.isAdmin) return null;
     const rows = await prisma.candidate.findMany({ where, select: { id: true } });
     return rows.map((r) => r.id);

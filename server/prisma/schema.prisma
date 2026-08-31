@@ -11,6 +11,8 @@ datasource db {
 enum UserRole {
   admin
   member
+  hiring_manager
+  interviewer
 }
 
 enum StageStatus {

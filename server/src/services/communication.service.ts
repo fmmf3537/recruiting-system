@@ -113,7 +113,7 @@ export class CommunicationService {
     if (type) where.type = type;
 
     // 数据可见性：member 仅可见范围内候选人的沟通记录（admin 不过滤）
-    const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    const visibilityWhere = scope ? await buildCandidateVisibilityWhere(scope) : undefined;
     if (visibilityWhere) {
       where.candidate = visibilityWhere;
     }

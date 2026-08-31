@@ -40,12 +40,23 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: '/hiring',
+        name: 'Hiring',
+        component: () => import('@/views/hiring/index.vue'),
+        meta: {
+          title: '招聘工作台',
+          icon: Briefcase,
+          role: ['admin', 'hiring_manager'],
+        },
+      },
+      {
         path: '/jobs',
         name: 'Jobs',
         component: () => import('@/views/jobs/index.vue'),
         meta: {
           title: '职位管理',
           icon: Briefcase,
+          role: ['admin', 'hr'],
         },
       },
       {
@@ -127,6 +138,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/interviews/my.vue'),
         meta: {
           title: '我的面试',
+          role: ['admin', 'interviewer'],
         },
       },
       {
@@ -352,6 +364,17 @@ router.beforeEach(async (to, from, next) => {
     ElMessage.error('没有权限访问该页面');
     next('/dashboard');
     return;
+  }
+
+  // 检查角色权限（member 与 hr 等价，P-5 再做数据迁移）
+  if (to.meta.role && Array.isArray(to.meta.role)) {
+    const rawRole = authStore.userInfo?.role;
+    const effectiveRole = rawRole === 'member' ? 'hr' : rawRole;
+    if (!effectiveRole || !to.meta.role.includes(effectiveRole)) {
+      ElMessage.error('您当前角色无权访问该页面');
+      next('/dashboard');
+      return;
+    }
   }
 
   next();

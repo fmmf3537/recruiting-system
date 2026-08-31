@@ -10,6 +10,7 @@ import { interviewController } from '../controllers/interview.controller';
 import { communicationController } from '../controllers/communication.controller';
 import { authenticate, authorize } from '../middleware/auth';
 import { requirePermission } from '../middleware/permission';
+import { requireMatrixPermission } from '../middleware/role';
 import { validate } from '../middleware/validate';
 import { STAGE_STATUS, INTERVIEW_ROUNDS } from '../constants';
 
@@ -188,6 +189,7 @@ router.get(
 router.post(
   '/',
   authenticate,
+  requireMatrixPermission('candidate:create'),
   validate(createCandidateSchema),
   candidateController.createCandidate
 );
@@ -282,6 +284,7 @@ router.get(
 router.patch(
   '/:id',
   authenticate,
+  requireMatrixPermission('candidate:update'),
   validate(candidateIdParamSchema, 'params'),
   validate(updateCandidateSchema),
   candidateController.updateCandidate
@@ -345,6 +348,7 @@ router.get(
 router.delete(
   '/:id',
   authenticate,
+  requireMatrixPermission('candidate:delete'),
   validate(candidateIdParamSchema, 'params'),
   candidateController.deleteCandidate
 );

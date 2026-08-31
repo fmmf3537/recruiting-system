@@ -178,18 +178,38 @@ const activeMenu = computed(() => route.path);
 const menuItems = computed(() => {
   const items = [
     { path: '/dashboard', title: '仪表盘', icon: Odometer },
-    { path: '/jobs', title: '职位管理', icon: Briefcase },
-    { path: '/candidates', title: '候选人管理', icon: UserFilled },
-    { path: '/interviews/my', title: '我的面试', icon: Calendar },
-    { path: '/offers', title: 'Offer管理', icon: DocumentChecked },
-    { path: '/stats', title: '数据统计', icon: TrendCharts },
   ];
+
+  const rawRole = authStore.userInfo?.role;
+  const role = rawRole === 'member' ? 'hr' : rawRole;
+
+  if (role === 'admin' || role === 'hiring_manager') {
+    items.push({ path: '/hiring', title: '招聘工作台', icon: Briefcase });
+  }
+
+  if (role === 'admin' || role === 'hr') {
+    items.push({ path: '/jobs', title: '职位管理', icon: Briefcase });
+  }
+
+  if (role !== 'interviewer') {
+    items.push({ path: '/candidates', title: '候选人管理', icon: UserFilled });
+  }
+
+  if (role === 'admin' || role === 'interviewer') {
+    items.push({ path: '/interviews/my', title: '我的面试', icon: Calendar });
+  }
+
+  if (role !== 'interviewer') {
+    items.push({ path: '/offers', title: 'Offer管理', icon: DocumentChecked });
+    items.push({ path: '/stats', title: '数据统计', icon: TrendCharts });
+  }
   
   // 消息通知对所有用户可见
   items.push({ path: '/notifications', title: '消息通知', icon: Bell });
 
-  // 编制管理对所有用户可见
-  items.push({ path: '/hc-requests', title: '编制管理', icon: Tickets });
+  if (role !== 'interviewer') {
+    items.push({ path: '/hc-requests', title: '编制管理', icon: Tickets });
+  }
 
   // 仅管理员可见成员管理和字典管理
   if (authStore.isAdmin) {

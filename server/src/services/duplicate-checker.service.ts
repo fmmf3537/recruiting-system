@@ -40,7 +40,7 @@ export async function checkDuplicate(
   let hasHiddenDuplicate = false;
 
   // member 的可见性条件（admin 或未传 scope 为 undefined，表示不脱敏）
-  const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+  const visibilityWhere = scope ? await buildCandidateVisibilityWhere(scope) : undefined;
 
   // 范围外的重复候选人脱敏处理：仅标记存在，不返回任何明细
   const pushDuplicate = async (existing: {

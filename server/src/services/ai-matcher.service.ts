@@ -50,7 +50,7 @@ export async function recommendCandidatesForJob(
 
   // 从人才库获取候选人（未关联任何职位的候选人）
   // 数据可见性：member 只能匹配自己可见范围内的候选人（admin 不过滤）
-  const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+  const visibilityWhere = scope ? await buildCandidateVisibilityWhere(scope) : undefined;
   const candidates = await prisma.candidate.findMany({
     where: {
       candidateJobs: { none: {} },

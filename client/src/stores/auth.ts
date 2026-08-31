@@ -8,7 +8,7 @@ export interface UserInfo {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'member';
+  role: 'admin' | 'member' | 'hr' | 'hiring_manager' | 'interviewer';
   department: string | null;
   createdAt: string;
 }

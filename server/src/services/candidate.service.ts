@@ -321,7 +321,7 @@ export class CandidateService {
     };
 
     // 数据可见性：member 仅可见"我创建的 + 指派给我的阶段 + 本部门职位下"的候选人
-    const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    const visibilityWhere = scope ? await buildCandidateVisibilityWhere(scope) : undefined;
     if (visibilityWhere) {
       where.AND = [{ deletedAt: null }, visibilityWhere];
     }
@@ -626,7 +626,7 @@ export class CandidateService {
     }
 
     // 数据可见性校验：member 不在可见范围内时返回 403（一次 count 查询，无 N+1）
-    const visibilityWhere = scope ? buildCandidateVisibilityWhere(scope) : undefined;
+    const visibilityWhere = scope ? await buildCandidateVisibilityWhere(scope) : undefined;
     if (visibilityWhere) {
       const visibleCount = await prisma.candidate.count({
         where: { id, AND: [visibilityWhere] },
@@ -1467,7 +1467,7 @@ export class CandidateService {
     candidateIds: string[],
     scope: CandidateVisibilityScope
   ): Promise<string[]> {
-    const visibilityWhere = buildCandidateVisibilityWhere(scope);
+    const visibilityWhere = await buildCandidateVisibilityWhere(scope);
     if (candidateIds.length === 0) {
       return candidateIds;
     }

@@ -4,22 +4,17 @@ import { AppError } from '../middleware/errorHandler';
 
 /**
  * 候选人数据可见性范围
- * - admin：可见全部候选人
- * - member：仅可见以下三类候选人
- *   1. 自己创建的（Candidate.createdById = 自己）
- *   2. 被指派给自己的阶段记录（StageRecord.assigneeId = 自己）关联的候选人
- *   3. 自己部门职位（Job.departments 包含自己 department）下关联的候选人
- *   department 为 null 的 member 仅看前两类
+ * - admin：可见全部未删除候选人
+ * - hr / member / hiring_manager：自己创建 + assignee + 本部门职位
+ * - interviewer：仅 Interview.interviewers 含自己的候选人
  */
 export interface CandidateVisibilityScope {
   userId: string;
   isAdmin: boolean;
   department: string | null;
+  role?: string;
 }
 
-/**
- * 从登录用户信息（JWT payload）构建可见性范围
- */
 export function scopeFromUser(user: {
   userId: string;
   role: string;
@@ -29,30 +24,52 @@ export function scopeFromUser(user: {
     userId: user.userId,
     isAdmin: user.role === 'admin',
     department: user.department ?? null,
+    role: user.role,
   };
+}
+
+/**
+ * 面试官可见候选人：JS 过滤 interviewers JSON（Prisma JSON contains 不稳定）
+ */
+async function getVisibleCandidateIdsForInterviewer(userId: string): Promise<string[]> {
+  const interviews = await prisma.interview.findMany({
+    select: { candidateId: true, interviewers: true },
+  });
+  const ids = new Set<string>();
+  for (const i of interviews) {
+    const list = Array.isArray(i.interviewers)
+      ? (i.interviewers as Array<{ id?: string }>)
+      : [];
+    if (list.some((u) => u.id === userId)) {
+      ids.add(i.candidateId);
+    }
+  }
+  return Array.from(ids);
 }
 
 /**
  * 构建候选人可见性 Prisma 查询条件
  * 始终带 `deletedAt: null`；admin 除此以外不限制范围
  */
-export function buildCandidateVisibilityWhere(
+export async function buildCandidateVisibilityWhere(
   scope: CandidateVisibilityScope
-): Prisma.CandidateWhereInput {
-  // 所有角色默认排除软删除；admin 除此以外不限制可见范围
+): Promise<Prisma.CandidateWhereInput> {
   const notDeleted: Prisma.CandidateWhereInput = { deletedAt: null };
   if (scope.isAdmin) {
     return notDeleted;
   }
 
+  if (scope.role === 'interviewer') {
+    const ids = await getVisibleCandidateIdsForInterviewer(scope.userId);
+    return { AND: [{ id: { in: ids } }, notDeleted] };
+  }
+
+  // hr / member / hiring_manager：本部门 + 自己创建 + assignee
   const or: Prisma.CandidateWhereInput[] = [
-    // 1. 自己创建的候选人
     { createdById: scope.userId },
-    // 2. 被指派给自己的阶段记录关联的候选人
     { stageRecords: { some: { assigneeId: scope.userId } } },
   ];
 
-  // 3. 自己部门职位（Job.departments 为 JSON 数组）下关联的候选人
   if (scope.department) {
     or.push({
       candidateJobs: {
@@ -70,7 +87,6 @@ export function buildCandidateVisibilityWhere(
 
 /**
  * 校验候选人在当前用户可见范围内，越权抛出 403
- * 未传 scope 直接放行；有 scope 时用一次 count（含 deletedAt: null）校验
  */
 export async function assertCandidateVisible(
   candidateId: string,
@@ -78,7 +94,7 @@ export async function assertCandidateVisible(
 ): Promise<void> {
   if (!scope) return;
 
-  const where = buildCandidateVisibilityWhere(scope);
+  const where = await buildCandidateVisibilityWhere(scope);
   const count = await prisma.candidate.count({
     where: { id: candidateId, AND: [where] },
   });
