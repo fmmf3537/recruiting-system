@@ -2,7 +2,7 @@ import { Router } from 'express';
 
 import { register } from '../lib/metrics';
 
-const router = Router();
+const router: Router = Router();
 
 // Prometheus 抓取通常不带 JWT，此端点不强制鉴权
 router.get('/', async (_req, res) => {
