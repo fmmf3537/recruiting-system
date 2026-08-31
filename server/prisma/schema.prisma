@@ -10,7 +10,8 @@ datasource db {
 
 enum UserRole {
   admin
-  member
+  member // 历史值：数据已迁 hr，PG 无法删除 enum 值；JWT 仍由 normalizeUserRole 兼容
+  hr
   hiring_manager
   interviewer
 }

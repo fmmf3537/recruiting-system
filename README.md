@@ -24,7 +24,7 @@ A full-featured **Applicant Tracking System (ATS)** built with modern web techno
 - 👥 **Candidate Management**: Track candidates from application to hire
 - 📊 **Recruitment Pipeline**: Visualize candidates through hiring stages (New → Screening → Interview → Offer → Hired)
 - 📈 **Analytics Dashboard**: Data visualization with ECharts for recruitment metrics
-- 🔐 **Role-based Access**: Admin and Member roles with different permissions
+- 🔐 **Role-based Access**: Admin, HR, hiring manager, and interviewer roles with a permission matrix
 - 📱 **Mobile H5**: Dedicated mobile interface (Vue 3 + Vant 4) for on-the-go recruiting
 - 🔍 **Duplicate Detection**: Automatic candidate deduplication by phone/email
 - 📄 **Resume Upload**: Support for PDF and Word documents
@@ -321,11 +321,42 @@ MIT License
 - 👥 **候选人管理**：从申请到入职全流程跟踪
 - 📊 **招聘流程**：可视化招聘阶段（入库→初筛→面试→Offer→入职）
 - 📈 **数据分析**：使用 ECharts 进行招聘数据可视化
-- 🔐 **权限管理**：管理员和普通成员两种角色
+- 🔐 **权限管理**：管理员、HR、业务经理、面试官四种角色
 - 📱 **移动端 H5**：独立的移动端界面（Vue 3 + Vant 4），随时随地跟进招聘
 - 🔍 **查重检测**：根据手机号/邮箱自动检测重复候选人
 - 📄 **简历上传**：支持 PDF 和 Word 文档
 - 🚀 **飞书集成**：支持飞书免登登录，企业用户一键接入
+
+## 角色与权限（阶段 3 后）
+
+系统支持 4 种角色，由 `server/src/services/role-permission.service.ts` 中央管理：
+
+| 角色 | 用途 | 关键权限 |
+|------|------|---------|
+| `admin` | 系统管理员 | 全部权限（`['*']`） |
+| `hr` | HR 招聘专员 | 完整 HR 权限（看 + 增删改 + 审批 + 触发 HC） |
+| `hiring_manager` | 业务经理（用人部门） | 看本部门 + 审批 Offer + 发起 HC + 填评估 |
+| `interviewer` | 面试官 | 只看自己被指派的面试 + 填评估 |
+
+权限矩阵详见 [`server/src/services/role-permission.service.ts`](server/src/services/role-permission.service.ts)。
+
+### 4 角色登录测试
+
+dev 库跑 `pnpm db:seed:test-users` 可创建 4 个测试账号：
+
+| 账号 | 密码 | 测试场景 |
+|------|------|---------|
+| admin@test.local | admin123 | 全部功能 |
+| hr@test.local | hr123456 | HR 工作台 |
+| hiring@test.local | hiring123 | 业务经理工作台（部门数据） |
+| interviewer@test.local | interview123 | 面试官工作台（自己的面试） |
+
+### 数据迁移说明
+
+P-5 之前用 `member` 角色的用户，**自动迁移到 `hr`**。
+迁移 SQL 在 `server/prisma/migrations/20260901000001_rename_member_to_hr/migration.sql`，幂等可重复。
+
+如果新部署的库没有 member 用户，迁移 no-op，安全。
 
 ---
 
