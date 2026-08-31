@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
 
 jobs:
   backend-test:
@@ -52,6 +52,11 @@ jobs:
         working-directory: server
       - name: Apply migrations
         run: npx prisma migrate deploy
+        working-directory: server
+      - name: Type check (tsc)
+        # 与 Dockerfile 的 npm run build 同口径的严格类型检查，
+        # 防止 tsx/vitest 不做类型检查导致的构建期错误漏网
+        run: npx tsc --noEmit
         working-directory: server
       - name: Run tests with coverage
         run: pnpm test:coverage
