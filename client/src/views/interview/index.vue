@@ -9,7 +9,8 @@
 
     <el-tabs v-model="activeTab">
       <el-tab-pane label="今日面试" name="today">
-        <el-table v-loading="todayLoading" :data="todayInterviews">
+        <TableSkeleton v-if="todayLoading" :row-count="5" />
+        <el-table v-else v-loading="todayLoading" :data="todayInterviews">
           <el-table-column label="候选人">
             <template #default="{ row }">{{ row.candidate?.name }}</template>
           </el-table-column>
@@ -31,7 +32,8 @@
       </el-tab-pane>
 
       <el-tab-pane label="待填评估" name="pending">
-        <el-table v-loading="pendingLoading" :data="pendingEvaluations">
+        <TableSkeleton v-if="pendingLoading" :row-count="5" />
+        <el-table v-else v-loading="pendingLoading" :data="pendingEvaluations">
           <el-table-column label="候选人">
             <template #default="{ row }">{{ row.candidate?.name }}</template>
           </el-table-column>
@@ -52,7 +54,8 @@
       </el-tab-pane>
 
       <el-tab-pane label="历史" name="history">
-        <el-table v-loading="historyLoading" :data="historyInterviews">
+        <TableSkeleton v-if="historyLoading" :row-count="5" />
+        <el-table v-else v-loading="historyLoading" :data="historyInterviews">
           <el-table-column label="候选人">
             <template #default="{ row }">{{ row.candidate?.name }}</template>
           </el-table-column>
@@ -113,6 +116,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import { TableSkeleton } from '@/components/Skeleton';
 import request from '@/utils/request';
 
 interface EvalDimension {

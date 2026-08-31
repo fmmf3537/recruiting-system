@@ -10,28 +10,32 @@
     <el-tabs v-model="activeTab">
       <el-tab-pane label="总览" name="overview">
         <div v-loading="overviewLoading">
-          <el-row :gutter="20">
-            <el-col :span="6">
-              <el-statistic title="开放职位" :value="overview.openJobs ?? 0" />
-            </el-col>
-            <el-col :span="6">
-              <el-statistic title="活跃候选人" :value="overview.activeCandidates ?? 0" />
-            </el-col>
-            <el-col :span="6">
-              <el-statistic title="待审批 Offer" :value="overview.pendingOffers ?? 0" />
-            </el-col>
-            <el-col :span="6">
-              <el-statistic title="即将面试" :value="overview.scheduledInterviews ?? 0" />
-            </el-col>
-          </el-row>
-          <p class="scope-tip">
-            数据范围：{{ overview.scope === 'company' ? '全公司' : `部门 ${overview.department || '(未设置)'}` }}
-          </p>
+          <CardSkeleton v-if="overviewLoading && !overview.scope" :row-count="3" />
+          <template v-else>
+            <el-row :gutter="20">
+              <el-col :span="6">
+                <el-statistic title="开放职位" :value="overview.openJobs ?? 0" />
+              </el-col>
+              <el-col :span="6">
+                <el-statistic title="活跃候选人" :value="overview.activeCandidates ?? 0" />
+              </el-col>
+              <el-col :span="6">
+                <el-statistic title="待审批 Offer" :value="overview.pendingOffers ?? 0" />
+              </el-col>
+              <el-col :span="6">
+                <el-statistic title="即将面试" :value="overview.scheduledInterviews ?? 0" />
+              </el-col>
+            </el-row>
+            <p class="scope-tip">
+              数据范围：{{ overview.scope === 'company' ? '全公司' : `部门 ${overview.department || '(未设置)'}` }}
+            </p>
+          </template>
         </div>
       </el-tab-pane>
 
       <el-tab-pane label="待审批" name="approvals">
-        <el-table v-loading="approvalsLoading" :data="approvals">
+        <TableSkeleton v-if="approvalsLoading" :row-count="5" />
+        <el-table v-else v-loading="approvalsLoading" :data="approvals">
           <el-table-column label="候选人">
             <template #default="{ row }">{{ row.candidate?.name }}</template>
           </el-table-column>
@@ -48,7 +52,8 @@
       </el-tab-pane>
 
       <el-tab-pane label="本部门候选人" name="candidates">
-        <el-table v-loading="candidatesLoading" :data="candidates">
+        <TableSkeleton v-if="candidatesLoading" :row-count="5" />
+        <el-table v-else v-loading="candidatesLoading" :data="candidates">
           <el-table-column label="候选人">
             <template #default="{ row }">{{ row.candidate?.name }}</template>
           </el-table-column>
@@ -68,7 +73,8 @@
       </el-tab-pane>
 
       <el-tab-pane label="即将面试" name="interviews">
-        <el-table v-loading="interviewsLoading" :data="interviews">
+        <TableSkeleton v-if="interviewsLoading" :row-count="5" />
+        <el-table v-else v-loading="interviewsLoading" :data="interviews">
           <el-table-column label="候选人">
             <template #default="{ row }">{{ row.candidate?.name }}</template>
           </el-table-column>
@@ -90,6 +96,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
+import { TableSkeleton, CardSkeleton } from '@/components/Skeleton';
 import request from '@/utils/request';
 
 interface HiringOverview {

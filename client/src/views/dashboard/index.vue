@@ -120,29 +120,32 @@
           </template>
           
           <div class="activity-list" v-loading="activityLoading">
-            <div
-              v-for="item in recentActivities"
-              :key="item.id"
-              class="activity-item"
-            >
-              <div class="activity-avatar">
-                <el-avatar :size="40" :icon="UserFilled" />
-              </div>
-              <div class="activity-content">
-                <div class="activity-title">
-                  <span class="candidate-name">{{ item.candidateName }}</span>
-                  <span class="activity-action">{{ item.action }}</span>
+            <CardSkeleton v-if="activityLoading && recentActivities.length === 0" />
+            <template v-else>
+              <div
+                v-for="item in recentActivities"
+                :key="item.id"
+                class="activity-item"
+              >
+                <div class="activity-avatar">
+                  <el-avatar :size="40" :icon="UserFilled" />
                 </div>
-                <div class="activity-meta">
-                  <span class="stage-tag" :class="item.stage">
-                    {{ item.stageText }}
-                  </span>
-                  <span class="activity-time">{{ formatTime(item.time) }}</span>
+                <div class="activity-content">
+                  <div class="activity-title">
+                    <span class="candidate-name">{{ item.candidateName }}</span>
+                    <span class="activity-action">{{ item.action }}</span>
+                  </div>
+                  <div class="activity-meta">
+                    <span class="stage-tag" :class="item.stage">
+                      {{ item.stageText }}
+                    </span>
+                    <span class="activity-time">{{ formatTime(item.time) }}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            
-            <el-empty v-if="recentActivities.length === 0" description="暂无动态" />
+
+              <el-empty v-if="recentActivities.length === 0" description="暂无动态" />
+            </template>
           </div>
         </el-card>
       </el-col>
@@ -153,6 +156,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
+import { CardSkeleton } from '@/components/Skeleton';
 import { ElMessage } from 'element-plus';
 import {
   User,

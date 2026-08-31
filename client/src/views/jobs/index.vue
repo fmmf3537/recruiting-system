@@ -88,8 +88,11 @@
     </el-card>
 
     <!-- 数据表格 -->
-    <el-card class="table-card" shadow="never" v-loading="loading">
+    <el-card class="table-card" shadow="never">
+      <TableSkeleton v-if="loading" :row-count="6" />
       <el-table
+        v-else
+        v-loading="loading"
         :data="jobList"
         stripe
         style="width: 100%"
@@ -227,7 +230,7 @@
       </el-table>
 
       <!-- 分页 -->
-      <div class="pagination-wrapper">
+      <div v-if="!loading" class="pagination-wrapper">
         <el-pagination
           v-model:current-page="pagination.page"
           v-model:page-size="pagination.pageSize"
@@ -245,6 +248,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
+import { TableSkeleton } from '@/components/Skeleton';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Plus, Search } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
