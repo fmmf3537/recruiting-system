@@ -48,6 +48,13 @@ vi.mock('../../src/lib/prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
+      count: vi.fn(),
+    },
+    interview: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      count: vi.fn(),
     },
     interviewFeedback: {
       findMany: vi.fn(),
