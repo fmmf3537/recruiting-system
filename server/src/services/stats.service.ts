@@ -1,4 +1,6 @@
 import { Prisma } from '@prisma/client';
+
+import { logger } from '../lib/logger';
 import prisma from '../lib/prisma';
 import { redis, connectRedis } from '../lib/redis';
 import {
@@ -211,19 +213,45 @@ export class StatsService {
       prisma.hCRequest.count({ where: { status: 'submitted' } }),
     ]);
 
-    // 近 7 天新增候选人趋势
-    const trend: Array<{ date: string; count: number }> = [];
-    for (let i = 6; i >= 0; i -= 1) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      d.setHours(0, 0, 0, 0);
-      const nextD = new Date(d);
-      nextD.setDate(nextD.getDate() + 1);
-      const count = await prisma.candidate.count({
-        where: { createdAt: { gte: d, lt: nextD }, ...candidateFilter },
-      });
-      const dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      trend.push({ date: dateStr, count });
+    // 近 7 天新增候选人趋势：单次 SQL 按日聚合，避免 7 次 count
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const formatTrendDate = (d: Date): string =>
+      `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    const fillTrendDays = (
+      counts: Map<string, number>
+    ): Array<{ date: string; count: number }> => {
+      const days: Array<{ date: string; count: number }> = [];
+      for (let i = 6; i >= 0; i -= 1) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = formatTrendDate(d);
+        days.push({ date: dateStr, count: counts.get(dateStr) ?? 0 });
+      }
+      return days;
+    };
+
+    let trend: Array<{ date: string; count: number }> = [];
+    try {
+      const rawTrend = await prisma.$queryRaw<Array<{ day: Date; cnt: bigint }>>`
+        SELECT date_trunc('day', c."createdAt") AS day, COUNT(*)::bigint AS cnt
+        FROM "candidate" c
+        WHERE c."createdAt" >= ${sevenDaysAgo}
+          ${this.visibleCandidateSql('c.id', visibleIds)}
+        GROUP BY day
+        ORDER BY day ASC
+      `;
+      const trendMap = new Map<string, number>();
+      for (const r of rawTrend) {
+        trendMap.set(formatTrendDate(new Date(r.day)), Number(r.cnt));
+      }
+      trend = fillTrendDays(trendMap);
+    } catch (e) {
+      logger.error({ err: e }, '7 天趋势查询失败');
+      trend = fillTrendDays(new Map());
     }
 
     const result = {

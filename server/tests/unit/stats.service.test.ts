@@ -10,6 +10,7 @@ const mockPrisma = vi.hoisted(() => ({
   candidate: {
     count: vi.fn(),
     groupBy: vi.fn(),
+    findMany: vi.fn(),
   },
   stageRecord: {
     count: vi.fn(),
@@ -47,6 +48,15 @@ vi.mock('../../src/lib/redis', () => ({
   connectRedis: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../src/lib/logger', () => ({
+  logger: {
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  },
+}));
+
 import { StatsService } from '../../src/services/stats.service';
 
 describe('StatsService - 统计服务单元测试', () => {
@@ -59,6 +69,7 @@ describe('StatsService - 统计服务单元测试', () => {
     vi.mocked(mockPrisma.user.findMany).mockResolvedValue([]);
     vi.mocked(mockPrisma.candidate.count).mockResolvedValue(0);
     vi.mocked(mockPrisma.candidate.groupBy).mockResolvedValue([]);
+    vi.mocked(mockPrisma.candidate.findMany).mockResolvedValue([]);
     vi.mocked(mockPrisma.stageRecord.count).mockResolvedValue(0);
     vi.mocked(mockPrisma.stageRecord.groupBy).mockResolvedValue([]);
     vi.mocked(mockPrisma.interviewFeedback.count).mockResolvedValue(0);
@@ -285,9 +296,8 @@ describe('StatsService - 统计服务单元测试', () => {
 
   describe('getDashboardStats - 数据看板', () => {
     it('应返回核心 KPI 和近 7 天趋势', async () => {
-      vi.mocked(mockPrisma.candidate.count)
-        .mockResolvedValueOnce(12) // newCandidatesThisMonth
-        .mockResolvedValue(0); // trend days (7 calls)
+      vi.mocked(mockPrisma.candidate.count).mockResolvedValueOnce(12); // newCandidatesThisMonth
+      vi.mocked(mockPrisma.$queryRaw).mockResolvedValue([]); // 近 7 天趋势单次聚合
       vi.mocked(mockPrisma.interviewFeedback.findMany).mockResolvedValue([
         { candidateId: 'c1' }, { candidateId: 'c2' },
       ] as any);
