@@ -50,6 +50,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: '/interview',
+        name: 'InterviewerWorkbench',
+        component: () => import('@/views/interview/index.vue'),
+        meta: {
+          title: '面试官工作台',
+          icon: User,
+          role: ['admin', 'interviewer'],
+        },
+      },
+      {
         path: '/jobs',
         name: 'Jobs',
         component: () => import('@/views/jobs/index.vue'),

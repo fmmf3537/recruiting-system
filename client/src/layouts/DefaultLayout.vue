@@ -196,7 +196,7 @@ const menuItems = computed(() => {
   }
 
   if (role === 'admin' || role === 'interviewer') {
-    items.push({ path: '/interviews/my', title: '我的面试', icon: Calendar });
+    items.push({ path: '/interview', title: '面试官工作台', icon: Calendar });
   }
 
   if (role !== 'interviewer') {
