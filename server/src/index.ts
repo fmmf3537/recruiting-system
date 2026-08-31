@@ -8,6 +8,8 @@ import {
   registerAnonymizeCron,
   registerEvaluationReminderCron,
   registerReminderCron,
+  registerHiringDigestCron,
+  registerInterviewerReminderCron,
 } from './lib/cron';
 import { env } from './lib/env';
 import { logger } from './lib/logger';
@@ -54,6 +56,12 @@ registerEvaluationReminderCron();
 
 // 注册统一提醒定时任务（跟进/面试/阶段超时，REMINDER_CRON_ENABLED 控制开关）
 registerReminderCron();
+
+// 注册 hiring_manager 日报（HIRING_DIGEST_CRON 控制开关）
+registerHiringDigestCron();
+
+// 注册 interviewer 面试前 24h 提醒（INTERVIEWER_REMINDER_CRON 控制开关）
+registerInterviewerReminderCron();
 
 // 优雅关闭
 process.on('SIGTERM', async () => {

@@ -61,6 +61,11 @@ const envSchema = z.object({
   // 阶段停留超时阈值（天数）：StageRecord 处于 in_progress 且 enteredAt 超过该天数触发提醒
   STAGE_OVERDUE_DAYS: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 7)),
 
+  // hiring_manager 日报（cron 表达式如 0 9 * * *；false/留空则关闭）
+  HIRING_DIGEST_CRON: z.string().optional().transform((val) => (val && val !== 'false' ? val : null)),
+  // interviewer 面试前 24h 提醒（cron 表达式如 0 * * * *；false/留空则关闭）
+  INTERVIEWER_REMINDER_CRON: z.string().optional().transform((val) => (val && val !== 'false' ? val : null)),
+
   // OpenTelemetry（留空则禁用 tracing）
   OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(
     (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
