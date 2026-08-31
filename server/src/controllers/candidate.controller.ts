@@ -110,6 +110,18 @@ export class CandidateController {
   }
 
   /**
+   * GET /api/candidates/export
+   * 导出候选人（PROMPT-14 示范路由；复用列表查询）
+   */
+  async exportCandidates(
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> {
+    return this.getCandidates(req, res, next);
+  }
+
+  /**
    * GET /api/candidates/:id
    * 候选人详情（含流程记录、面试反馈、Offer 信息）
    */

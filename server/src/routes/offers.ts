@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { OFFER_RESULTS } from '../constants';
 import { offerController } from '../controllers/offer.controller';
 import { authenticate } from '../middleware/auth';
+import { requirePermission } from '../middleware/permission';
 import { validate } from '../middleware/validate';
 
 const router: RouterType = Router();
@@ -153,6 +154,7 @@ router.post(
 router.post(
   '/:candidateId/approve',
   authenticate,
+  requirePermission('offer:approve'),
   validate(candidateIdParamSchema, 'params'),
   validate(approveOfferSchema),
   offerController.approveOffer

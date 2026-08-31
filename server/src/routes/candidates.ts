@@ -9,6 +9,7 @@ import { tagController } from '../controllers/tag.controller';
 import { interviewController } from '../controllers/interview.controller';
 import { communicationController } from '../controllers/communication.controller';
 import { authenticate, authorize } from '../middleware/auth';
+import { requirePermission } from '../middleware/permission';
 import { validate } from '../middleware/validate';
 import { STAGE_STATUS, INTERVIEW_ROUNDS } from '../constants';
 
@@ -248,6 +249,17 @@ router.get(
   authenticate,
   authorize('admin'),
   candidateController.getRecycleBin
+);
+
+/**
+ * GET /api/candidates/export
+ * 导出候选人（PROMPT-14 示范：requirePermission）
+ */
+router.get(
+  '/export',
+  authenticate,
+  requirePermission('candidate:export'),
+  candidateController.exportCandidates
 );
 
 /**
