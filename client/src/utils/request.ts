@@ -1,6 +1,11 @@
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { ElMessage } from 'element-plus';
 import router from '@/router';
+import {
+  BackendErrorCode,
+  BusinessError,
+  type BackendErrorResponse,
+} from '@/types/error';
 
 // 创建 axios 实例
 const request: AxiosInstance = axios.create({
@@ -10,6 +15,60 @@ const request: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+function clearAuthAndRedirect(): void {
+  ElMessage.error('登录已过期，请重新登录');
+  localStorage.removeItem('ats_token');
+  localStorage.removeItem('ats_user');
+  router.push('/login');
+}
+
+/**
+ * 按业务 code 分支处理 API 错误；未知 code 再 fallback 到 HTTP status
+ */
+export function handleResponseError(error: AxiosError<BackendErrorResponse>): Promise<never> {
+  console.error('[HTTP] response error', error.message, error.config?.url);
+  const { response } = error;
+
+  if (!response) {
+    ElMessage.error('网络错误，请检查网络连接');
+    return Promise.reject(new BusinessError('网络错误', BackendErrorCode.INTERNAL_ERROR, 0));
+  }
+
+  const { status, data } = response;
+  const code = data?.code ?? status;
+  const message = data?.error ?? `请求失败 (${status})`;
+
+  switch (code) {
+    case BackendErrorCode.UNAUTHORIZED:
+    case BackendErrorCode.TOKEN_EXPIRED:
+      clearAuthAndRedirect();
+      break;
+    case BackendErrorCode.FORBIDDEN:
+      ElMessage.error(message || '没有权限执行此操作');
+      break;
+    case BackendErrorCode.NOT_FOUND:
+      ElMessage.error(message || '请求的资源不存在');
+      break;
+    case BackendErrorCode.ALREADY_EXISTS:
+    case BackendErrorCode.CANDIDATE_DUPLICATE:
+      ElMessage.warning(message || '记录已存在');
+      break;
+    case BackendErrorCode.OFFER_NOT_APPROVABLE:
+      ElMessage.warning(message || 'Offer 状态不允许审批');
+      break;
+    default:
+      if (status === 401) {
+        clearAuthAndRedirect();
+      } else if (status >= 500) {
+        ElMessage.error('服务器内部错误，请稍后重试');
+      } else {
+        ElMessage.error(message);
+      }
+  }
+
+  return Promise.reject(new BusinessError(message, code, status));
+}
 
 // 请求拦截器
 request.interceptors.request.use(
@@ -28,48 +87,13 @@ request.interceptors.request.use(
   }
 );
 
-// 响应拦截器
+// 响应拦截器：优先按业务 code 处理，HTTP status 作为 fallback
 request.interceptors.response.use(
   (response) => {
     console.log(`[HTTP] response ${response.status} ${response.config.url}`);
-    // 直接返回响应数据
     return response.data;
   },
-  (error: AxiosError) => {
-    console.error('[HTTP] response error', error.message, error.config?.url);
-    const { response } = error;
-    
-    if (response) {
-      const { status, data } = response;
-      const errorData = data as { success?: boolean; error?: string; message?: string };
-      
-      switch (status) {
-        case 401:
-          // 未授权，清除 token 并跳转到登录页
-          ElMessage.error('登录已过期，请重新登录');
-          localStorage.removeItem('ats_token');
-          localStorage.removeItem('ats_user');
-          router.push('/login');
-          break;
-        case 403:
-          ElMessage.error('没有权限执行此操作');
-          break;
-        case 404:
-          ElMessage.error(errorData.error || '请求的资源不存在');
-          break;
-        case 500:
-          ElMessage.error('服务器内部错误，请稍后重试');
-          break;
-        default:
-          ElMessage.error(errorData.error || `请求失败 (${status})`);
-      }
-    } else {
-      // 网络错误或其他错误
-      ElMessage.error('网络错误，请检查网络连接');
-    }
-    
-    return Promise.reject(error);
-  }
+  (error: AxiosError<BackendErrorResponse>) => handleResponseError(error)
 );
 
 export default request;

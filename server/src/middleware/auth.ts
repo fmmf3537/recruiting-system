@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
+import { ErrorCode } from '../constants/error-codes';
 import { env } from '../lib/env';
 import prisma from '../lib/prisma';
 import { getFromCache, setCache } from '../lib/redis';
@@ -78,10 +79,10 @@ async function loadUserFromToken(token: string): Promise<JwtPayload> {
     decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      throw new AppError('认证令牌已过期', 401);
+      throw new AppError('认证令牌已过期', 401, ErrorCode.TOKEN_EXPIRED);
     }
     if (error instanceof jwt.JsonWebTokenError) {
-      throw new AppError('无效的认证令牌', 401);
+      throw new AppError('无效的认证令牌', 401, ErrorCode.UNAUTHORIZED);
     }
     throw new AppError('认证过程中发生错误', 500);
   }
@@ -151,7 +152,7 @@ export const authenticate = async (
       res.status(401).json({
         success: false,
         error: '未提供认证令牌',
-        code: 401,
+        code: ErrorCode.UNAUTHORIZED,
       });
       return;
     }
@@ -163,7 +164,7 @@ export const authenticate = async (
       res.status(error.statusCode).json({
         success: false,
         error: error.message,
-        code: error.statusCode,
+        code: error.code ?? error.statusCode,
       });
       return;
     }

@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { ErrorCode } from '../constants/error-codes';
 
 // 自定义应用错误类
 export class AppError extends Error {
@@ -20,12 +21,12 @@ export const createError = (message: string, statusCode: number = 500): AppError
   return new AppError(message, statusCode);
 };
 
-// Prisma 错误码映射
-const prismaErrorMap: Record<string, { message: string; statusCode: number }> = {
-  P2002: { message: '记录已存在', statusCode: 409 },
-  P2003: { message: '外键约束失败', statusCode: 400 },
-  P2025: { message: '记录不存在', statusCode: 404 },
-  P2014: { message: '关联关系错误', statusCode: 400 },
+// Prisma 错误码映射（HTTP status 与业务 code 分开）
+const prismaErrorMap: Record<string, { message: string; statusCode: number; code: number }> = {
+  P2002: { message: '记录已存在', statusCode: 409, code: ErrorCode.ALREADY_EXISTS },
+  P2003: { message: '外键约束失败', statusCode: 400, code: ErrorCode.VALIDATION_FAILED },
+  P2025: { message: '记录不存在', statusCode: 404, code: ErrorCode.NOT_FOUND },
+  P2014: { message: '关联关系错误', statusCode: 400, code: ErrorCode.VALIDATION_FAILED },
 };
 
 /**
@@ -58,6 +59,7 @@ export const errorHandler = (
     if (errorInfo) {
       message = errorInfo.message;
       statusCode = errorInfo.statusCode;
+      code = errorInfo.code;
     } else {
       message = `数据库错误: ${prismaError.code}`;
     }
@@ -70,11 +72,19 @@ export const errorHandler = (
   else if (err.name === 'ValidationError') {
     message = err.message;
     statusCode = 400;
+    code = ErrorCode.VALIDATION_FAILED;
+  }
+  // 处理 JWT 过期（须在 JsonWebTokenError 之前，TokenExpiredError 是其子类）
+  else if (err.name === 'TokenExpiredError') {
+    message = '认证令牌已过期';
+    statusCode = 401;
+    code = ErrorCode.TOKEN_EXPIRED;
   }
   // 处理 JWT 错误
   else if (err.name === 'JsonWebTokenError') {
     message = '无效的令牌';
     statusCode = 401;
+    code = ErrorCode.UNAUTHORIZED;
   }
 
   // 开发环境输出详细错误
@@ -85,7 +95,8 @@ export const errorHandler = (
   res.status(statusCode).json({
     success: false,
     error: message,
-    code: code || statusCode,
+    // 优先用业务 code；未指定时 fallback 到 HTTP status，供前端双轨判断
+    code: code ?? statusCode,
     ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 };
@@ -110,6 +121,6 @@ export const notFoundHandler = (_req: Request, res: Response): void => {
   res.status(404).json({
     success: false,
     error: '请求的资源不存在',
-    code: 404,
+    code: ErrorCode.NOT_FOUND,
   });
 };
