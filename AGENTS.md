@@ -463,4 +463,22 @@ Nginx (:80)
 
 ---
 
-*最后更新时间：2026-04-15*
+## 13. 切片自动化流水线（dev-slice-loop，2026-09-01 接入）
+
+- runner：`scripts/{oc,codex,dsh}-run.ps1`（后台执行）+ 对应 `-exec.cmd`；日志在 `logs/<工具>/`（已 gitignore）。
+- 切片提示词放 `docs/cursor-prompts/<切片ID>.md`，先提交提示词再启动执行器；执行 agent 不跑验收、不 commit，验收由审核方亲手重跑。
+- **验收基线（S0 后实测，lint 类命令一律用 `lint:check` 无 --fix 变体，防误改源码）**：
+
+| 命令 | 基线 |
+|---|---|
+| `server pnpm test` | 44 文件 / 427 用例全过 |
+| `server pnpm build`（tsc） | 0 错误 |
+| `server pnpm lint:check` | 17682 errors / 210 warnings（存量债，不得新增） |
+| `client pnpm type-check` | 78 个存量 TS 错误（不得新增） |
+| `client pnpm lint:check` | 137 errors / 231 warnings（不得新增） |
+
+- Git Bash 中 pnpm/opencode 的 shim 有路径串扰，须用 `cmd.exe //c` 调用（runner 内部已是 cmd 调用，不受影响）。
+
+---
+
+*最后更新时间：2026-09-01*
