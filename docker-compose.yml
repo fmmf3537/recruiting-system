@@ -60,6 +60,12 @@ services:
       # 统一提醒定时任务开关（跟进到期/面试前提醒/阶段超时）与超时阈值（天）
       REMINDER_CRON_ENABLED: ${REMINDER_CRON_ENABLED:-false}
       STAGE_OVERDUE_DAYS: ${STAGE_OVERDUE_DAYS:-7}
+      # LLM 简历解析配置（容器内无 .env，必须显式透传；缺省时代码默认 deepseek 会因无 key 报错）
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      ZHIPU_API_KEY: ${ZHIPU_API_KEY:-}
+      KIMI_API_KEY: ${KIMI_API_KEY:-}
+      MINIMAX_API_KEY: ${MINIMAX_API_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
