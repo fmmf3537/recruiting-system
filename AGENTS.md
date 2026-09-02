@@ -472,9 +472,9 @@ Nginx (:80)
 
 | 命令 | 基线 |
 |---|---|
-| `server pnpm test` | 44 文件 / 427 用例全过 |
+| `server pnpm test` | 54 文件 / 542 用例全过（F4-S1 后） |
 | `server pnpm build`（tsc） | 0 错误 |
-| `server pnpm lint:check` | 17682 errors / 210 warnings（存量债，不得新增） |
+| `server pnpm lint:check` | 15567 errors / 240 warnings（存量债，不得新增；F4-S1 修 CRLF 后下降） |
 | `client pnpm type-check` | 78 个存量 TS 错误（不得新增） |
 | `client pnpm lint:check` | 137 errors / 231 warnings（不得新增） |
 
