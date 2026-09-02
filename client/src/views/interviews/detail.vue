@@ -22,6 +22,7 @@
           <el-tag effect="light">{{ interview.round }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="面试方式">{{ interview.type }}</el-descriptions-item>
+        <el-descriptions-item label="考察方向">{{ interviewFocusTypeName }}</el-descriptions-item>
         <el-descriptions-item label="面试时间">{{ formatDateTime(interview.scheduledAt) }}</el-descriptions-item>
         <el-descriptions-item label="时长">{{ interview.duration }}分钟</el-descriptions-item>
         <el-descriptions-item label="地点/链接">{{ interview.location || '—' }}</el-descriptions-item>
@@ -34,6 +35,13 @@
         <el-descriptions-item label="备注" :span="3">{{ interview.notes || '—' }}</el-descriptions-item>
       </el-descriptions>
     </el-card>
+
+    <!-- AI 面试大纲（F3-C 卡片，组件内自带拉取/版本切换/手动微调） -->
+    <QuestionOutlineCard
+      v-if="interview"
+      :interview-id="interview.id"
+      :interview-focus-type="interview.focusType"
+    />
 
     <!-- 面试官评估 -->
     <el-card shadow="never" class="evaluation-card">
@@ -118,6 +126,8 @@ import {
   type InterviewEvaluationItem,
   type EvaluationConclusion,
 } from '@/api/evaluation';
+import { getDictionaries, type DictionaryItem } from '@/api/dictionary';
+import QuestionOutlineCard from '@/components/interviews/QuestionOutlineCard.vue';
 
 // 注册 ECharts 组件（雷达图按需引入）
 use([CanvasRenderer, RadarChart, RadarComponent, TooltipComponent, LegendComponent]);
@@ -128,6 +138,22 @@ const router = useRouter();
 const loading = ref(false);
 const interview = ref<InterviewItem | null>(null);
 const evaluations = ref<InterviewEvaluationItem[]>([]);
+
+// F3-C 考察方向字典（code → name）
+const focusTypeDict = ref<DictionaryItem[]>([]);
+const focusTypeMap = computed(() => {
+  const m: Record<string, string> = {};
+  focusTypeDict.value.forEach((d) => {
+    if (d.enabled) m[d.code] = d.name;
+  });
+  return m;
+});
+// 面试信息行展示用：code 转中文名，无 focusType 显示 —
+const interviewFocusTypeName = computed(() => {
+  const code = interview.value?.focusType;
+  if (!code) return '—';
+  return focusTypeMap.value[code] || code;
+});
 
 // 已提交的评估（用于雷达图）
 const submittedEvaluations = computed(() =>
@@ -172,16 +198,24 @@ async function fetchDetail() {
   loading.value = true;
   try {
     const id = route.params.id as string;
-    const [detailRes, evalRes] = await Promise.all([
+    const [detailRes, evalRes, dictRes] = await Promise.all([
       // 响应拦截器直接返回 response.data，此处断言为实际返回结构
       getInterviewById(id) as unknown as Promise<{ success: boolean; data: InterviewItem }>,
       getInterviewEvaluations(id),
+      // 考察方向字典（用于描述行展示与卡片初始默认值）
+      getDictionaries({ category: 'interview_focus_type' }) as unknown as Promise<{
+        success: boolean;
+        data: DictionaryItem[];
+      }>,
     ]);
     if (detailRes.success) {
       interview.value = detailRes.data;
     }
     if (evalRes.success) {
       evaluations.value = evalRes.data || [];
+    }
+    if (dictRes.success) {
+      focusTypeDict.value = dictRes.data || [];
     }
   } catch (error) {
     console.error('获取面试详情失败:', error);

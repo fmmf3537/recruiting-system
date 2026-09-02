@@ -82,6 +82,36 @@
         <el-form-item label="候选人">
           <span>{{ currentInterview?.candidate?.name }}</span>
         </el-form-item>
+        <!-- F3-C 大纲对照：按需拉取最新版，失败/403 静默隐藏 -->
+        <el-form-item v-if="latestOutline" label="大纲对照">
+          <div class="outline-preview">
+            <div
+              v-for="(sec, sIdx) in latestOutline.outline?.sections || []"
+              :key="`p-s-${sIdx}`"
+              class="outline-section"
+            >
+              <div class="section-theme">{{ sIdx + 1 }}. {{ sec.theme }}</div>
+              <div
+                v-for="(q, qIdx) in sec.questions"
+                :key="`p-q-${sIdx}-${qIdx}`"
+                class="outline-question"
+              >
+                <div class="question-line">
+                  <span class="question-label">Q{{ qIdx + 1 }}</span>
+                  <span class="question-text">{{ q.question }}</span>
+                </div>
+                <el-collapse class="answer-collapse">
+                  <el-collapse-item title="展开参考答案" name="ans">
+                    <div class="reference-answer">{{ q.referenceAnswer || '—' }}</div>
+                  </el-collapse-item>
+                </el-collapse>
+              </div>
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item v-else-if="outlineLoaded" label="大纲对照">
+          <span class="outline-empty">暂无大纲</span>
+        </el-form-item>
         <el-form-item label="维度评分">
           <div v-for="dim in evalForm.dimensions" :key="dim.name" class="dimension-row">
             <span class="dimension-name">{{ dim.name }}：</span>
@@ -118,6 +148,10 @@ import { ref, reactive, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { TableSkeleton } from '@/components/Skeleton';
 import request from '@/utils/request';
+import {
+  getQuestionOutlines,
+  type QuestionOutlineVersion,
+} from '@/api/interview';
 
 interface EvalDimension {
   name: string;
@@ -169,6 +203,10 @@ const evalForm = reactive({
   conclusion: 'pending',
 });
 
+// F3-C 大纲对照：按需拉取最新版
+const latestOutline = ref<QuestionOutlineVersion | null>(null);
+const outlineLoaded = ref(false);
+
 function formatDateTime(value: string): string {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString();
@@ -215,6 +253,24 @@ async function loadHistory() {
   }
 }
 
+async function loadLatestOutline(interviewId: string) {
+  latestOutline.value = null;
+  outlineLoaded.value = false;
+  try {
+    const res = await getQuestionOutlines(interviewId);
+    if (res.success) {
+      const list = (res.data || []) as QuestionOutlineVersion[];
+      // 后端已按 version 降序，取第一项为最新版
+      latestOutline.value = list[0] || null;
+    }
+  } catch {
+    // 静默：失败/403 不弹错误提示
+    latestOutline.value = null;
+  } finally {
+    outlineLoaded.value = true;
+  }
+}
+
 function openEvaluationDialog(interview: InterviewerInterview, isReadonly = false) {
   currentInterview.value = interview;
   readonly.value = isReadonly;
@@ -233,6 +289,8 @@ function openEvaluationDialog(interview: InterviewerInterview, isReadonly = fals
     evalForm.conclusion = 'pending';
   }
   evalDialogVisible.value = true;
+  // F3-C 按需拉取大纲最新版，失败/403 静默隐藏面板
+  loadLatestOutline(interview.id);
 }
 
 async function submitEvaluation() {
@@ -292,5 +350,78 @@ onMounted(async () => {
 
 .dimension-comment {
   margin-top: 4px;
+}
+
+/* F3-C 大纲对照只读面板样式 */
+.outline-preview {
+  width: 100%;
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fafafa;
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+
+.outline-section {
+  margin-bottom: 10px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.section-theme {
+  font-weight: 500;
+  color: #303133;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.outline-question {
+  background: #fff;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.question-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.question-label {
+  color: #409eff;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.question-text {
+  color: #303133;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.answer-collapse :deep(.el-collapse-item__header) {
+  font-size: 12px;
+  color: #409eff;
+  padding-left: 0;
+}
+
+.reference-answer {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.outline-empty {
+  color: #909399;
+  font-size: 13px;
 }
 </style>

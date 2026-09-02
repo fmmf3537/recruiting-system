@@ -15,6 +15,7 @@ export interface InterviewParams {
   duration?: number;
   location?: string;
   notes?: string;
+  focusType?: string;
 }
 
 export interface InterviewItem {
@@ -33,6 +34,43 @@ export interface InterviewItem {
   jobTitle: string | null;
   createdById: string;
   createdByName: string | null;
+  createdAt: string;
+  // F3-C 考察方向（字典 code：hr/tech/comprehensive/manager/cross）
+  focusType?: string | null;
+}
+
+// ============ 面试问题大纲（F3-C） ============
+
+/** 大纲中单道面试题 */
+export interface OutlineQuestion {
+  question: string;
+  intent: string;
+  referenceAnswer: string;
+  followUp?: string;
+}
+
+/** 大纲的一个主题分组 */
+export interface OutlineSection {
+  theme: string;
+  questions: OutlineQuestion[];
+}
+
+/** 完整大纲结构 */
+export interface QuestionOutline {
+  sections: OutlineSection[];
+  durationAdvice?: string;
+}
+
+/** 大纲版本记录（与后端 InterviewQuestionOutline 对应） */
+export interface QuestionOutlineVersion {
+  id: string;
+  interviewId: string;
+  version: number;
+  focusType: string;
+  outline: QuestionOutline;
+  adjustNote: string | null;
+  editedById: string | null;
+  createdById: string;
   createdAt: string;
 }
 
@@ -97,4 +135,38 @@ export function getInterviewerConflicts(interviewerId: string, startDate: string
   return request.get('/interviews/conflicts', {
     params: { interviewerId, startDate, endDate },
   });
+}
+
+// ============ F3-C 面试问题大纲接口 ============
+
+/** 生成/再生成面试大纲（同步调用，LLM 耗时可能较长，调用方需 loading 锁） */
+export function generateQuestionOutline(
+  interviewId: string,
+  data: { focusType: string; adjustNote?: string }
+): Promise<{ success: boolean; data: QuestionOutlineVersion }> {
+  return request.post(
+    `/interviews/${interviewId}/question-outline`,
+    data
+  ) as Promise<{ success: boolean; data: QuestionOutlineVersion }>;
+}
+
+/** 获取某场面试的大纲版本列表（返回 version 降序） */
+export function getQuestionOutlines(
+  interviewId: string
+): Promise<{ success: boolean; data: QuestionOutlineVersion[] }> {
+  return request.get(
+    `/interviews/${interviewId}/question-outlines`
+  ) as Promise<{ success: boolean; data: QuestionOutlineVersion[] }>;
+}
+
+/** 手动微调定稿（不调 LLM，仅保存当前 outline） */
+export function finalizeQuestionOutline(
+  interviewId: string,
+  version: number,
+  outline: QuestionOutline
+): Promise<{ success: boolean; data: QuestionOutlineVersion }> {
+  return request.patch(
+    `/interviews/${interviewId}/question-outline/${version}`,
+    { outline }
+  ) as Promise<{ success: boolean; data: QuestionOutlineVersion }>;
 }

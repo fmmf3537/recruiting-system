@@ -286,6 +286,22 @@
             <el-option label="现场" value="现场" />
           </el-select>
         </el-form-item>
+        <!-- F3-C 考察方向（字典 interview_focus_type，value=code, label=name） -->
+        <el-form-item label="考察方向" prop="focusType">
+          <el-select
+            v-model="scheduleForm.focusType"
+            placeholder="选择考察方向（可选）"
+            clearable
+            style="width: 100%"
+          >
+            <el-option
+              v-for="opt in focusTypeOptions"
+              :key="opt.code"
+              :label="opt.name"
+              :value="opt.code"
+            />
+          </el-select>
+        </el-form-item>
         <el-form-item label="面试官" prop="interviewers">
           <el-select
             v-model="scheduleForm.interviewerIds"
@@ -343,6 +359,7 @@ import {
 import { getCandidateList } from '@/api/candidate';
 import { getUserList } from '@/api/user';
 import { getJobList } from '@/api/job';
+import { getDictionaries, type DictionaryItem } from '@/api/dictionary';
 
 const router = useRouter();
 
@@ -406,7 +423,12 @@ const scheduleForm = reactive({
   duration: 60,
   location: '',
   notes: '',
+  // F3-C 考察方向（字典 code，留空表示未设置）
+  focusType: '' as string,
 });
+
+// F3-C 考察方向字典（缓存到组件级，避免每次打开弹窗都请求）
+const focusTypeOptions = ref<DictionaryItem[]>([]);
 
 const scheduleRules: FormRules = {
   candidateId: [{ required: true, message: '请选择候选人', trigger: 'change' }],
@@ -524,6 +546,16 @@ function handleSizeChange(size: number) {
   fetchInterviews();
 }
 
+async function loadFocusTypeDict() {
+  if (focusTypeOptions.value.length) return;
+  try {
+    const res = await getDictionaries({ category: 'interview_focus_type' });
+    if (res.success) {
+      focusTypeOptions.value = (res.data || []).filter((d: DictionaryItem) => d.enabled);
+    }
+  } catch { /* ignore */ }
+}
+
 function handleSchedule() {
   scheduleEditId.value = null;
   scheduleForm.candidateId = '';
@@ -535,9 +567,12 @@ function handleSchedule() {
   scheduleForm.duration = 60;
   scheduleForm.location = '';
   scheduleForm.notes = '';
+  scheduleForm.focusType = '';
   scheduleDialogVisible.value = true;
   loadUsers();
   loadJobs();
+  // F3-C 加载考察方向字典（首次为空时拉一次，之后命中缓存）
+  loadFocusTypeDict();
 }
 
 async function handleScheduleSubmit() {
@@ -559,6 +594,8 @@ async function handleScheduleSubmit() {
       duration: scheduleForm.duration,
       location: scheduleForm.location || undefined,
       notes: scheduleForm.notes || undefined,
+      // F3-C 考察方向：空字符串视为未设置
+      focusType: scheduleForm.focusType || undefined,
     };
 
     if (scheduleEditId.value) {
