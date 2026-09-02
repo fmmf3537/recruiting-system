@@ -3,13 +3,14 @@ import { InterviewStatus } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
-import * as notificationService from './notification.service';
 import { interviewEvaluationService } from './interview-evaluation.service';
 import {
   assertCandidateVisible,
   buildCandidateVisibilityWhere,
   type CandidateVisibilityScope,
 } from './candidate-visibility.service';
+import { assertFocusTypeValid } from './interview-outline.service';
+import * as notificationService from './notification.service';
 
 // 面试列表查询参数
 export interface InterviewListQuery {
@@ -33,6 +34,8 @@ export interface CreateInterviewInput {
   duration?: number;
   location?: string;
   notes?: string;
+  // F3-S：考察方向（字典 interview_focus_type）；可选，service 层校验字典有效性
+  focusType?: string;
 }
 
 // 更新面试参数
@@ -45,6 +48,8 @@ export interface UpdateInterviewInput {
   location?: string;
   notes?: string;
   status?: string;
+  // F3-S：考察方向（字典 interview_focus_type）；可选，service 层校验字典有效性
+  focusType?: string;
 }
 
 // 面试列表返回类型
@@ -99,6 +104,9 @@ export class InterviewSchedulerService {
 
     // 数据可见性校验：member 只能为可见范围内的候选人安排面试
     await assertCandidateVisible(data.candidateId, scope);
+
+    // F3-S：考察方向字典校验（可选；不提供则放行）
+    await assertFocusTypeValid(data.focusType);
 
     // 验证职位（如果指定）
     if (data.jobId) {
@@ -166,6 +174,8 @@ export class InterviewSchedulerService {
         duration,
         location: data.location || null,
         notes: data.notes || null,
+        // F3-S：考察方向（已校验通过）；不提供则落 null（兼容存量面试）
+        focusType: data.focusType ?? null,
         status: InterviewStatus.scheduled,
         createdById,
       },
@@ -349,6 +359,11 @@ export class InterviewSchedulerService {
     if (data.duration !== undefined) updateData.duration = data.duration;
     if (data.location !== undefined) updateData.location = data.location;
     if (data.notes !== undefined) updateData.notes = data.notes;
+    // F3-S：focusType 字典有效性校验 + 透传（显式 null 也允许，便于清除）
+    if (data.focusType !== undefined) {
+      await assertFocusTypeValid(data.focusType);
+      updateData.focusType = data.focusType;
+    }
 
     const interview = await prisma.interview.update({
       where: { id },

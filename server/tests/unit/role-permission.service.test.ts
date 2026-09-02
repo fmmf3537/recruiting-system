@@ -40,11 +40,12 @@ describe('role-permission 矩阵', () => {
 
   it('interviewer 角色只含 interview + evaluation 权限', () => {
     const perms = getRolePermissions('interviewer');
-    expect(perms).toHaveLength(5);
+    expect(perms).toHaveLength(6);
     expect(perms.every((p) => (
       p.startsWith('interview:')
       || p.startsWith('evaluation:')
       || p === 'candidate:read:limited'
+      || p === 'ai:interview-outline'
     ))).toBe(true);
   });
 

@@ -367,6 +367,8 @@ model Interview {
   duration      Int       @default(60) // 面试时长（分钟）
   location      String?   // 面试地点或会议链接
   notes         String?   @db.Text // 面试备注/准备事项
+  // 考察方向：字典 interview_focus_type，可空兼容存量（F3-S 一键生成面试问题大纲用）
+  focusType     String?
   status        InterviewStatus @default(scheduled) // scheduled, completed, cancelled, no_show
 
   createdById   String
@@ -382,11 +384,33 @@ model Interview {
   @@index([createdById])
   // 关系：一个 Interview 有多条面试官评估
   evaluations   InterviewEvaluation[]
+  // 关系：一个 Interview 有多个版本化的面试问题大纲（F3-S）
+  questionOutlines InterviewQuestionOutline[]
 
   @@index([scheduledAt, status])
   // 冲突检测：status 等值 + scheduledAt 范围，等值列在前才能进 Index Cond
   @@index([status, scheduledAt])
   @@map("interview")
+}
+
+// ==================== 面试问题大纲表（结构化大纲版本化，F3-S）====================
+// 一键生成的面试问题大纲按版本（interviewId + version）落库，每场面试上限 10 版；
+// 每版 focusType 快照（不随面试记录变更）；支持整体再生成（adjustNote）与手动微调定稿（editedById）。
+model InterviewQuestionOutline {
+  id          String   @id @default(cuid())
+  interviewId String
+  interview   Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  version     Int     // 从 1 开始；版本数上限 10
+  focusType   String  // 本版大纲使用的考察方向（快照，不随面试记录变更）
+  outline     Json    // { sections: [{ theme, questions: [{ question, intent, referenceAnswer, followUp? }] }], durationAdvice? }
+  adjustNote  String? // 本版本的调整指令（v1 为 null）
+  editedById  String? // 手动微调人（PATCH 定稿时记录）
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@unique([interviewId, version])
+  @@index([interviewId])
+  @@map("interview_question_outline")
 }
 
 // ==================== 面试评估表（结构化评估，面试官本人填写） ====================

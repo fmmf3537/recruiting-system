@@ -2,7 +2,9 @@ import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { interviewController } from '../controllers/interview.controller';
 import { interviewEvaluationController } from '../controllers/interview-evaluation.controller';
+import { interviewOutlineController } from '../controllers/interview-outline.controller';
 import { authenticate } from '../middleware/auth';
+import { requireMatrixPermission } from '../middleware/role';
 import { validate, validateAll } from '../middleware/validate';
 import { INTERVIEW_TYPES, INTERVIEW_STATUS, INTERVIEW_ROUNDS } from '../constants';
 
@@ -32,6 +34,8 @@ const createInterviewSchema = z.object({
   duration: z.number().int().min(15).max(480).optional().default(60),
   location: z.string().max(200).optional(),
   notes: z.string().max(5000).optional(),
+  // F3-S：考察方向，字典 interview_focus_type；zod 仅做格式约束（zod 无法异步查字典）
+  focusType: z.string().max(50).optional(),
 });
 
 // 更新面试验证 Schema
@@ -55,11 +59,29 @@ const updateInterviewSchema = z.object({
   duration: z.number().int().min(15).max(480).optional(),
   location: z.string().max(200).optional(),
   notes: z.string().max(5000).optional(),
+  // F3-S：考察方向，字典有效性由 service 层校验（zod 仅做格式约束）
+  focusType: z.string().max(50).optional(),
 });
 
 // 面试ID参数验证
 const interviewIdSchema = z.object({
   id: z.string().max(50).cuid('无效的面试ID'),
+});
+
+// F3-S：生成/再生成大纲 body
+const generateOutlineBodySchema = z.object({
+  focusType: z.string().min(1, 'focusType 不能为空').max(50),
+  adjustNote: z.string().max(1000, 'adjustNote 最多 1000 字').optional(),
+});
+
+// F3-S：手动定稿 params + body
+const finalizeOutlineParamsSchema = z.object({
+  id: z.string().max(50).cuid('无效的面试ID'),
+  version: z.coerce.number().int().min(1, 'version 必须为正整数'),
+});
+const finalizeOutlineBodySchema = z.object({
+  // outline 服务端会按 §4.1 规则做结构校验；zod 只挡非对象
+  outline: z.record(z.unknown()),
 });
 
 // 列表查询验证
@@ -109,6 +131,49 @@ router.get(
   '/conflicts',
   authenticate,
   interviewController.getInterviewerConflicts
+);
+
+/**
+ * POST /api/interviews/:id/question-outline
+ * F3-S：生成/再生成面试问题大纲（同步返回新版本）
+ * 权限：登录用户 + ai:interview-outline（service 层做精细校验：admin 直通 / hr 候选人可见 / hm&interviewer 必须是该场面试官）
+ */
+router.post(
+  '/:id/question-outline',
+  authenticate,
+  requireMatrixPermission('ai:interview-outline'),
+  validateAll({
+    params: interviewIdSchema,
+    body: generateOutlineBodySchema,
+  }),
+  interviewOutlineController.generate
+);
+
+/**
+ * GET /api/interviews/:id/question-outlines
+ * F3-S：版本列表（version 降序）
+ */
+router.get(
+  '/:id/question-outlines',
+  authenticate,
+  requireMatrixPermission('ai:interview-outline'),
+  validate(interviewIdSchema, 'params'),
+  interviewOutlineController.list
+);
+
+/**
+ * PATCH /api/interviews/:id/question-outline/:version
+ * F3-S：手动微调定稿（不调 LLM）
+ */
+router.patch(
+  '/:id/question-outline/:version',
+  authenticate,
+  requireMatrixPermission('ai:interview-outline'),
+  validateAll({
+    params: finalizeOutlineParamsSchema,
+    body: finalizeOutlineBodySchema,
+  }),
+  interviewOutlineController.finalize
 );
 
 /**

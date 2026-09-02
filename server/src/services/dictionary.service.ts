@@ -86,6 +86,15 @@ const DEFAULT_DICTIONARIES: Record<
     { code: 'stability', name: '职业稳定性', sortOrder: 4, description: '10' },
     { code: 'bonus', name: '加分项（证书/行业背景）', sortOrder: 5, description: '10' },
   ],
+  // F3-S：面试考察方向（仅配置名称 + 启停用；出题侧重不放 description，
+  // 统一在 interview-outline.service.ts 的 FOCUS_TYPE_GUIDANCE 常量里维护）
+  interview_focus_type: [
+    { code: 'hr', name: 'HR面', sortOrder: 1 },
+    { code: 'tech', name: '技术面', sortOrder: 2 },
+    { code: 'comprehensive', name: '综合面', sortOrder: 3 },
+    { code: 'manager', name: '主管面', sortOrder: 4 },
+    { code: 'cross', name: '交叉面', sortOrder: 5 },
+  ],
 };
 
 export interface DictionaryItem {

@@ -18,6 +18,8 @@ const HR_PERMISSIONS = [
   'ai:match-score',
   // F1-S：JD 完善 / 草稿生成（PRD §4.4；interviewer 不给）
   'ai:jd-assist',
+  // F3-S：面试问题一键生成（PRD §5.5；hr 可操作，service 层做候选人可见性精细校验）
+  'ai:interview-outline',
 ] as const;
 
 const HIRING_MANAGER_PERMISSIONS = [
@@ -33,12 +35,16 @@ const HIRING_MANAGER_PERMISSIONS = [
   'ai:match-score',
   // F1-S：用人部门可触发 JD 完善 / 草稿生成（PRD §4.4）
   'ai:jd-assist',
+  // F3-S：用人部门作为面试官参场可生成大纲（service 层要求必须是该场面试官）
+  'ai:interview-outline',
 ] as const;
 
 const INTERVIEWER_PERMISSIONS = [
   'candidate:read:limited',
   'interview:read:limited',
   'evaluation:read', 'evaluation:create', 'evaluation:update',
+  // F3-S：面试官本人作为该场面试官可生成大纲（service 层要求必须是该场面试官）
+  'ai:interview-outline',
 ] as const;
 
 /** P-5 之前 JWT / DB 仍为 member，权限矩阵按 hr 处理 */
