@@ -21,6 +21,7 @@
         <el-radio-button label="job_type">招聘类型</el-radio-button>
         <el-radio-button label="skills">技能要求</el-radio-button>
         <el-radio-button label="evaluation_dimension">评估维度</el-radio-button>
+        <el-radio-button label="matching_dimension">匹配维度</el-radio-button>
       </el-radio-group>
     </el-card>
 
@@ -114,7 +115,8 @@ type CategoryKey =
   | 'source'
   | 'job_type'
   | 'skills'
-  | 'evaluation_dimension';
+  | 'evaluation_dimension'
+  | 'matching_dimension';
 const currentCategory = ref<CategoryKey>('department');
 
 const CATEGORY_LABELS: Record<CategoryKey, string> = {
@@ -125,6 +127,7 @@ const CATEGORY_LABELS: Record<CategoryKey, string> = {
   job_type: '招聘类型',
   skills: '技能要求',
   evaluation_dimension: '评估维度',
+  matching_dimension: '匹配维度',
 };
 
 const categoryText = computed(() => {

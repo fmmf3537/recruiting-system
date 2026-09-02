@@ -134,6 +134,9 @@
             <p>{{ candidate.intro }}</p>
           </div>
         </el-card>
+
+        <!-- AI 匹配分卡片（F2-C） -->
+        <MatchScoreCard :candidate-id="candidate.id" :candidate-jobs="candidate.jobs" />
       </div>
 
       <!-- 中间：流程记录 -->
@@ -546,6 +549,7 @@ import { getCandidateCommunications, createCommunication, type CommunicationItem
 import { useAuthStore } from '@/stores/auth';
 import { resolveFileUrl } from '@/utils/file';
 import { useResumeParserStore } from '@/stores/resumeParser';
+import MatchScoreCard from '@/components/candidates/MatchScoreCard.vue';
 import ResumeUpload from './ResumeUpload.vue';
 
 const route = useRoute();

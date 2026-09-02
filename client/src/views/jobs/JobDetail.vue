@@ -229,6 +229,19 @@
           </template>
         </el-table-column>
 
+        <el-table-column label="匹配分" width="150" align="center" sortable :sort-method="sortByMatchScore">
+          <template #default="{ row }">
+            <template v-if="scoreByCandidateId.get(row.id)">
+              <span class="match-score-num">{{ scoreByCandidateId.get(row.id)!.overallScore }}</span>
+              <el-tag :type="getMatchGradeType(scoreByCandidateId.get(row.id)!.grade)" size="small">
+                {{ getMatchGradeText(scoreByCandidateId.get(row.id)!.grade) }}
+              </el-tag>
+              <el-tag v-if="scoreByCandidateId.get(row.id)!.stale" type="info" size="small">过期</el-tag>
+            </template>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="createdAt" label="投递时间" width="160">
           <template #default="{ row }">
             {{ formatDate(row.createdAt) }}
@@ -274,6 +287,7 @@ import {
 import { getCandidateList, type CandidateItem } from '@/api/candidate';
 import type { Tag } from '@/api/tag';
 import { getRecommendations, type MatchResult } from '@/api/ai-matcher';
+import { getJobMatchScores, type JobMatchScore } from '@/api/match-score';
 import { sanitizeHtml } from '@/utils/sanitize';
 
 const route = useRoute();
@@ -308,6 +322,54 @@ const matchColor = [
   { color: '#e6a23c', percentage: 70 },
   { color: '#67c23a', percentage: 100 },
 ];
+
+// 候选人匹配分：candidateId → 分数对象
+const scoreByCandidateId = ref<Map<string, JobMatchScore>>(new Map());
+
+async function loadMatchScores() {
+  try {
+    const res = await getJobMatchScores(jobId);
+    if (res.success) {
+      const m = new Map<string, JobMatchScore>();
+      (res.data || []).forEach((s) => m.set(s.candidateId, s));
+      scoreByCandidateId.value = m;
+    }
+  } catch {
+    // 静默失败：表格仍可正常展示，仅匹配分列显示 '-'
+    scoreByCandidateId.value = new Map();
+  }
+}
+
+// 表格按分数排序：无分排最后
+function sortByMatchScore(a: CandidateItem, b: CandidateItem): number {
+  const sa = scoreByCandidateId.value.get(a.id)?.overallScore;
+  const sb = scoreByCandidateId.value.get(b.id)?.overallScore;
+  if (sa === undefined && sb === undefined) return 0;
+  if (sa === undefined) return 1;
+  if (sb === undefined) return -1;
+  return sb - sa;
+}
+
+function getMatchGradeType(grade: string): string {
+  return (
+    {
+      strong_recommend: 'success',
+      recommend: 'primary',
+      consider: 'warning',
+      not_recommend: 'danger',
+    } as Record<string, string>
+  )[grade] || 'info';
+}
+function getMatchGradeText(grade: string): string {
+  return (
+    {
+      strong_recommend: '强烈推荐',
+      recommend: '推荐',
+      consider: '待定',
+      not_recommend: '不推荐',
+    } as Record<string, string>
+  )[grade] || grade;
+}
 
 async function fetchAiRecommendations() {
   aiMatchLoading.value = true;
@@ -386,6 +448,8 @@ async function fetchCandidates() {
   } finally {
     candidatesLoading.value = false;
   }
+  // 并行触发匹配分加载（fire-and-forget，失败静默）
+  loadMatchScores();
 }
 
 // 格式化日期
@@ -715,6 +779,12 @@ onActivated(init);
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .match-score-num {
+    font-weight: 600;
+    color: #409eff;
+    margin-right: 6px;
   }
 }
 </style>
