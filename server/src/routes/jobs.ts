@@ -1,13 +1,29 @@
 import { Router, type Router as RouterType } from 'express';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { JOB_STATUS } from '../constants';
 import { jobController } from '../controllers/job.controller';
+import { jdAssistController } from '../controllers/jd-assist.controller';
 import { matchScoreController } from '../controllers/match-score.controller';
 import { tagController } from '../controllers/tag.controller';
 import { authenticate, authorize } from '../middleware/auth';
+import { requireMatrixPermission } from '../middleware/role';
 import { validate } from '../middleware/validate';
 
 const router: RouterType = Router();
+
+// F1-S：JD 完善 / 草稿生成接口限流（两接口独立计数）
+const aiJdAssistLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'AI 辅助生成调用过于频繁，请稍后再试',
+    code: 429,
+  },
+});
 
 // ============ 验证 Schema 定义 ============
 
@@ -60,6 +76,56 @@ const listJobsQuerySchema = z.object({
 });
 
 // ============ 路由定义 ============
+
+// F1-S：JD 完善与辅助生成（不落库，输出由前端写入职位表单）
+const aiPolishSchema = z.object({
+  jdText: z.string().min(10, 'JD 内容至少 10 个字符').max(20000, 'JD 内容最多 20000 字'),
+  meta: z
+    .object({
+      title: z.string().max(200).optional(),
+      level: z.string().max(50).optional(),
+      departments: z.array(z.string().max(50)).max(10).optional(),
+      type: z.string().max(20).optional(),
+    })
+    .partial()
+    .optional(),
+});
+
+const aiDraftSchema = z.object({
+  title: z.string().min(2, '职位名称至少 2 个字符').max(100),
+  departments: z.array(z.string().max(50)).min(1, '至少选择一个部门').max(10),
+  level: z.string().max(50),
+  type: z.string().max(20),
+  freeText: z.string().max(2000).optional(),
+});
+
+/**
+ * POST /api/jobs/ai-polish
+ * JD 诊断 + 优化稿生成
+ * 权限：登录用户 + ai:jd-assist（admin / hr / hiring_manager；interviewer 403）
+ */
+router.post(
+  '/ai-polish',
+  authenticate,
+  aiJdAssistLimiter,
+  requireMatrixPermission('ai:jd-assist'),
+  validate(aiPolishSchema),
+  jdAssistController.polish
+);
+
+/**
+ * POST /api/jobs/ai-draft
+ * JD 草稿从零生成
+ * 权限：登录用户 + ai:jd-assist
+ */
+router.post(
+  '/ai-draft',
+  authenticate,
+  aiJdAssistLimiter,
+  requireMatrixPermission('ai:jd-assist'),
+  validate(aiDraftSchema),
+  jdAssistController.draft
+);
 
 /**
  * POST /api/jobs
