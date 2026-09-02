@@ -1,10 +1,12 @@
 import type { Offer, Prisma } from '@prisma/client';
 import { OfferResult, OfferStatus, StageStatus } from '@prisma/client';
+import { RULE_CODE } from '../constants/hr-score-rules';
 import { offerApprovalTotal } from '../lib/metrics';
 import prisma from '../lib/prisma';
 import { clearStatsCache, getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
 import { autoSendEmailOnStageTransition } from './email-auto-sender.service';
+import { emitScoreEvent } from './hr-score-event.service';
 import * as notificationService from './notification.service';
 import {
   assertCandidateVisible,
@@ -290,6 +292,21 @@ export class OfferService {
       data: updateData,
     });
 
+    // F4-S1 考核积分：Offer 被拒 -10，负分归属招聘负责人（候选人创建人）
+    if (data.result === OfferResult.rejected) {
+      try {
+        await emitScoreEvent({
+          ruleCode: RULE_CODE.offer_rejected,
+          userId: candidate.createdById,
+          targetType: 'Offer',
+          targetId: offer.id,
+          remark: 'Offer 被拒',
+        });
+      } catch {
+        // F4-S1 发射失败不阻塞主流程
+      }
+    }
+
     // 如果 result=accepted，自动推进候选人到"入职"阶段
     if (data.result === OfferResult.accepted) {
       // 检查是否已有入职阶段记录
@@ -315,6 +332,20 @@ export class OfferService {
 
         // 异步触发入职邮件
         void autoSendEmailOnStageTransition(candidateId, '入职', StageStatus.passed, 'system');
+      }
+
+      // F4-S1 考核积分：候选人入职 +50，统一归属候选人创建人
+      // （与 candidate.service.advanceStage 的入职事件靠唯一约束 P2002 去重，只记一次）
+      try {
+        await emitScoreEvent({
+          ruleCode: RULE_CODE.candidate_joined,
+          userId: candidate.createdById,
+          targetType: 'Candidate',
+          targetId: candidateId,
+          remark: 'Offer 接受后自动推进到入职',
+        });
+      } catch {
+        // F4-S1 发射失败不阻塞主流程
       }
     }
 
@@ -536,6 +567,19 @@ export class OfferService {
     });
 
     await this.logOperation(userId, offer.id, 'offer_sent', { candidateId });
+
+    // F4-S1 考核积分：发出 Offer +30，归属发送人（发射失败不影响 Offer 状态）
+    try {
+      await emitScoreEvent({
+        ruleCode: RULE_CODE.offer_sent,
+        userId,
+        targetType: 'Offer',
+        targetId: offer.id,
+        remark: 'Offer 已发送',
+      });
+    } catch {
+      // F4-S1 发射失败不阻塞主流程
+    }
 
     await clearListCache('offers:list:*');
     return offer;

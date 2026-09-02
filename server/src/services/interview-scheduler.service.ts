@@ -1,5 +1,6 @@
 import type { Interview, Prisma } from '@prisma/client';
 import { InterviewStatus } from '@prisma/client';
+import { RULE_CODE } from '../constants/hr-score-rules';
 import prisma from '../lib/prisma';
 import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { AppError } from '../middleware/errorHandler';
@@ -9,6 +10,7 @@ import {
   buildCandidateVisibilityWhere,
   type CandidateVisibilityScope,
 } from './candidate-visibility.service';
+import { emitScoreEvent } from './hr-score-event.service';
 import { assertFocusTypeValid } from './interview-outline.service';
 import * as notificationService from './notification.service';
 
@@ -429,6 +431,19 @@ export class InterviewSchedulerService {
       where: { id },
       data: { status: InterviewStatus.completed },
     });
+
+    // F4-S1 考核积分：完成一场面试 +10，归属安排面试的 HR（本方法无操作人入参）
+    try {
+      await emitScoreEvent({
+        ruleCode: RULE_CODE.interview_complete,
+        userId: existing.createdById,
+        targetType: 'Interview',
+        targetId: id,
+        remark: '面试完成',
+      });
+    } catch {
+      // F4-S1 发射失败不阻塞主流程
+    }
 
     await clearListCache('interviews:list:*');
     return interview;

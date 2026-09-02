@@ -2,6 +2,7 @@ import type { Candidate } from '@prisma/client';
 import { InterviewConclusion, OfferResult, Prisma, StageStatus, UserRole } from '@prisma/client';
 import { DEFAULT_STAGE, DEFAULT_STAGE_STATUS } from '../constants';
 import type { Stage } from '../constants';
+import { AGENCY_SOURCE_PREFIX, RULE_CODE } from '../constants/hr-score-rules';
 import { logger } from '../lib/logger';
 import { candidateStageAdvanceTotal } from '../lib/metrics';
 import prisma from '../lib/prisma';
@@ -15,6 +16,11 @@ import {
 } from './candidate-visibility.service';
 import { checkDuplicate, isPhoneUsed, isEmailUsed } from './duplicate-checker.service';
 import { autoSendEmailOnStageTransition } from './email-auto-sender.service';
+import {
+  emitFirstAdvance,
+  emitProbationOut,
+  emitScoreEvent,
+} from './hr-score-event.service';
 import * as notificationService from './notification.service';
 import { getCandidatePipelineStages } from './pipeline-template.service';
 
@@ -278,6 +284,22 @@ export class CandidateService {
     await clearStatsCache();
     await clearListCache('candidates:list:*');
     await clearListCache('candidates:activities');
+
+    // F4-S1 考核积分：非猎头渠道简历上传入库 +2（猎头渠道由「首次推进」发 agency_resume_process）
+    // 发射器内部已 fail-safe，此处再包一层，确保积分问题绝不阻塞候选人创建
+    if (!candidate.source.startsWith(AGENCY_SOURCE_PREFIX)) {
+      try {
+        await emitScoreEvent({
+          ruleCode: RULE_CODE.resume_upload,
+          userId: createdById,
+          targetType: 'Candidate',
+          targetId: candidate.id,
+          remark: '简历上传入库',
+        });
+      } catch {
+        // F4-S1 发射失败不阻塞主流程
+      }
+    }
 
     // 如果有重复，返回警告
     if (duplicates.length > 0) {
@@ -900,6 +922,11 @@ export class CandidateService {
           },
         });
         await clearListCache('candidates:activities');
+
+        // F4-S1 考核积分：同阶段把「入职」置为淘汰 = 试用期淘汰 -20（负分记给招聘负责人）
+        if (stage === '入职' && status === StageStatus.rejected) {
+          void emitProbationOut(id, candidate.createdById, '入职阶段淘汰').catch(() => {});
+        }
         return;
       }
 
@@ -929,7 +956,25 @@ export class CandidateService {
         },
       });
       await clearListCache('candidates:activities');
+
+      // F4-S1 考核积分：admin 同阶段把「入职」置为淘汰 = 试用期淘汰 -20
+      if (stage === '入职' && status === StageStatus.rejected) {
+        void emitProbationOut(id, candidate.createdById, '入职阶段淘汰').catch(() => {});
+      }
       return;
+    }
+
+    // F4-S1 考核积分：判定本次是否为「首次推进」（离开入库）。
+    // 注意 createCandidate 会写入一条「入库」初始记录，因此以「是否已存在非入库阶段记录」为准。
+    // 该查询放在事务外，并发场景由唯一约束兜底幂等。
+    let isFirstAdvance = false;
+    try {
+      const advancedCount = await prisma.stageRecord.count({
+        where: { candidateId: id, stage: { not: DEFAULT_STAGE } },
+      });
+      isFirstAdvance = advancedCount === 0;
+    } catch {
+      // 统计失败则不发首次推进积分，不影响推进主流程
     }
 
     // 创建阶段记录 + Offer 联动写入，包在事务中保证原子性
@@ -985,6 +1030,26 @@ export class CandidateService {
         }
       }
     });
+
+    // ========== F4-S1 考核积分（均在事务外发射，fire-and-forget，失败不阻塞推进）==========
+    // 1) 首次推进：猎头渠道 +3（agency_resume_process），其他渠道 +5（dept_recommend），归属推进人
+    if (isFirstAdvance) {
+      void emitFirstAdvance(candidate.source, operatedById, id).catch(() => {});
+    }
+    // 2) 入职 +50：统一归属候选人创建人，与 offer.service 自动推进路径靠唯一约束去重
+    if (stage === '入职') {
+      void emitScoreEvent({
+        ruleCode: RULE_CODE.candidate_joined,
+        userId: candidate.createdById,
+        targetType: 'Candidate',
+        targetId: id,
+        remark: '阶段推进到入职',
+      }).catch(() => {});
+    }
+    // 3) admin 从「入职」阶段回退 = 试用期淘汰 -20，负分归属招聘负责人
+    if (targetStageIndex < currentStageIndex && currentStage === '入职') {
+      void emitProbationOut(id, candidate.createdById, 'admin 回退入职阶段').catch(() => {});
+    }
 
     // 异步触发自动化邮件（发后即忘，失败不阻塞流程）
     void autoSendEmailOnStageTransition(id, stage, status, operatedById);

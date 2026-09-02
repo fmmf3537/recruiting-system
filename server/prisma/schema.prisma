@@ -107,6 +107,10 @@ model User {
   // RBAC：用户-角色绑定（表名 user_role；model 不能叫 UserRole，与 enum UserRole 冲突）
   userRoles UserRoleBinding[]
 
+  // F4-S1：一个 User 的考核积分事件 / 周期快照
+  hrScoreEvents    HrScoreEvent[]
+  hrScoreSnapshots HrScoreSnapshot[]
+
   @@index([email])
   @@index([role])
   @@index([createdAt])
@@ -867,4 +871,42 @@ model AgencyLink {
   @@index([disabledAt])
   @@index([expiresAt])
   @@map("agency_link")
+}
+
+// ==================== HR 考核积分事件表（F4-S1）====================
+// 业务动作发生时由 service 层发射一行事件；分值取自字典 hr_score_rule.description。
+// 唯一约束用于幂等去重（同一用户 + 规则 + 业务对象只记一次分）。
+model HrScoreEvent {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  ruleCode   String // 对应 hr_score_rule.code
+  category   String // business / process
+  points     Int
+  targetType String? // Candidate / Interview / Offer / StageRecord
+  targetId   String?
+  remark     String?
+  bizDate    DateTime @db.Date // 归属业务日期
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, ruleCode, targetType, targetId]) // 幂等防重（nullable target 列允许多行 NULL）
+  @@index([userId, bizDate])
+  @@map("hr_score_event")
+}
+
+// ==================== HR 考核积分周期快照表（F4-S1 建表，F4-S2 写入）====================
+model HrScoreSnapshot {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  periodType  String // day / week / month / quarter / year
+  periodStart DateTime @db.Date
+  businessPts Int
+  processPts  Int
+  totalScore  Float // 权重快照（F4-S2 写入）
+  rank        Int?
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, periodType, periodStart])
+  @@map("hr_score_snapshot")
 }
