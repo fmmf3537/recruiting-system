@@ -16,6 +16,7 @@ import { logger } from './lib/logger';
 import { redis } from './lib/redis';
 import { isSentryEnabled } from './lib/sentry';
 import './workers/resume-parser.worker';
+import './workers/ai-match-score.worker';
 
 const PORT = env.PORT;
 

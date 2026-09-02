@@ -5,6 +5,7 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { candidateController } from '../controllers/candidate.controller';
+import { matchScoreController } from '../controllers/match-score.controller';
 import { tagController } from '../controllers/tag.controller';
 import { interviewController } from '../controllers/interview.controller';
 import { communicationController } from '../controllers/communication.controller';
@@ -169,6 +170,11 @@ const batchSetTagsSchema = z.object({
   tagIds: z.array(z.string().max(50)).max(20, '最多设置20个标签'),
 });
 
+// F2-S：手动触发简历打分的 body 验证
+const triggerMatchScoreSchema = z.object({
+  jobId: z.string().min(1).max(50),
+});
+
 /**
  * GET /api/candidates
  * 候选人列表（支持分页和多条件筛选）
@@ -274,6 +280,32 @@ router.get(
   authenticate,
   validate(candidateIdParamSchema, 'params'),
   candidateController.getCandidateById
+);
+
+/**
+ * POST /api/candidates/:id/match-score
+ * 手动触发 AI 简历-JD 匹配打分（同步执行，前端 loading 等待完整结果）
+ * 权限：登录用户 + ai:match-score 权限（admin/hr/hiring_manager 可触发；interviewer 仅可查看）
+ */
+router.post(
+  '/:id/match-score',
+  authenticate,
+  requireMatrixPermission('ai:match-score'),
+  validate(candidateIdParamSchema, 'params'),
+  validate(triggerMatchScoreSchema),
+  matchScoreController.trigger
+);
+
+/**
+ * GET /api/candidates/:id/match-scores
+ * 查看该候选人的全部职位打分（按更新时间倒序）
+ * 权限：登录用户（按候选人可见性过滤）
+ */
+router.get(
+  '/:id/match-scores',
+  authenticate,
+  validate(candidateIdParamSchema, 'params'),
+  matchScoreController.listByCandidate
 );
 
 /**

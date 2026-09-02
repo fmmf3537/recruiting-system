@@ -14,6 +14,8 @@ const HR_PERMISSIONS = [
   'dictionary:read', 'dictionary:create', 'dictionary:update',
   'automation:read', 'automation:create', 'automation:update',
   'user:read', 'user:create', 'user:update', 'user:delete',
+  // F2-S：触发简历自动打分 + 查看打分列表
+  'ai:match-score',
 ] as const;
 
 const HIRING_MANAGER_PERMISSIONS = [
@@ -25,6 +27,8 @@ const HIRING_MANAGER_PERMISSIONS = [
   'stage:read',
   'hc_request:read', 'hc_request:create',
   'dictionary:read',
+  // F2-S：用人部门可看 / 触发自动打分（PRD §3.1）
+  'ai:match-score',
 ] as const;
 
 const INTERVIEWER_PERMISSIONS = [

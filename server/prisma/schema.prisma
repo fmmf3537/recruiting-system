@@ -145,6 +145,9 @@ model Job {
   // 关系：一个 Job 有多个面试安排
   interviews Interview[]
 
+  // 关系：一个 Job 下有多份候选人简历-JD 匹配打分（F2-S 简历自动打分）
+  aiMatchScores AiMatchScore[]
+
   @@index([title])
   @@index([status])
   @@index([type])
@@ -239,6 +242,9 @@ model Candidate {
 
   // 关系：一个 Candidate 有多个入职任务
   onboardingTasks OnboardingTask[]
+
+  // 关系：一个 Candidate 有多个 AI 简历-JD 匹配打分（F2-S 简历自动打分）
+  aiMatchScores AiMatchScore[]
 
   @@index([name])
   @@index([email])
@@ -528,6 +534,38 @@ model OnboardingTask {
   @@index([status])
   @@index([category])
   @@map("onboarding_task")
+}
+
+// ==================== AI 简历自动打分（F2-S）====================
+// PRD 阶段 5 §3：候选人关联职位后由 BullMQ 异步触发 AI 多维打分，
+// LLM 输出经服务端按字典权重重算校验后写入本表。
+model AiMatchScore {
+  id            String   @id @default(cuid())
+  candidateId   String
+  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobId         String
+  job           Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  // 服务端按字典权重重算的综合分（不直接信任 LLM 自报）；grade 据此按 GRADE_THRESHOLDS 得出
+  overallScore  Int
+  grade         String
+  summary       String?
+  dimensions    Json     // 维度评分 [{name, code, weight, score, comment?}]
+  risks         Json?    // LLM 输出的风险点列表
+  highlights    Json?    // LLM 输出的亮点列表
+  stale         Boolean  @default(false) // JD 变化后置 true，前端展示旧分时标注
+  model         String?
+  promptVersion String   @default("v1")
+  triggeredBy   String   // auto / manual
+  createdById   String?  // 手动触发人；auto 为 null
+  // 简历内容 hash 和 JD hash，用于同一份候选人简历 + 同 JD 不重复调 LLM（成本控制）
+  resumeHash    String?
+  jdHash        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([candidateId, jobId])
+  @@index([jobId, overallScore])
+  @@map("ai_match_score")
 }
 
 // ==================== 字典表（系统配置） ====================

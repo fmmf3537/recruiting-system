@@ -3,7 +3,11 @@ import { AppError } from '../middleware/errorHandler';
 import { pinyin } from 'pinyin-pro';
 
 // 默认字典数据：按 category 分组
-const DEFAULT_DICTIONARIES: Record<string, Array<{ code: string; name: string; sortOrder: number }>> = {
+// description 可选：matching_dimension 等需要在 description 存附加信息（权重等）的字典携带该字段
+const DEFAULT_DICTIONARIES: Record<
+  string,
+  Array<{ code: string; name: string; sortOrder: number; description?: string }>
+> = {
   department: [
     { code: 'tech', name: '技术部', sortOrder: 1 },
     { code: 'product', name: '产品部', sortOrder: 2 },
@@ -73,6 +77,15 @@ const DEFAULT_DICTIONARIES: Record<string, Array<{ code: string; name: string; s
     { code: 'culture_fit', name: '文化匹配', sortOrder: 4 },
     { code: 'motivation', name: '求职动机', sortOrder: 5 },
   ],
+  // 简历-JD 匹配打分维度（F2-S）：description 字段存权重数字字符串
+  // （Dictionary 表无 weight 列；权重约定存 description，解析失败/缺失按 0 处理并回退等权）
+  matching_dimension: [
+    { code: 'skill_match', name: '专业技能匹配', sortOrder: 1, description: '40' },
+    { code: 'experience_match', name: '工作经验与年限', sortOrder: 2, description: '25' },
+    { code: 'education_match', name: '学历与院校背景', sortOrder: 3, description: '15' },
+    { code: 'stability', name: '职业稳定性', sortOrder: 4, description: '10' },
+    { code: 'bonus', name: '加分项（证书/行业背景）', sortOrder: 5, description: '10' },
+  ],
 };
 
 export interface DictionaryItem {
@@ -117,9 +130,11 @@ export class DictionaryService {
         await prisma.dictionary.createMany({
           data: DEFAULT_DICTIONARIES[cat].map((item) => ({
             category: cat,
+            // 部分字典（如 matching_dimension）需要把权重等信息塞进 description
+            // 默认项不含 description 时按 null 落库，保留历史行为
             ...item,
             enabled: true,
-            description: null,
+            description: item.description ?? null,
           })),
         });
       }

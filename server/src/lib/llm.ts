@@ -37,7 +37,13 @@ interface LLMResponse {
   };
 }
 
-async function callLLM(prompt: string, systemPrompt?: string): Promise<LLMResponse> {
+async function callLLM(
+  prompt: string,
+  systemPrompt?: string,
+  // 调用目的标签，写入 Prometheus llmCallDuration.purpose 维度，便于按业务区分统计
+  // 兼容旧调用：未传时维持历史默认 'unknown'，避免误读旧指标
+  purpose: string = 'unknown'
+): Promise<LLMResponse> {
   const config = LLM_CONFIG[LLM_CONFIG.provider as keyof typeof LLM_CONFIG] as {
     apiKey: string;
     baseUrl: string;
@@ -54,7 +60,7 @@ async function callLLM(prompt: string, systemPrompt?: string): Promise<LLMRespon
   }
   messages.push({ role: 'user', content: prompt });
 
-  const end = llmCallDuration.startTimer({ provider: LLM_CONFIG.provider, purpose: 'unknown' });
+  const end = llmCallDuration.startTimer({ provider: LLM_CONFIG.provider, purpose });
   try {
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',

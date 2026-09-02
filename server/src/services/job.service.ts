@@ -325,6 +325,28 @@ export class JobService {
       throw new AppError('已关闭的职位不能编辑', 400);
     }
 
+    // F2-S：跟踪 JD（description/requirements）是否实际变化，变化后置旧打分为 stale
+    let descriptionChanged = false;
+    let requirementsChanged = false;
+
+    // 拉取旧值用于对比实际变化（数据为 undefined 表示未修改字段，不视为变化）
+    const existingForCompare = data.description !== undefined || data.requirements !== undefined
+      ? await prisma.job.findUnique({
+          where: { id },
+          select: { description: true, requirements: true },
+        })
+      : null;
+    if (existingForCompare) {
+      if (data.description !== undefined) {
+        const sanitized = sanitizeHtml(data.description);
+        descriptionChanged = sanitized !== existingForCompare.description;
+      }
+      if (data.requirements !== undefined) {
+        const sanitized = sanitizeHtml(data.requirements);
+        requirementsChanged = sanitized !== existingForCompare.requirements;
+      }
+    }
+
     const updateData: Prisma.JobUpdateInput = {};
 
     if (data.title !== undefined) updateData.title = data.title;
@@ -373,6 +395,21 @@ export class JobService {
           data: data.tagIds.map((tagId) => ({ jobId: id, tagId })),
           skipDuplicates: true,
         });
+      }
+    }
+
+    // F2-S：JD 内容实际变化后，将该职位下全部历史打分置 stale（前端列表展示旧分时需标注）
+    // 仅在 description 或 requirements 实际改字（非仅 sanitizeHtml 规范化）时触发
+    if (descriptionChanged || requirementsChanged) {
+      try {
+        await prisma.aiMatchScore.updateMany({
+          where: { jobId: id },
+          data: { stale: true },
+        });
+      } catch (e) {
+        // 不阻塞更新主流程：日志记录即可
+        // eslint-disable-next-line no-console
+        console.error('[F2-S] 标记 stale 失败', e);
       }
     }
 

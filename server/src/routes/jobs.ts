@@ -2,6 +2,7 @@ import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { JOB_STATUS } from '../constants';
 import { jobController } from '../controllers/job.controller';
+import { matchScoreController } from '../controllers/match-score.controller';
 import { tagController } from '../controllers/tag.controller';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
@@ -94,6 +95,18 @@ router.get(
   authenticate,
   validate(jobIdParamSchema, 'params'),
   jobController.getJobById
+);
+
+/**
+ * GET /api/jobs/:id/match-scores
+ * 职位下候选人简历-JD 匹配打分列表（按综合分降序）
+ * 权限：登录用户（按职位部门可见性过滤：admin 全量；member 仅本部门职位）
+ */
+router.get(
+  '/:id/match-scores',
+  authenticate,
+  validate(jobIdParamSchema, 'params'),
+  matchScoreController.listByJob
 );
 
 /**

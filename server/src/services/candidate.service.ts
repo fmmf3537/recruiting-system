@@ -212,6 +212,21 @@ export class CandidateService {
           jobId,
         })),
       });
+
+      // F2-S：关联职位后异步触发 AI 简历-JD 匹配打分（fire-and-forget）
+      // 失败仅记日志，绝不阻塞候选人创建；打分是增强功能，不能影响主流程
+      try {
+        const { aiMatchScoreQueue } = await import('../lib/queue');
+        for (const jobId of data.jobIds) {
+          await aiMatchScoreQueue.add('score', {
+            candidateId: candidate.id,
+            jobId,
+            userId: createdById,
+          });
+        }
+      } catch (e) {
+        logger.error({ err: e, candidateId: candidate.id }, '[F2-S] 投递 AI 打分任务失败');
+      }
     }
 
     // 如果有标签，创建标签关联

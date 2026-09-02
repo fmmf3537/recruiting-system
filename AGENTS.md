@@ -467,6 +467,7 @@ Nginx (:80)
 
 - runner：`scripts/{oc,codex,dsh}-run.ps1`（后台执行）+ 对应 `-exec.cmd`；日志在 `logs/<工具>/`（已 gitignore）。
 - 切片提示词放 `docs/cursor-prompts/<切片ID>.md`，先提交提示词再启动执行器；执行 agent 不跑验收、不 commit，验收由审核方亲手重跑。
+- 阶段 5 切片进度（PRD 见根目录 PRD_阶段5 文档）：S0 工具链 ✅ / F2-S 简历打分服务端 ✅（迁移 `20260901000000_add_ai_match_score` 已生成待人工 apply）/ F2-C 前端 ⬜ / F1-S ⬜ / F1-C ⬜ / F3-S ⬜ / F3-C ⬜ / F5-S ⬜ / F5-C ⬜ / F4-S1 ⬜ / F4-S2 ⬜ / F4-C ⬜ / M6 ⬜
 - **验收基线（S0 后实测，lint 类命令一律用 `lint:check` 无 --fix 变体，防误改源码）**：
 
 | 命令 | 基线 |
