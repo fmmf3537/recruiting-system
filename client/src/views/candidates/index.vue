@@ -79,12 +79,24 @@
             style="width: 140px"
             @change="handleSearch"
           >
-            <el-option
-              v-for="item in dictionaryStore.sourceOptions"
-              :key="item.code"
-              :label="item.name"
-              :value="item.name"
-            />
+            <!-- F5-C：常规来源（字典项） -->
+            <el-option-group label="常规来源">
+              <el-option
+                v-for="item in dictionaryStore.sourceOptions"
+                :key="item.code"
+                :label="item.name"
+                :value="item.name"
+              />
+            </el-option-group>
+            <!-- F5-C：猎头渠道（仅 admin / hr 可见，§3.2-2 不发请求则不发请求） -->
+            <el-option-group v-if="agencySourceOptions.length" label="猎头渠道">
+              <el-option
+                v-for="item in agencySourceOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-option-group>
           </el-select>
         </el-form-item>
 
@@ -416,6 +428,8 @@ import { getTags, type Tag } from '@/api/tag';
 import { useAuthStore } from '@/stores/auth';
 import { useDictionaryStore } from '@/stores/dictionary';
 import { useResumeParserStore } from '@/stores/resumeParser';
+// F5-C：猎头渠道来源筛选（仅 admin / hr 加载）
+import { getAgencyList } from '@/api/agency';
 import ResumeUpload from './ResumeUpload.vue';
 
 const router = useRouter();
@@ -499,6 +513,9 @@ const rejectRules: FormRules = { rejectReason: [{ required: true, message: '请�
 // ============ 简历上传 ============
 const showResumeUpload = ref(false);
 
+// F5-C：猎头渠道来源筛选选项（值为 `猎头:机构名`，与后端精确匹配 §3.2-1）
+const agencySourceOptions = ref<Array<{ value: string; label: string }>>([]);
+
 const resumeParserStore = useResumeParserStore();
 
 function handleResumeParsed(data: ResumeParseResult) {
@@ -543,6 +560,24 @@ async function fetchTags() {
     }
   } catch {
     // 静默失败
+  }
+}
+
+// F5-C：仅 admin / hr（member 换算 hr）才发请求拉取猎头机构作为来源筛选；其他角色不发请求（§3.2-2）
+async function fetchAgencySourceOptions() {
+  const rawRole = authStore.userInfo?.role;
+  const role = rawRole === 'member' ? 'hr' : rawRole;
+  if (role !== 'admin' && role !== 'hr') return;
+  try {
+    const res = await getAgencyList();
+    if (res.success) {
+      agencySourceOptions.value = res.data.map((a) => ({
+        value: `猎头:${a.name}`,
+        label: `猎头:${a.name}`,
+      }));
+    }
+  } catch {
+    // 静默失败，保持空数组（分组 v-if 自动隐藏）
   }
 }
 
@@ -741,6 +776,7 @@ async function handleBatchTagSubmit() {
 
 onMounted(() => {
   dictionaryStore.fetchDictionaries('source');
+  fetchAgencySourceOptions();
   fetchCandidateList();
 });
 onActivated(() => { fetchCandidateList(); });

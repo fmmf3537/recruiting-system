@@ -24,6 +24,16 @@ const routes: RouteRecordRaw[] = [
       title: '登录',
     },
   },
+  // F5-C：猎头推荐公开落地页（外部用户唯一可见，不带系统布局）
+  {
+    path: '/referral/:token',
+    name: 'Referral',
+    component: () => import('@/views/referral/index.vue'),
+    meta: {
+      public: true,
+      title: '猎头推荐',
+    },
+  },
   {
     path: '/',
     name: 'Layout',
@@ -295,6 +305,16 @@ const routes: RouteRecordRaw[] = [
           icon: Setting,
           requireAdmin: true,
           hidden: true,
+        },
+      },
+      // F5-C：猎头机构管理（HR / Admin 可见）
+      {
+        path: '/settings/agencies',
+        name: 'Agencies',
+        component: () => import('@/views/settings/Agencies.vue'),
+        meta: {
+          title: '猎头机构',
+          role: ['admin', 'hr'],
         },
       },
       {

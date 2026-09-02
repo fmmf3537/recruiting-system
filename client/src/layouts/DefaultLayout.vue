@@ -138,6 +138,7 @@ import {
   Bell,
   Tickets,
   Calendar,
+  Connection,
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -189,6 +190,8 @@ const menuItems = computed(() => {
 
   if (role === 'admin' || role === 'hr') {
     items.push({ path: '/jobs', title: '职位管理', icon: Briefcase });
+    // F5-C：猎头机构菜单（HR / Admin 可见）
+    items.push({ path: '/settings/agencies', title: '猎头机构', icon: Connection });
   }
 
   if (role !== 'interviewer') {
