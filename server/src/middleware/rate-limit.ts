@@ -38,3 +38,30 @@ export const emailSendLimiter = rateLimit({
     code: 429,
   },
 });
+
+// F5-S：猎头推荐通道——公开提交 / 落地页访问独立限流
+// 提交：15 分钟内最多 10 次/IP（防灌垃圾候选人）
+export const referralLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: '提交过于频繁，请稍后再试',
+    code: 429,
+  },
+});
+
+// 落地页 GET：15 分钟内最多 60 次/IP（防止 token 持有者刷量）
+export const referralPageLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: '访问过于频繁，请稍后再试',
+    code: 429,
+  },
+});

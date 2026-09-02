@@ -20,6 +20,8 @@ const HR_PERMISSIONS = [
   'ai:jd-assist',
   // F3-S：面试问题一键生成（PRD §5.5；hr 可操作，service 层做候选人可见性精细校验）
   'ai:interview-outline',
+  // F5-S：猎头机构 / 推荐链接管理（PRD §7；admin 天然拥有 '*'）
+  'agency:manage',
 ] as const;
 
 const HIRING_MANAGER_PERMISSIONS = [

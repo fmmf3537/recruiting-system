@@ -25,6 +25,9 @@ import metricsRoutes from './metrics';
 import notificationRoutes from './notification';
 import hcRequestRoutes from './hc-requests';
 import pipelineTemplateRoutes from './pipeline-templates';
+// F5-S：猎头推荐通道（机构管理 + 公开落地页/提交）
+import agencyRoutes from './agencies';
+import referralRoutes from './referral';
 
 const router: RouterType = Router();
 
@@ -61,5 +64,8 @@ router.use('/automation-rules', automationRuleRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/hc-requests', hcRequestRoutes);
 router.use('/pipeline-templates', pipelineTemplateRoutes);
+// F5-S：猎头机构管理 + 公开推荐入口
+router.use('/agencies', agencyRoutes);
+router.use('/referral', referralRoutes);
 
 export default router;

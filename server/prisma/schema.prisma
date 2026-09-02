@@ -148,6 +148,9 @@ model Job {
   // 关系：一个 Job 下有多份候选人简历-JD 匹配打分（F2-S 简历自动打分）
   aiMatchScores AiMatchScore[]
 
+  // 关系：一个 Job 下有多个猎头推荐链接（F5-S 猎头推荐通道，链接可绑定职位）
+  agencyLinks AgencyLink[]
+
   @@index([title])
   @@index([status])
   @@index([type])
@@ -820,4 +823,48 @@ model UserRoleBinding {
   @@unique([userId, roleId])
   @@index([userId])
   @@map("user_role")
+}
+
+// ==================== 猎头机构表（F5-S 猎头推荐通道）====================
+// HR 维护的猎头机构主数据；停用后其下所有链接视为失效（级联判断，不物理删链接）。
+model Agency {
+  id          String   @id @default(cuid())
+  name        String   @unique // 机构名称，全局唯一
+  contact     String?           // 联系人
+  phone       String?           // 联系电话
+  enabled     Boolean  @default(true) // 停用后其下所有链接失效（不物理删链接行）
+  remark      String?  @db.Text
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  links AgencyLink[]
+
+  @@index([enabled])
+  @@index([createdAt])
+  @@map("agency")
+}
+
+// ==================== 猎头推荐链接表（F5-S 猎头推荐通道）====================
+// HR 为猎头机构生成的公开推荐链接（token 是路径段，32 位 hex，128 位熵）。
+// expiresAt 为 null 表示长期有效；disabledAt 软停用，不物理删链接行。
+// jobId 为 null 表示不限职位；职位被删时链接保留（ON DELETE SET NULL）。
+model AgencyLink {
+  id          String    @id @default(cuid())
+  agencyId    String
+  agency      Agency    @relation(fields: [agencyId], references: [id], onDelete: Restrict)
+  token       String    @unique // crypto.randomBytes(16).toString('hex')，32 位 hex
+  jobId       String?
+  job         Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  expiresAt   DateTime? // null = 长期有效；默认创建 = 当前 + 90 天
+  disabledAt  DateTime? // 软停用（DELETE 路由置时间戳，幂等）
+  createdById String    // 推荐候选人通过此链接入库时归属此 HR
+  createdAt   DateTime  @default(now())
+
+  @@index([agencyId])
+  @@index([jobId])
+  @@index([createdById])
+  @@index([disabledAt])
+  @@index([expiresAt])
+  @@map("agency_link")
 }
