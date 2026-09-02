@@ -139,6 +139,20 @@
             <!-- 职位描述 -->
             <div class="form-section">
               <h3 class="section-title">职位描述</h3>
+              <!-- AI 辅助操作：interviewer 隐藏（服务端仍会兜底拦截） -->
+              <el-form-item v-if="canAi" label-width="0" class="jd-ai-actions">
+                <el-button
+                  type="primary"
+                  plain
+                  :disabled="jdIsEmpty"
+                  @click="handlePolishClick"
+                >
+                  <el-icon><MagicStick /></el-icon>AI 完善建议
+                </el-button>
+                <el-button type="success" plain @click="openDraftDialog">
+                  <el-icon><MagicStick /></el-icon>AI 辅助生成
+                </el-button>
+              </el-form-item>
               <el-form-item prop="description" label-width="0">
                 <QuillEditor
                   v-model:content="formData.description"
@@ -226,14 +240,29 @@
         </el-row>
       </el-form>
     </el-card>
+
+    <!-- AI JD 完善建议弹窗 -->
+    <JdPolishDialog
+      v-model="polishDialogVisible"
+      :jd-text="formData.description"
+      :meta="jdMeta"
+      @apply="applyImprovedJd"
+    />
+
+    <!-- AI JD 辅助生成弹窗 -->
+    <JdDraftDialog
+      v-model="draftDialogVisible"
+      :initial="jdMeta"
+      @apply="applyDraftJd"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onActivated, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
-import { ArrowLeft } from '@element-plus/icons-vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { ArrowLeft, MagicStick } from '@element-plus/icons-vue';
 import { QuillEditor } from '@vueup/vue-quill';
 import '@vueup/vue-quill/dist/vue-quill.snow.css';
 import {
@@ -247,10 +276,23 @@ import {
 } from '@/api/job';
 import { getTags, type Tag } from '@/api/tag';
 import { useDictionaryStore } from '@/stores/dictionary';
+import { useAuthStore } from '@/stores/auth';
+import JdPolishDialog from '@/components/jobs/JdPolishDialog.vue';
+import JdDraftDialog from '@/components/jobs/JdDraftDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
 const dictionaryStore = useDictionaryStore();
+const authStore = useAuthStore();
+
+// AI 入口可见性：interviewer 隐藏（服务端仍会兜底拦截）
+const canAi = computed(() => {
+  const role = authStore.userInfo?.role;
+  return role === 'admin' || role === 'member' || role === 'hr' || role === 'hiring_manager';
+});
+
+const polishDialogVisible = ref(false);
+const draftDialogVisible = ref(false);
 
 // 判断是否为编辑模式
 const isEdit = computed(() => !!route.params.id && route.path.includes('/edit'));
@@ -278,6 +320,20 @@ const formData = reactive<CreateJobParams>({
 });
 
 const tagOptions = ref<Tag[]>([]);
+
+// JD 描述是否为空（HTML 形态需剥标签判断；依赖 formData，须置于其后）
+const jdIsEmpty = computed(() => {
+  const html = formData.description || '';
+  return !html || html.replace(/<[^>]+>/g, '').trim() === '' || html === '<p><br></p>';
+});
+
+// 透传给 AI 弹窗的职位 meta（来自表单已填字段）
+const jdMeta = computed(() => ({
+  title: formData.title || undefined,
+  level: formData.level || undefined,
+  departments: formData.departments?.length ? formData.departments : undefined,
+  type: formData.type || undefined,
+}));
 
 // 编辑器配置
 const editorOptions = {
@@ -390,6 +446,59 @@ function init() {
   } else {
     resetForm();
   }
+}
+
+// 纯文本 → HTML（QuillEditor contentType=html）
+// 策略：按空行分段包 <p>...</p>，段内单换行转 <br>
+function plainTextToHtml(text: string): string {
+  if (!text) return '';
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return escaped
+    .split(/\n\s*\n/)
+    .map((para) => `<p>${para.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
+function handlePolishClick() {
+  if (jdIsEmpty.value) {
+    ElMessage.warning('请先输入职位描述');
+    return;
+  }
+  polishDialogVisible.value = true;
+}
+
+function openDraftDialog() {
+  draftDialogVisible.value = true;
+}
+
+async function applyImprovedJd(improvedText: string) {
+  // 完善场景：覆盖前确认（非空）
+  const hasContent =
+    formData.description &&
+    formData.description.replace(/<[^>]+>/g, '').trim() !== '' &&
+    formData.description !== '<p><br></p>';
+  if (hasContent) {
+    try {
+      await ElMessageBox.confirm('将覆盖当前 JD 内容，是否继续？', '提示', {
+        type: 'warning',
+        confirmButtonText: '覆盖',
+        cancelButtonText: '取消',
+      });
+    } catch {
+      // 用户取消
+      return;
+    }
+  }
+  formData.description = plainTextToHtml(improvedText);
+  ElMessage.success('已填入优化稿，请检查后再保存');
+}
+
+async function applyDraftJd(draftText: string) {
+  formData.description = plainTextToHtml(draftText);
+  ElMessage.success('已填入 AI 草稿，请检查后再保存');
 }
 
 // 提交表单
