@@ -70,6 +70,13 @@
       </el-col>
     </el-row>
 
+    <!-- F4-C：HR 考核「我的积分」卡片，仅 hr（含存量 member）可见；原 4 卡布局不动 -->
+    <el-row v-if="isHrRole" :gutter="20" class="stats-row">
+      <el-col :xs="24" :sm="12" :lg="8">
+        <PersonalScoreCard />
+      </el-col>
+    </el-row>
+
     <!-- 快捷操作 -->
     <el-card class="quick-actions" shadow="never">
       <template #header>
@@ -154,10 +161,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue';
+import { ref, reactive, computed, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { CardSkeleton } from '@/components/Skeleton';
 import { ElMessage } from 'element-plus';
+import { useAuthStore } from '@/stores/auth';
+import PersonalScoreCard from '@/components/dashboard/PersonalScoreCard.vue';
 import {
   User,
   Briefcase,
@@ -182,6 +191,12 @@ import { getOfferList } from '@/api/offer';
 import { getHCRequests } from '@/api/hc-request';
 
 const router = useRouter();
+const authStore = useAuthStore();
+// member 归一为 hr（与菜单/路由守卫一致）
+const isHrRole = computed(() => {
+  const raw = authStore.userInfo?.role;
+  return raw === 'hr' || raw === 'member';
+});
 
 // 统计数据
 const stats = reactive({

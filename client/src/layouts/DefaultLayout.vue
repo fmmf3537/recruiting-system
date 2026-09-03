@@ -139,6 +139,7 @@ import {
   Tickets,
   Calendar,
   Connection,
+  Trophy,
 } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -205,6 +206,14 @@ const menuItems = computed(() => {
   if (role !== 'interviewer') {
     items.push({ path: '/offers', title: 'Offer管理', icon: DocumentChecked });
     items.push({ path: '/stats', title: '数据统计', icon: TrendCharts });
+  }
+
+  // F4-C：考核菜单（按 role 过滤；member 已归一为 hr）
+  if (role === 'admin' || role === 'hr') {
+    items.push({ path: '/hr-score/my', title: '我的积分', icon: Trophy });
+  }
+  if (role === 'admin') {
+    items.push({ path: '/hr-score/team', title: '团队考核', icon: Trophy });
   }
   
   // 消息通知对所有用户可见

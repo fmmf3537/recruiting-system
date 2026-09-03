@@ -11,6 +11,7 @@ import {
   Setting,
   Bell,
   Tickets,
+  Trophy,
 } from '@element-plus/icons-vue';
 
 // 路由配置
@@ -316,6 +317,34 @@ const routes: RouteRecordRaw[] = [
           title: '猎头机构',
           role: ['admin', 'hr'],
         },
+      },
+      // F4-C：HR 考核 - 我的积分
+      {
+        path: '/hr-score/my',
+        name: 'MyScore',
+        component: () => import('@/views/hr-score/my.vue'),
+        meta: { title: '我的积分', icon: Trophy, role: ['admin', 'hr'] },
+      },
+      // F4-C：HR 考核 - 团队考核（admin only）
+      {
+        path: '/hr-score/team',
+        name: 'TeamScore',
+        component: () => import('@/views/hr-score/team.vue'),
+        meta: { title: '团队考核', icon: Trophy, requireAdmin: true },
+      },
+      // F4-C：HR 考核 - 详细报表（admin only，团队页跳转）
+      {
+        path: '/hr-score/report',
+        name: 'ScoreReport',
+        component: () => import('@/views/hr-score/report.vue'),
+        meta: { title: '考核报表', icon: TrendCharts, requireAdmin: true, hidden: true },
+      },
+      // F4-C：HR 考核 - 规则配置（admin only，设置页子路由）
+      {
+        path: '/settings/hr-score-rules',
+        name: 'HrScoreRules',
+        component: () => import('@/views/settings/HrScoreRules.vue'),
+        meta: { title: '积分规则', requireAdmin: true, hidden: true },
       },
       {
         path: '/profile',
