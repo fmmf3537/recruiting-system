@@ -43,6 +43,13 @@ const LLM_RETRY_TIMES = 1;
 const DIMENSION_SCORE_MIN = 0;
 const DIMENSION_SCORE_MAX = 100;
 
+/**
+ * 打分 prompt 版本：prompt 文案或口径变化时 +1。
+ * hash 去重会同时校验该版本——版本不一致视为旧结果，强制重算一次（随后 upsert 落新版本），
+ * 避免 prompt 升级后仍长期复用升级前（可能错误）的缓存结果。
+ */
+export const PROMPT_VERSION = 'v2';
+
 // ============ 类型 ============
 
 export interface ScoreCandidateOptions {
@@ -96,6 +103,16 @@ export function computeResumeHash(payload: Prisma.JsonValue | null | undefined):
 // 导出仅供测试复用同一算法，避免硬编字符串导致 hash 永远不匹配
 export function computeJdHash(description: string | null | undefined, requirements: string | null | undefined): string {
   return createHash('sha256').update(`${description ?? ''}|||${requirements ?? ''}`).digest('hex');
+}
+
+/** 本地时区"今天"（YYYY-MM-DD）：LLM 没有实时日期概念，必须显式给出评估基准日期，
+ *  否则它会按训练截止时间臆断"现在"，把过去年份（如 2025）误判为未来，导致稳定性评估失真 */
+function todayString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  const day = `${now.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /** grade 由重算的综合分按阈值表分段 */
@@ -288,14 +305,17 @@ export async function scoreCandidateForJob(
   const resumeHash = computeResumeHash(candidatePayload);
   const jdHash = computeJdHash(job.description, job.requirements);
 
-  // 3. hash 去重：同 candidate+job 且 resumeHash/jdHash 均未变 → 直接复用旧记录
+  // 3. hash 去重：同 candidate+job 且 resumeHash/jdHash 均未变且 promptVersion 一致 → 直接复用旧记录
   const existing = await prisma.aiMatchScore.findUnique({
     where: { candidateId_jobId: { candidateId, jobId } },
   });
+  // promptVersion 一并参与去重：prompt 升级（PROMPT_VERSION +1）后，即使简历/JD hash 未变，
+  // 旧版本结果也判定为过期，强制重算一次（详见 PROMPT_VERSION 常量注释）
   if (
     existing
     && existing.resumeHash === resumeHash
     && existing.jdHash === jdHash
+    && existing.promptVersion === PROMPT_VERSION
   ) {
     await prisma.operationLog.create({
       data: {
@@ -325,7 +345,9 @@ export async function scoreCandidateForJob(
 - 不要给出 overallScore 与 grade（综合分与等级由服务端重算）。
 - 不要在 summary/highlights/risks/comment 中回显候选人手机号、邮箱等个人敏感联系方式（与评估无关，不要引用）。`;
 
-  const userPrompt = `职位信息：
+  const userPrompt = `评估基准日期（视为“今天”，判断工作经历起止时间的先后、在职时长与“至今”合理性均以此为准）：${todayString()}
+
+职位信息：
 - 标题：${job.title}
 - 职级：${job.level || '未指定'}
 - 类型：${job.type}
@@ -388,7 +410,7 @@ ${weights.map((w) => `- ${w.name}（code: ${w.code}, weight: ${w.weight}%）`).j
       highlights: (parsed.highlights ?? null) as unknown as Prisma.InputJsonValue,
       stale: false,
       model: env.LLM_PROVIDER,
-      promptVersion: 'v1',
+      promptVersion: PROMPT_VERSION,
       triggeredBy: opts.triggeredBy,
       createdById: opts.createdById ?? null,
       resumeHash,
@@ -403,6 +425,7 @@ ${weights.map((w) => `- ${w.name}（code: ${w.code}, weight: ${w.weight}%）`).j
       highlights: (parsed.highlights ?? null) as unknown as Prisma.InputJsonValue,
       stale: false,
       model: env.LLM_PROVIDER,
+      promptVersion: PROMPT_VERSION,
       triggeredBy: opts.triggeredBy,
       createdById: opts.createdById ?? null,
       resumeHash,

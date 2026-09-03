@@ -41,6 +41,7 @@ vi.mock('../../src/lib/llm', () => ({
 import prisma from '../../src/lib/prisma';
 import {
   GRADE_THRESHOLDS,
+  PROMPT_VERSION,
   scoreCandidateForJob,
   listCandidateMatchScores,
   listJobMatchScores,
@@ -306,6 +307,8 @@ describe('MatchScoreService - 简历自动打分单元测试', () => {
           workHistories: [],
         }),
         jdHash: computeJdHash(job.description, job.requirements),
+        // promptVersion 与当前一致，才会命中去重（见 PROMPT_VERSION）
+        promptVersion: PROMPT_VERSION,
       };
       vi.mocked(prisma.aiMatchScore.findUnique).mockResolvedValue(existing as any);
       vi.mocked(prisma.operationLog.create).mockResolvedValue({} as any);
@@ -325,6 +328,165 @@ describe('MatchScoreService - 简历自动打分单元测试', () => {
           }),
         })
       );
+    });
+
+    it('promptVersion 与当前 PROMPT_VERSION 不一致时即使简历/JD hash 未变也重新打分（旧 prompt 结果失效）', async () => {
+      const candidate = {
+        id: 'cand-2b',
+        name: '李四',
+        skills: ['Go'],
+        workYears: 3,
+        education: '本科',
+        school: '北大',
+        currentCompany: 'X',
+        currentPosition: '工程师',
+        createdById: 'user-1',
+        workHistories: [],
+      };
+      const job = {
+        id: 'job-2b',
+        title: '后端',
+        level: 'P5',
+        type: '社招',
+        description: '负责后端',
+        requirements: '3年经验',
+        skills: ['Go'],
+      };
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue(candidate as any);
+      vi.mocked(prisma.job.findUnique).mockResolvedValue(job as any);
+      vi.mocked(prisma.dictionary.count).mockResolvedValue(0);
+      vi.mocked(prisma.dictionary.findMany).mockResolvedValue([] as any);
+
+      // 旧版本（v1）缓存：hash 与现算一致，但 promptVersion 过期 → 不得直接复用
+      const existing = {
+        id: 'ams-old-version',
+        candidateId: 'cand-2b',
+        jobId: 'job-2b',
+        overallScore: 75,
+        grade: 'recommend',
+        summary: '旧 prompt 结果',
+        dimensions: [],
+        risks: null,
+        highlights: null,
+        stale: false,
+        triggeredBy: 'auto',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        resumeHash: computeResumeHash({
+          name: candidate.name,
+          skills: candidate.skills,
+          workYears: candidate.workYears,
+          education: candidate.education,
+          school: candidate.school,
+          currentCompany: candidate.currentCompany,
+          currentPosition: candidate.currentPosition,
+          workHistories: [],
+        }),
+        jdHash: computeJdHash(job.description, job.requirements),
+        promptVersion: 'v1',
+      };
+      vi.mocked(prisma.aiMatchScore.findUnique).mockResolvedValue(existing as any);
+      vi.mocked(prisma.operationLog.create).mockResolvedValue({} as any);
+
+      callLLMMock.mockResolvedValueOnce({
+        content: JSON.stringify({
+          dimensions: [
+            { code: 'skill_match', score: 88 },
+            { code: 'experience_match', score: 88 },
+            { code: 'education_match', score: 88 },
+            { code: 'stability', score: 88 },
+            { code: 'bonus', score: 88 },
+          ],
+          summary: '新版本重算',
+          highlights: [],
+          risks: [],
+        }),
+      });
+      vi.mocked(prisma.aiMatchScore.upsert).mockImplementation(async (args: any) => ({
+        id: 'ams-refreshed',
+        ...args.create,
+      }));
+
+      const result = await scoreCandidateForJob('cand-2b', 'job-2b', {
+        triggeredBy: 'manual',
+        createdById: 'user-1',
+      });
+
+      // 旧缓存未直接返回：重新调 LLM 并 upsert 覆盖，落新 promptVersion
+      expect(callLLMMock).toHaveBeenCalledTimes(1);
+      expect(result.id).toBe('ams-refreshed');
+      expect(result.overallScore).toBe(88);
+      expect(vi.mocked(prisma.aiMatchScore.upsert)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ promptVersion: PROMPT_VERSION }),
+          update: expect.objectContaining({ promptVersion: PROMPT_VERSION }),
+        })
+      );
+    });
+  });
+
+  describe('service.scoreCandidateForJob - prompt 注入评估基准日期', () => {
+    it('打分 prompt 显式包含当前日期，作为 LLM 判断时间先后与在职时长的“今天”基准', async () => {
+      const candidate = {
+        id: 'cand-7',
+        name: '周九',
+        skills: [],
+        workYears: 1,
+        education: '本科',
+        school: null,
+        currentCompany: 'Z',
+        currentPosition: '工程师',
+        createdById: 'user-1',
+        workHistories: [
+          // 复现线上误判场景：当前工作（至今）起始于 2025 年，对 2026 年的"今天"而言是过去
+          { company: 'Z', position: '工程师', startDate: new Date('2025-03-01'), endDate: null, description: '' },
+        ],
+      };
+      const job = {
+        id: 'job-7',
+        title: '工程师',
+        level: 'P5',
+        type: '社招',
+        description: 'xx',
+        requirements: 'xx',
+        skills: [],
+      };
+      vi.mocked(prisma.candidate.findUnique).mockResolvedValue(candidate as any);
+      vi.mocked(prisma.job.findUnique).mockResolvedValue(job as any);
+      vi.mocked(prisma.aiMatchScore.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.dictionary.count).mockResolvedValue(0);
+      vi.mocked(prisma.dictionary.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.aiMatchScore.upsert).mockImplementation(async (args: any) => ({
+        id: 'ams-7',
+        ...args.create,
+      }));
+      vi.mocked(prisma.operationLog.create).mockResolvedValue({} as any);
+
+      // 断言 userPrompt（mock 第一参）包含"评估基准日期 + 当天日期"
+      callLLMMock.mockImplementation(async (prompt: string) => {
+        const now = new Date();
+        const expectedDate = `${now.getFullYear()}-${`${now.getMonth() + 1}`.padStart(2, '0')}-${`${now.getDate()}`.padStart(2, '0')}`;
+        expect(prompt).toContain('评估基准日期');
+        expect(prompt).toContain('“今天”');
+        expect(prompt).toContain(expectedDate);
+        return {
+          content: JSON.stringify({
+            dimensions: [
+              { code: 'skill_match', score: 60 },
+              { code: 'experience_match', score: 60 },
+              { code: 'education_match', score: 60 },
+              { code: 'stability', score: 60 },
+              { code: 'bonus', score: 60 },
+            ],
+            summary: '',
+            highlights: [],
+            risks: [],
+          }),
+        };
+      });
+
+      const result = await scoreCandidateForJob('cand-7', 'job-7', { triggeredBy: 'auto' });
+      expect(result.overallScore).toBe(60);
     });
   });
 
