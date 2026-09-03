@@ -30,6 +30,7 @@ import agencyRoutes from './agencies';
 import referralRoutes from './referral';
 // F4-S2：HR 考核积分查询 / 报表 / 规则
 import hrScoreRoutes from './hr-score';
+import aiSettingsRoutes from './ai-settings';
 
 const router: RouterType = Router();
 
@@ -70,5 +71,6 @@ router.use('/pipeline-templates', pipelineTemplateRoutes);
 router.use('/agencies', agencyRoutes);
 router.use('/referral', referralRoutes);
 router.use('/hr-score', hrScoreRoutes);
+router.use('/settings', aiSettingsRoutes);
 
 export default router;

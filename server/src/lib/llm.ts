@@ -1,32 +1,16 @@
 import { env } from './env';
 import { llmCallDuration } from './metrics';
-
-const LLM_CONFIG = {
-  provider: env.LLM_PROVIDER,
-  deepseek: {
-    apiKey: env.DEEPSEEK_API_KEY,
-    baseUrl: 'https://api.deepseek.com/v1',
-    model: 'deepseek-chat',
-  },
-  zhipu: {
-    apiKey: env.ZHIPU_API_KEY,
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
-    model: 'glm-4-flash',
-  },
-  kimi: {
-    apiKey: env.KIMI_API_KEY,
-    baseUrl: 'https://api.moonshot.cn/v1',
-    model: 'moonshot-v1-8k',
-  },
-  minimax: {
-    apiKey: env.MINIMAX_API_KEY,
-    baseUrl: 'https://api.minimax.chat/v1',
-    model: 'abab6.5s-chat',
-  },
-};
+import { getActiveLlmConfig } from '../services/ai-config.service';
 
 // LLM 请求超时（简历解析文本较长，给足 60s；防止 LLM 挂起导致 BullMQ worker 永久占用）
 const LLM_TIMEOUT_MS = 60_000;
+
+export interface LlmRuntimeConfig {
+  provider: string;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+}
 
 interface LLMResponse {
   content: string;
@@ -35,6 +19,13 @@ interface LLMResponse {
     completionTokens: number;
     totalTokens: number;
   };
+  provider?: string;
+  model?: string;
+}
+
+export interface CallLLMOptions {
+  maxTokens?: number;
+  config?: LlmRuntimeConfig;
 }
 
 async function callLLM(
@@ -42,16 +33,13 @@ async function callLLM(
   systemPrompt?: string,
   // 调用目的标签，写入 Prometheus llmCallDuration.purpose 维度，便于按业务区分统计
   // 兼容旧调用：未传时维持历史默认 'unknown'，避免误读旧指标
-  purpose: string = 'unknown'
+  purpose: string = 'unknown',
+  options?: CallLLMOptions
 ): Promise<LLMResponse> {
-  const config = LLM_CONFIG[LLM_CONFIG.provider as keyof typeof LLM_CONFIG] as {
-    apiKey: string;
-    baseUrl: string;
-    model: string;
-  };
+  const config = options?.config ?? (await getActiveLlmConfig());
 
   if (!config?.apiKey) {
-    throw new Error(`${LLM_CONFIG.provider} API key not configured`);
+    throw new Error(`${config?.provider ?? 'LLM'} API key not configured`);
   }
 
   const messages: Array<{ role: string; content: string }> = [];
@@ -60,7 +48,7 @@ async function callLLM(
   }
   messages.push({ role: 'user', content: prompt });
 
-  const end = llmCallDuration.startTimer({ provider: LLM_CONFIG.provider, purpose });
+  const end = llmCallDuration.startTimer({ provider: config.provider, purpose });
   try {
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -73,7 +61,7 @@ async function callLLM(
         model: config.model,
         messages,
         temperature: 0.1,
-        max_tokens: 4000,
+        max_tokens: options?.maxTokens ?? 4000,
       }),
     });
 
@@ -86,6 +74,8 @@ async function callLLM(
     return {
       content: data.choices?.[0]?.message?.content || '',
       usage: data.usage,
+      provider: config.provider,
+      model: config.model,
     };
   } finally {
     end();

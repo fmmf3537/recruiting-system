@@ -910,3 +910,22 @@ model HrScoreSnapshot {
   @@unique([userId, periodType, periodStart])
   @@map("hr_score_snapshot")
 }
+
+// ==================== AI 提供方配置（界面化管理，密钥密文落库）====================
+// 表为空时运行时回退环境变量 LLM_PROVIDER / *_API_KEY，保证老部署无需先初始化。
+// 全局同时仅一行 isActive=true，由 ai-settings.service 事务保证。
+model AiProviderConfig {
+  id          String   @id @default(cuid())
+  provider    String   @unique // deepseek | zhipu | kimi | minimax
+  baseUrl     String            // 预置默认值；页面可编辑（URL）
+  model       String            // 预置默认值；页面可编辑
+  isActive    Boolean  @default(false) // 全局同时仅一行 true，service 层保证
+  enabled     Boolean  @default(true)
+  apiKeyEnc   String?           // AES-256-GCM 密文，hex 格式 iv:tag:cipher
+  apiKeyMask  String?           // 展示用掩码，如 sk-****abcd；有 key 才有值
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("ai_provider_config")
+}

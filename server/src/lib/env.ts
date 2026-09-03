@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { z } from 'zod';
 import dotenv from 'dotenv';
 
@@ -38,6 +39,8 @@ const envSchema = z.object({
   ZHIPU_API_KEY: z.string().optional(),
   KIMI_API_KEY: z.string().optional(),
   MINIMAX_API_KEY: z.string().optional(),
+  // AI 设置页密钥加密主密钥（32 字节，建议 base64；未配置则由 JWT_SECRET SHA-256 派生）
+  AI_CONFIG_ENC_KEY: z.string().optional(),
 
   // SMTP 邮件配置（可选）
   SMTP_HOST: z.string().optional(),
@@ -102,5 +105,27 @@ if (!parsedEnv.success) {
 
 // 导出验证后的环境变量
 export const env = parsedEnv.data;
+
+/**
+ * AES-256-GCM 主密钥（32 字节）：优先解析 AI_CONFIG_ENC_KEY（base64 或 64 位 hex），
+ * 未配置时用 JWT_SECRET 经 SHA-256 派生，保证有值且进程内稳定。
+ */
+function resolveAiConfigEncKey(raw: string | undefined, jwtSecret: string): Buffer {
+  const trimmed = raw?.trim();
+  if (trimmed) {
+    if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+      return Buffer.from(trimmed, 'hex');
+    }
+    const fromB64 = Buffer.from(trimmed, 'base64');
+    if (fromB64.length === 32) {
+      return fromB64;
+    }
+    console.error('❌ AI_CONFIG_ENC_KEY must be 32 bytes (base64 or 64-char hex)');
+    process.exit(1);
+  }
+  return createHash('sha256').update(jwtSecret).digest();
+}
+
+export const AI_CONFIG_ENC_KEY = resolveAiConfigEncKey(env.AI_CONFIG_ENC_KEY, env.JWT_SECRET);
 
 export default env;

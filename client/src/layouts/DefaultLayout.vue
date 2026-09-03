@@ -229,6 +229,7 @@ const menuItems = computed(() => {
     items.push({ path: '/settings/dictionary', title: '字典管理', icon: Setting });
     items.push({ path: '/settings/tags', title: '标签管理', icon: Setting });
     items.push({ path: '/settings/pipeline-templates', title: '流程模板', icon: Setting });
+    items.push({ path: '/settings/ai', title: 'AI 设置', icon: Setting });
     items.push({ path: '/settings/automation-rules', title: '自动化邮件', icon: Setting });
   }
   

@@ -212,7 +212,7 @@ function mergeScores(
 async function callLLMForScore(
   systemPrompt: string,
   userPrompt: string,
-): Promise<ParsedLLMResponse> {
+): Promise<{ parsed: ParsedLLMResponse; provider?: string }> {
   let lastErr: unknown = null;
   for (let i = 0; i <= LLM_RETRY_TIMES; i += 1) {
     try {
@@ -220,7 +220,7 @@ async function callLLMForScore(
       const res = await callLLM(userPrompt, systemPrompt, 'match-score');
       const jsonStr = stripJsonFence(res.content);
       const parsed = JSON.parse(jsonStr) as ParsedLLMResponse;
-      return parsed;
+      return { parsed, provider: res.provider };
     } catch (err) {
       lastErr = err;
       if (i === LLM_RETRY_TIMES) break;
@@ -373,8 +373,11 @@ ${weights.map((w) => `- ${w.name}（code: ${w.code}, weight: ${w.weight}%）`).j
 
   // 6. 调 LLM
   let parsed: ParsedLLMResponse;
+  let llmProvider: string | undefined;
   try {
-    parsed = await callLLMForScore(systemPrompt, userPrompt);
+    const llmResult = await callLLMForScore(systemPrompt, userPrompt);
+    parsed = llmResult.parsed;
+    llmProvider = llmResult.provider;
   } catch (err) {
     // 写失败 OperationLog 后抛 AppError，由 controller 决定返回 500
     await prisma.operationLog.create({
@@ -409,7 +412,7 @@ ${weights.map((w) => `- ${w.name}（code: ${w.code}, weight: ${w.weight}%）`).j
       risks: (parsed.risks ?? null) as unknown as Prisma.InputJsonValue,
       highlights: (parsed.highlights ?? null) as unknown as Prisma.InputJsonValue,
       stale: false,
-      model: env.LLM_PROVIDER,
+      model: llmProvider ?? env.LLM_PROVIDER,
       promptVersion: PROMPT_VERSION,
       triggeredBy: opts.triggeredBy,
       createdById: opts.createdById ?? null,
@@ -424,7 +427,7 @@ ${weights.map((w) => `- ${w.name}（code: ${w.code}, weight: ${w.weight}%）`).j
       risks: (parsed.risks ?? null) as unknown as Prisma.InputJsonValue,
       highlights: (parsed.highlights ?? null) as unknown as Prisma.InputJsonValue,
       stale: false,
-      model: env.LLM_PROVIDER,
+      model: llmProvider ?? env.LLM_PROVIDER,
       promptVersion: PROMPT_VERSION,
       triggeredBy: opts.triggeredBy,
       createdById: opts.createdById ?? null,

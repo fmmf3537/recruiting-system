@@ -308,6 +308,16 @@ const routes: RouteRecordRaw[] = [
           hidden: true,
         },
       },
+      {
+        path: '/settings/ai',
+        name: 'AiSettings',
+        component: () => import('@/views/settings/AiSettings.vue'),
+        meta: {
+          title: 'AI 设置',
+          icon: Setting,
+          requireAdmin: true,
+        },
+      },
       // F5-C：猎头机构管理（HR / Admin 可见）
       {
         path: '/settings/agencies',
