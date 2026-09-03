@@ -145,8 +145,8 @@ docker-compose exec postgres pg_dump -U ats_user ats_db > backup.sql
 # 恢复数据库
 docker-compose exec -T postgres psql -U ats_user -d ats_db < backup.sql
 ```
-
 ### 更新部署
+
 ```bash
 # 拉取最新代码后重建
 docker-compose down
@@ -154,6 +154,39 @@ docker-compose --profile build run --rm client-build
 docker-compose up -d --build
 docker-compose exec server npx prisma migrate deploy
 ```
+
+---
+
+## 🆕 阶段 5 部署补充
+
+阶段 5（AI 招聘增强 + HR 考核积分）新增 5 个 migration，生产首次部署需依次 apply：
+
+| 顺序 | Migration | 内容 |
+|------|-----------|------|
+| 1 | `20260901000000_add_user_role_hr` | User.role enum 扩展（member/hiring_manager/interviewer）|
+| 2 | `20260901000001_rename_member_to_hr` | 数据迁移：已有 member 角色批量改为 hr（幂等）|
+| 3 | `20260901000000_add_ai_match_score` | 新增 AiMatchScore 表（F2-S 简历打分）|
+| 4 | `20260902000000_add_interview_question_outline` | 新增 InterviewQuestionOutline 表（F3-S 面试大纲）|
+| 5 | `20260902130000_add_agency_referral` | 新增 Agency / AgencyLink 两表（F5-S 猎头通道）|
+| 6 | `20260902150000_add_hr_score` | 新增 HrScoreEvent / HrScoreSnapshot 两表（F4-S1 考核事件埋点）|
+
+> 注：阶段 5 之前的 migration 列表详见 `server/prisma/migrations/`。
+
+### 启用 HR 考核定时任务（可选）
+
+`.env` 中追加：
+
+```bash
+# 每日凌晨 2:00 计算 HR 过程分 + 日快照
+HR_SCORE_CRON=0 2 * * *
+```
+
+不启用则留空或置 `false`，与现有 `ANONYMIZE_CRON` 等定时任务开关风格一致。
+
+### Nginx / 路由覆盖
+
+- 公开猎头落地页：`/referral/:token` 由 `nginx.conf` 的 `location /` (try_files → index.html) 自动覆盖，**无需改 nginx**。
+- 公开提交接口：`/api/referral/:token` 由 `location /api/` 转发至 server:3001，**无需改 nginx**。
 
 ---
 

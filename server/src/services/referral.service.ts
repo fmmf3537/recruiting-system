@@ -175,7 +175,9 @@ export async function submitReferral(
 
   // 4) 创建候选人 —— 不传 jobIds，绕过 F2-S AI 自动打分钩子（A1）
   const consentAt = new Date();
-  const consentNote = `猎头机构（${link.agency.name}）承诺已获候选人授权`;
+  // M6 合规补强：候选人授权文案需覆盖「AI 处理」用途（PRD §8.6）
+  // 简历经 AI 解析 / 评分，会发送给第三方 LLM 服务，授权声明必须显式说明
+  const consentNote = `猎头机构（${link.agency.name}）承诺已获候选人授权，并知悉简历可能经第三方 AI 服务处理（用于简历解析、人岗匹配等招聘用途）`;
 
   let candidateId: string;
   try {

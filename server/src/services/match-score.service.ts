@@ -322,7 +322,8 @@ export async function scoreCandidateForJob(
 输出要求：
 - 仅返回 JSON，不要任何额外文字。
 - 每维度给出 0-100 的整数分；不确定时给出 0 并在 comment 中说明。
-- 不要给出 overallScore 与 grade（综合分与等级由服务端重算）。`;
+- 不要给出 overallScore 与 grade（综合分与等级由服务端重算）。
+- 不要在 summary/highlights/risks/comment 中回显候选人手机号、邮箱等个人敏感联系方式（与评估无关，不要引用）。`;
 
   const userPrompt = `职位信息：
 - 标题：${job.title}

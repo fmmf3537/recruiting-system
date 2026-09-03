@@ -436,7 +436,8 @@ export async function generateOutline(
 - outline.sections 是有序的主题分组（按考察优先级排列）。
 - 每个 section 至少包含 2 道 question；每道 question 含 question / intent / referenceAnswer / 可选 followUp。
 - intent 写明考察意图；referenceAnswer 是参考答案要点（不是完整答案，给出关键判断标准与加分点即可）；followUp 是候选人答得模糊时的追问。
-- durationAdvice 用一句话给出整场的时间分配建议。`;
+- durationAdvice 用一句话给出整场的时间分配建议。
+- 不要在大纲的任何字段中回显候选人手机号、邮箱等个人敏感联系方式（与面试题设计无关，不要引用）。`;
 
   const userPrompt = `${jobBlock}
 

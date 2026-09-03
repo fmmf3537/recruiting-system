@@ -214,7 +214,7 @@ describe('referral.service - 猎头推荐通道单元测试', () => {
         source: '猎头:ACME 猎头',
         intro: '强推',
         consentAt: expect.any(String),
-        consentNote: '猎头机构（ACME 猎头）承诺已获候选人授权',
+        consentNote: '猎头机构（ACME 猎头）承诺已获候选人授权，并知悉简历可能经第三方 AI 服务处理（用于简历解析、人岗匹配等招聘用途）',
       }),
       USER_ID
     );

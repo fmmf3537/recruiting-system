@@ -94,7 +94,8 @@ async function callLLM(
 
 export async function extractResumeInfo(resumeText: string): Promise<any> {
   const systemPrompt = `你是一个简历信息提取助手。请从以下简历文本中提取结构化信息。
-只返回 JSON 格式，不要包含其他文字。`;
+只返回 JSON 格式，不要包含其他文字。
+注意：只提取简历中的公开信息（姓名/学历/工作经历等招聘相关字段），不要在输出中回显手机号、邮箱等个人敏感联系方式；不要编造信息，如与原简历无关不要引用。`;
 
   const userPrompt = `简历文本：
 ${resumeText}

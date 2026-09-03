@@ -191,7 +191,8 @@ export async function polishJd(input: PolishJdInput, userId: string): Promise<Po
   const systemPrompt = `你是一位资深招聘 JD 顾问。请基于用户提供的 JD 文本，给出诊断问题清单与完整优化稿。
 - 仅返回 JSON，不要任何额外文字。
 - issues 元素给出 title（问题概述）、detail（具体说明）、severity（高/中/低）。
-- improvedJd 必须是完整可发布的 JD 文本（保留原意，补全缺失模块，如岗位职责 / 任职要求 / 加分项）。`;
+- improvedJd 必须是完整可发布的 JD 文本（保留原意，补全缺失模块，如岗位职责 / 任职要求 / 加分项）。
+- 不要在 issues/detail 中回显候选人手机号、邮箱等个人敏感联系方式（与 JD 优化无关，不要引用）。`;
 
   const userPrompt = `当前 JD 全文：${metaBlock}
 ${jdText}
@@ -276,7 +277,8 @@ export async function draftJd(input: DraftJdInput, userId: string): Promise<Draf
   const systemPrompt = `你是一位资深招聘 JD 撰稿人。请根据职位信息 + 可选补充 + 同类历史 JD 风格，撰写一份高质量 JD 草稿。
 - 仅返回 JSON，不要任何额外文字。
 - 草稿必须包含三段结构：「岗位职责 / 任职要求 / 加分项」。
-- 草稿用 Markdown 风格排版，便于 HR 直接复制。`;
+- 草稿用 Markdown 风格排版，便于 HR 直接复制。
+- 不要在草稿文本中回显候选人手机号、邮箱等个人敏感联系方式（与 JD 撰写无关，不要引用）。`;
 
   const userPrompt = `职位信息：
 - 标题：${title}
