@@ -147,6 +147,9 @@ async function handleSave(row: AiProviderItem) {
       form.apiKey = '';
       await fetchList();
     }
+  } catch (error) {
+    // 后端错误已由 request 拦截器提示；此处兜底展示并避免未处理的 Promise rejection
+    ElMessage.error(error instanceof Error ? error.message : '保存失败');
   } finally {
     saving[row.provider] = false;
   }
@@ -165,6 +168,9 @@ async function handleActivate(row: AiProviderItem) {
       form.apiKey = '';
       await fetchList();
     }
+  } catch (error) {
+    // 无 Key 激活等业务错误由拦截器提示；此处兜底并避免未处理的 Promise rejection
+    ElMessage.error(error instanceof Error ? error.message : '启用失败');
   } finally {
     activating[row.provider] = false;
   }
@@ -183,6 +189,8 @@ async function handleTest(row: AiProviderItem) {
     } else {
       ElMessage.error(res.data?.error || '连接测试失败');
     }
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '连接测试失败');
   } finally {
     testing[row.provider] = false;
   }
