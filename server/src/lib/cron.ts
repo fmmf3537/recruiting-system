@@ -117,3 +117,61 @@ export function registerInterviewerReminderCron(): void {
 
   logger.info({ expr: env.INTERVIEWER_REMINDER_CRON }, '[面试前 24h 提醒] 已注册定时任务');
 }
+
+/**
+ * 注册 HR 考核过程分 + 日快照
+ * 由 HR_SCORE_CRON 控制：cron 表达式（如 0 2 * * *）；false/留空则关闭。
+ * 过程分与日快照各自 try/catch，单类失败不阻塞主进程，也不互相影响。
+ */
+export function registerHrScoreCron(): void {
+  if (!env.HR_SCORE_CRON) {
+    return;
+  }
+
+  cron.schedule(env.HR_SCORE_CRON, async () => {
+    // 动态导入：聚合 service 加载失败也不阻断 cron 注册 / 主进程
+    let calculateProcessScoresForWeek: typeof import('../services/hr-score-process.service')['calculateProcessScoresForWeek'];
+    let generateDailySnapshot: typeof import('../services/hr-score-snapshot.service')['generateDailySnapshot'];
+    let startOfDay: typeof import('../services/hr-score-snapshot.service')['startOfDay'];
+    let startOfWeek: typeof import('../services/hr-score-snapshot.service')['startOfWeek'];
+    try {
+      const processMod = await import('../services/hr-score-process.service');
+      const snapshotMod = await import('../services/hr-score-snapshot.service');
+      calculateProcessScoresForWeek = processMod.calculateProcessScoresForWeek;
+      generateDailySnapshot = snapshotMod.generateDailySnapshot;
+      startOfDay = snapshotMod.startOfDay;
+      startOfWeek = snapshotMod.startOfWeek;
+    } catch (e) {
+      logger.error({ err: e }, '[HR 考核] 任务模块加载失败');
+      return;
+    }
+
+    const today = startOfDay(new Date());
+    const weekStart = startOfWeek(today);
+    // 1. 过程分计算（4 维度，单类失败不阻塞）
+    try {
+      const result = await calculateProcessScoresForWeek(weekStart);
+      logger.info({ count: result.length }, '[过程分] 计算完成');
+    } catch (e) {
+      logger.error({ err: e }, '[过程分] 计算失败');
+    }
+    // 2. 今日日快照（业务分）
+    try {
+      await generateDailySnapshot(today);
+      logger.info('[日快照] 生成完成');
+    } catch (e) {
+      logger.error({ err: e }, '[日快照] 生成失败');
+    }
+    // 3. 过程分写入周一 bizDate，需回刷周一快照，避免周聚合漏过程分
+    if (weekStart.getTime() !== today.getTime()) {
+      try {
+        await generateDailySnapshot(weekStart);
+        logger.info('[日快照] 周一过程分回刷完成');
+      } catch (e) {
+        logger.error({ err: e }, '[日快照] 周一过程分回刷失败');
+      }
+    }
+  });
+
+  logger.info({ expr: env.HR_SCORE_CRON }, '[HR 考核] 已注册');
+}

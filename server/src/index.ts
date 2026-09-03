@@ -10,6 +10,7 @@ import {
   registerReminderCron,
   registerHiringDigestCron,
   registerInterviewerReminderCron,
+  registerHrScoreCron,
 } from './lib/cron';
 import { env } from './lib/env';
 import { logger } from './lib/logger';
@@ -63,6 +64,9 @@ registerHiringDigestCron();
 
 // 注册 interviewer 面试前 24h 提醒（INTERVIEWER_REMINDER_CRON 控制开关）
 registerInterviewerReminderCron();
+
+// 注册 HR 考核过程分 + 日快照（HR_SCORE_CRON 控制开关）
+registerHrScoreCron();
 
 // 优雅关闭
 process.on('SIGTERM', async () => {

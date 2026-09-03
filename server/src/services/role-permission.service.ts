@@ -22,6 +22,8 @@ const HR_PERMISSIONS = [
   'ai:interview-outline',
   // F5-S：猎头机构 / 推荐链接管理（PRD §7；admin 天然拥有 '*'）
   'agency:manage',
+  // F4-S2：本人积分明细 / 团队排名（admin 用 '*' 覆盖报表与规则管理）
+  'hr-score:read',
 ] as const;
 
 const HIRING_MANAGER_PERMISSIONS = [

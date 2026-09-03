@@ -66,6 +66,14 @@ const envSchema = z.object({
   // interviewer 面试前 24h 提醒（cron 表达式如 0 * * * *；false/留空则关闭）
   INTERVIEWER_REMINDER_CRON: z.string().optional().transform((val) => (val && val !== 'false' ? val : null)),
 
+  // HR 考核 cron（默认每天 2:00 跑过程分 + 日快照；false/留空则关闭）
+  HR_SCORE_CRON: z.string().optional().transform((val) => (val && val !== 'false' ? val : null)),
+  // 业务分/过程分权重（默认 70/30，需 sum=1）
+  HR_SCORE_BUSINESS_WEIGHT: z.string().optional().transform((val) => (val ? parseFloat(val) : 0.7)),
+  HR_SCORE_PROCESS_WEIGHT: z.string().optional().transform((val) => (val ? parseFloat(val) : 0.3)),
+  // 人才库维护周目标次数（默认 5）
+  HR_SCORE_TALENT_OPS_WEEKLY: z.string().optional().transform((val) => (val ? parseInt(val, 10) : 5)),
+
   // OpenTelemetry（留空则禁用 tracing）
   OTEL_EXPORTER_OTLP_ENDPOINT: z.preprocess(
     (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),

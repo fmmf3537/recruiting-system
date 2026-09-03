@@ -28,6 +28,8 @@ import pipelineTemplateRoutes from './pipeline-templates';
 // F5-S：猎头推荐通道（机构管理 + 公开落地页/提交）
 import agencyRoutes from './agencies';
 import referralRoutes from './referral';
+// F4-S2：HR 考核积分查询 / 报表 / 规则
+import hrScoreRoutes from './hr-score';
 
 const router: RouterType = Router();
 
@@ -67,5 +69,6 @@ router.use('/pipeline-templates', pipelineTemplateRoutes);
 // F5-S：猎头机构管理 + 公开推荐入口
 router.use('/agencies', agencyRoutes);
 router.use('/referral', referralRoutes);
+router.use('/hr-score', hrScoreRoutes);
 
 export default router;
