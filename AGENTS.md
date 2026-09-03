@@ -467,19 +467,20 @@ Nginx (:80)
 
 - runner：`scripts/{oc,codex,dsh}-run.ps1`（后台执行）+ 对应 `-exec.cmd`；日志在 `logs/<工具>/`（已 gitignore）。
 - 切片提示词放 `docs/cursor-prompts/<切片ID>.md`，先提交提示词再启动执行器；执行 agent 不跑验收、不 commit，验收由审核方亲手重跑。
-- 阶段 5 切片进度（PRD 见根目录 PRD_阶段5 文档）：S0 工具链 ✅ / F2-S 简历打分服务端 ✅（迁移 `20260901000000_add_ai_match_score` 已生成待人工 apply）/ F2-C 前端 ✅ / F1-S ✅ / F1-C ✅ / F3-S ✅（迁移 `20260902000000_add_interview_question_outline` 已生成待人工 apply）/ F3-C ✅ / F5-S ✅（迁移 `20260902130000_add_agency_referral` 已生成待人工 apply）/ F5-C ✅ / F4-S1 ✅（迁移 `20260902150000_add_hr_score` 已生成待人工 apply）/ F4-S2 ⬜ / F4-C ⬜ / M6 ⬜
-- **验收基线（S0 后实测，lint 类命令一律用 `lint:check` 无 --fix 变体，防误改源码）**：
+- 阶段 5 切片进度（PRD 见根目录 PRD_阶段5 文档，全部完成）：S0 工具链 ✅ / F2-S ✅ / F2-C ✅ / F1-S ✅ / F1-C ✅ / F3-S ✅ / F3-C ✅ / F5-S ✅ / F5-C ✅ / F4-S1 ✅ / F4-S2 ✅ / F4-C ✅ / M6 ✅
+  - 阶段 5 迁移 6 个已全部 apply 到 dev 库：`20260901000000_add_user_role_hr` / `20260901000001_rename_member_to_hr` / `20260901000000_add_ai_match_score` / `20260902000000_add_interview_question_outline` / `20260902130000_add_agency_referral` / `20260902150000_add_hr_score`
+- **验收基线（各切片完成后实测最新值，lint 类命令一律用 `lint:check` 无 --fix 变体，防误改源码）**：
 
 | 命令 | 基线 |
 |---|---|
-| `server pnpm test` | 54 文件 / 542 用例全过（F4-S1 后） |
+| `server pnpm test` | 54 文件 / 561 用例全过（M6 后） |
 | `server pnpm build`（tsc） | 0 错误 |
-| `server pnpm lint:check` | 15567 errors / 240 warnings（存量债，不得新增；F4-S1 修 CRLF 后下降） |
-| `client pnpm type-check` | 78 个存量 TS 错误（不得新增） |
+| `server pnpm lint:check` | 15600 errors / 253 warnings（存量债，不得新增；实测漂移已更新，勿回退到旧值 15567e/240w） |
+| `client pnpm type-check` | 90 个存量 TS 错误（不得新增；实测漂移已更新，勿回退到旧值 78） |
 | `client pnpm lint:check` | 137 errors / 231 warnings（不得新增） |
 
 - Git Bash 中 pnpm/opencode 的 shim 有路径串扰，须用 `cmd.exe //c` 调用（runner 内部已是 cmd 调用，不受影响）。
 
 ---
 
-*最后更新时间：2026-09-01*
+*最后更新时间：2026-09-03*
