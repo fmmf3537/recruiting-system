@@ -97,6 +97,8 @@ const listInterviewQuerySchema = z.object({
   status: z.enum([...INTERVIEW_STATUS] as [string, ...string[]]).optional(),
   startDate: z.string().max(50).optional(),
   endDate: z.string().max(50).optional(),
+  // 轮次筛选：与创建 schema 共用 INTERVIEW_ROUNDS，避免被 zod strip
+  round: z.enum([...INTERVIEW_ROUNDS] as [string, ...string[]]).optional(),
 });
 
 // ============ 路由定义 ============

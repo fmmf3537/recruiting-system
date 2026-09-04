@@ -43,6 +43,8 @@ export class InterviewController {
         status: req.query.status as string | undefined,
         startDate: req.query.startDate as string | undefined,
         endDate: req.query.endDate as string | undefined,
+        // INTV-S2：轮次筛选（zod 已校验枚举，须透传否则 service 收不到）
+        round: req.query.round as string | undefined,
       };
 
       // 可见性范围由 JWT 用户信息构建，实际过滤逻辑集中在 service 层

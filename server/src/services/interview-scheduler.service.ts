@@ -23,6 +23,7 @@ export interface InterviewListQuery {
   status?: string;
   startDate?: string;
   endDate?: string;
+  round?: string;
 }
 
 // 创建面试参数
@@ -81,6 +82,8 @@ export interface InterviewListItem {
   createdById: string;
   createdByName: string | null;
   createdAt: Date;
+  // 已提交评估摘要（最多 1 条，最近优先）；前端读 evaluations?.[0]?.conclusion
+  evaluations: Array<{ conclusion: string | null; submittedAt: string }>;
 }
 
 /**
@@ -261,6 +264,7 @@ export class InterviewSchedulerService {
       status,
       startDate,
       endDate,
+      round,
     } = query;
 
     // 缓存 key 包含完整可见性范围，避免不同角色/部门的成员共享同一份缓存
@@ -275,6 +279,8 @@ export class InterviewSchedulerService {
     if (candidateId) where.candidateId = candidateId;
     if (jobId) where.jobId = jobId;
     if (status) where.status = status as InterviewStatus;
+    // 轮次精确匹配（初试/复试/终面）；未传则不限制
+    if (round) where.round = round;
 
     // 数据可见性：member 仅可见范围内候选人的面试安排（admin 不过滤）
     const visibilityWhere = scope ? await buildCandidateVisibilityWhere(scope) : undefined;
@@ -298,6 +304,13 @@ export class InterviewSchedulerService {
           candidate: { select: { id: true, name: true } },
           job: { select: { id: true, title: true } },
           createdBy: { select: { id: true, name: true } },
+          // 已提交评估：最近 1 条，供列表「评估」列（前端 evaluations[0].conclusion）
+          evaluations: {
+            where: { submittedAt: { not: null } },
+            orderBy: { updatedAt: 'desc' },
+            select: { conclusion: true, submittedAt: true },
+            take: 1,
+          },
         },
       }),
       prisma.interview.count({ where }),
@@ -321,6 +334,10 @@ export class InterviewSchedulerService {
         createdById: it.createdById,
         createdByName: it.createdBy?.name || null,
         createdAt: it.createdAt,
+        evaluations: it.evaluations.map((e) => ({
+          conclusion: e.conclusion,
+          submittedAt: e.submittedAt ? e.submittedAt.toISOString() : '',
+        })),
       })),
       total,
       page,
