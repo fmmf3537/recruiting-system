@@ -6,22 +6,21 @@
         <h2 class="page-title">字典管理</h2>
         <span class="page-subtitle">管理系统基础参数（部门、城市等）</span>
       </div>
-      <el-button type="primary" @click="handleAdd">
-        <el-icon><Plus /></el-icon>新增字典项
-      </el-button>
+      <div class="header-actions">
+        <el-button @click="handleExport">导出</el-button>
+        <el-button type="primary" plain @click="importDialogVisible = true">导入</el-button>
+        <el-button type="primary" @click="handleAdd">
+          <el-icon><Plus /></el-icon>新增字典项
+        </el-button>
+      </div>
     </div>
 
     <!-- 分类标签 -->
     <el-card class="category-card" shadow="never">
       <el-radio-group v-model="currentCategory" @change="handleCategoryChange">
-        <el-radio-button label="department">所属部门</el-radio-button>
-        <el-radio-button label="location">工作城市</el-radio-button>
-        <el-radio-button label="education">学历</el-radio-button>
-        <el-radio-button label="source">来源渠道</el-radio-button>
-        <el-radio-button label="job_type">招聘类型</el-radio-button>
-        <el-radio-button label="skills">技能要求</el-radio-button>
-        <el-radio-button label="evaluation_dimension">评估维度</el-radio-button>
-        <el-radio-button label="matching_dimension">匹配维度</el-radio-button>
+        <el-radio-button v-for="cat in categories" :key="cat" :label="cat">
+          {{ categoryLabel(cat) }}
+        </el-radio-button>
       </el-radio-group>
     </el-card>
 
@@ -91,6 +90,12 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <DictionaryImportDialog
+      v-model="importDialogVisible"
+      :category="currentCategory"
+      @imported="handleImported"
+    />
   </div>
 </template>
 
@@ -103,23 +108,20 @@ import {
   createDictionary,
   updateDictionary,
   deleteDictionary,
+  getCategories,
+  exportDictionaryCategory,
   type DictionaryItem,
 } from '@/api/dictionary';
+import DictionaryImportDialog from '@/components/settings/DictionaryImportDialog.vue';
 
 const dictionaryStore = useDictionaryStore();
 
-type CategoryKey =
-  | 'department'
-  | 'location'
-  | 'education'
-  | 'source'
-  | 'job_type'
-  | 'skills'
-  | 'evaluation_dimension'
-  | 'matching_dimension';
-const currentCategory = ref<CategoryKey>('department');
+const currentCategory = ref('department');
+const categories = ref<string[]>([]);
+const importDialogVisible = ref(false);
 
-const CATEGORY_LABELS: Record<CategoryKey, string> = {
+/** 已知分类中文名；清单以外的分类直接显示 code（服务端为分类事实源） */
+const CATEGORY_LABELS: Record<string, string> = {
   department: '所属部门',
   location: '工作城市',
   education: '学历',
@@ -128,11 +130,15 @@ const CATEGORY_LABELS: Record<CategoryKey, string> = {
   skills: '技能要求',
   evaluation_dimension: '评估维度',
   matching_dimension: '匹配维度',
+  interview_focus_type: '考察方向',
+  hr_score_rule: '积分规则',
 };
 
-const categoryText = computed(() => {
-  return CATEGORY_LABELS[currentCategory.value];
-});
+function categoryLabel(cat: string): string {
+  return CATEGORY_LABELS[cat] || cat;
+}
+
+const categoryText = computed(() => categoryLabel(currentCategory.value));
 
 const displayList = computed(() => {
   return dictionaryStore.byCategory(currentCategory.value, true);
@@ -140,6 +146,20 @@ const displayList = computed(() => {
 
 function handleCategoryChange() {
   dictionaryStore.fetchDictionaries(currentCategory.value);
+}
+
+function handleExport() {
+  const items = dictionaryStore.items.filter((i) => i.category === currentCategory.value);
+  if (!items.length) {
+    ElMessage.warning('当前分类无数据');
+    return;
+  }
+  exportDictionaryCategory(currentCategory.value, items);
+}
+
+async function handleImported() {
+  // 弹窗内保留结果明细；此处只刷新当前分类数据
+  await dictionaryStore.refreshCategory(currentCategory.value);
 }
 
 // 弹窗相关
@@ -150,7 +170,7 @@ const formRef = ref<FormInstance>();
 
 const formData = reactive({
   id: '',
-  category: 'department' as CategoryKey,
+  category: 'department',
   code: '',
   name: '',
   sortOrder: 0,
@@ -181,7 +201,7 @@ function handleAdd() {
 function handleEdit(row: DictionaryItem) {
   isEdit.value = true;
   formData.id = row.id;
-  formData.category = row.category as CategoryKey;
+  formData.category = row.category;
   formData.code = row.code;
   formData.name = row.name;
   formData.sortOrder = row.sortOrder;
@@ -249,9 +269,23 @@ async function handleDelete(row: DictionaryItem) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const res = await getCategories();
+    const list = res.data ?? [];
+    categories.value = list;
+    // department 在清单则保留；否则 fallback 第一个
+    if (list.length && !list.includes(currentCategory.value)) {
+      [currentCategory.value] = list;
+    }
+  } catch {
+    // 拦截器已提示；分类为空时 radio 不渲染
+  }
   dictionaryStore.fetchDictionaries('department');
   dictionaryStore.fetchDictionaries('location');
+  if (currentCategory.value !== 'department' && currentCategory.value !== 'location') {
+    dictionaryStore.fetchDictionaries(currentCategory.value);
+  }
 });
 </script>
 
@@ -276,6 +310,11 @@ onMounted(() => {
       color: #909399;
       font-size: 14px;
     }
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 8px;
   }
 }
 
