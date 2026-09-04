@@ -23,9 +23,10 @@
           <el-table-column label="时长">
             <template #default="{ row }">{{ row.duration }} 分钟</template>
           </el-table-column>
-          <el-table-column label="操作" width="100">
+          <el-table-column label="操作" width="180">
             <template #default="{ row }">
               <el-button size="small" @click="openEvaluationDialog(row)">填评估</el-button>
+              <el-button size="small" @click="goToInterviewDetail(row)">详情</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -43,11 +44,12 @@
           <el-table-column label="完成时间">
             <template #default="{ row }">{{ formatDate(row.scheduledAt) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="120">
+          <el-table-column label="操作" width="200">
             <template #default="{ row }">
               <el-button size="small" type="primary" @click="openEvaluationDialog(row)">
                 立即填评估
               </el-button>
+              <el-button size="small" @click="goToInterviewDetail(row)">详情</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -68,9 +70,10 @@
           <el-table-column label="结论">
             <template #default="{ row }">{{ row.evaluations?.[0]?.conclusion }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="100">
+          <el-table-column label="操作" width="160">
             <template #default="{ row }">
               <el-button size="small" @click="openEvaluationDialog(row, true)">查看</el-button>
+              <el-button size="small" @click="goToInterviewDetail(row)">详情</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -81,6 +84,33 @@
       <el-form :model="evalForm" label-width="100px">
         <el-form-item label="候选人">
           <span>{{ currentInterview?.candidate?.name }}</span>
+        </el-form-item>
+        <!-- 评估时就近生成/再生成大纲；无考察方向时先选再生成 -->
+        <el-form-item label="AI 面试大纲">
+          <div class="outline-gen-bar">
+            <el-select
+              v-if="!currentInterview?.focusType"
+              v-model="generateFocusType"
+              placeholder="选择考察方向"
+              size="small"
+              style="width: 180px"
+            >
+              <el-option
+                v-for="opt in focusTypeOptions"
+                :key="opt.code"
+                :label="opt.name"
+                :value="opt.code"
+              />
+            </el-select>
+            <el-button
+              size="small"
+              type="primary"
+              :loading="generating"
+              @click="handleGenerateOutline"
+            >
+              {{ latestOutline ? '再生成' : '生成大纲' }}
+            </el-button>
+          </div>
         </el-form-item>
         <!-- F3-C 大纲对照：按需拉取最新版，失败/403 静默隐藏 -->
         <el-form-item v-if="latestOutline" label="大纲对照">
@@ -145,13 +175,17 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
-import { ElMessage } from 'element-plus';
+import { useRouter } from 'vue-router';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { TableSkeleton } from '@/components/Skeleton';
 import request from '@/utils/request';
 import {
+  completeInterview,
+  generateQuestionOutline,
   getQuestionOutlines,
   type QuestionOutlineVersion,
 } from '@/api/interview';
+import { getDictionaries, type DictionaryItem } from '@/api/dictionary';
 
 interface EvalDimension {
   name: string;
@@ -170,6 +204,8 @@ interface InterviewerInterview {
   id: string;
   scheduledAt: string;
   duration: number;
+  status?: string;
+  focusType?: string | null;
   candidate?: { name?: string };
   job?: { title?: string } | null;
   evaluations?: InterviewEval[];
@@ -186,6 +222,7 @@ const DEFAULT_DIMENSIONS: EvalDimension[] = [
   { name: '工作经验', score: 0, comment: '' },
 ];
 
+const router = useRouter();
 const activeTab = ref('today');
 const todayLoading = ref(false);
 const todayInterviews = ref<InterviewerInterview[]>([]);
@@ -206,6 +243,9 @@ const evalForm = reactive({
 // F3-C 大纲对照：按需拉取最新版
 const latestOutline = ref<QuestionOutlineVersion | null>(null);
 const outlineLoaded = ref(false);
+const generating = ref(false);
+const generateFocusType = ref('');
+const focusTypeOptions = ref<DictionaryItem[]>([]);
 
 function formatDateTime(value: string): string {
   const d = new Date(value);
@@ -271,9 +311,47 @@ async function loadLatestOutline(interviewId: string) {
   }
 }
 
-function openEvaluationDialog(interview: InterviewerInterview, isReadonly = false) {
+async function loadFocusTypeDict() {
+  if (focusTypeOptions.value.length) return;
+  try {
+    const res = await getDictionaries({ category: 'interview_focus_type' });
+    if (res.success) {
+      focusTypeOptions.value = (res.data || []).filter((d: DictionaryItem) => d.enabled);
+    }
+  } catch {
+    focusTypeOptions.value = [];
+  }
+}
+
+function goToInterviewDetail(row: InterviewerInterview) {
+  router.push(`/interviews/${row.id}`);
+}
+
+async function openEvaluationDialog(interview: InterviewerInterview, isReadonly = false) {
+  // 一键二连：未完成时先确认再 complete，取消则不开评估弹窗
+  if (!isReadonly && interview.status !== 'completed') {
+    try {
+      await ElMessageBox.confirm(
+        '面试还未标记完成，是否先标记完成再填写评估？',
+        '提示',
+        { type: 'warning' }
+      );
+      await completeInterview(interview.id);
+      ElMessage.success('面试已标记完成');
+      interview.status = 'completed';
+      await loadToday();
+      await loadPending();
+    } catch (e) {
+      if (e !== 'cancel' && e !== 'close') {
+        // complete 失败：拦截器已提示
+      }
+      return;
+    }
+  }
+
   currentInterview.value = interview;
   readonly.value = isReadonly;
+  generateFocusType.value = interview.focusType || '';
   const existing = interview.evaluations?.[0];
   if (existing) {
     evalForm.dimensions = (existing.dimensions || DEFAULT_DIMENSIONS).map((d) => ({
@@ -289,8 +367,34 @@ function openEvaluationDialog(interview: InterviewerInterview, isReadonly = fals
     evalForm.conclusion = 'pending';
   }
   evalDialogVisible.value = true;
+  loadFocusTypeDict();
   // F3-C 按需拉取大纲最新版，失败/403 静默隐藏面板
   loadLatestOutline(interview.id);
+}
+
+async function handleGenerateOutline() {
+  if (!currentInterview.value) return;
+  const focusType =
+    currentInterview.value.focusType
+    || generateFocusType.value
+    || latestOutline.value?.focusType
+    || '';
+  if (!focusType) {
+    ElMessage.error('请选择考察方向');
+    return;
+  }
+  generating.value = true;
+  try {
+    const res = await generateQuestionOutline(currentInterview.value.id, { focusType });
+    if (res.success) {
+      ElMessage.success('大纲生成成功');
+      await loadLatestOutline(currentInterview.value.id);
+    }
+  } catch {
+    // 拦截器已直出 400/403 message
+  } finally {
+    generating.value = false;
+  }
 }
 
 async function submitEvaluation() {
@@ -350,6 +454,13 @@ onMounted(async () => {
 
 .dimension-comment {
   margin-top: 4px;
+}
+
+.outline-gen-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* F3-C 大纲对照只读面板样式 */

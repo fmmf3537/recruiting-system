@@ -150,6 +150,19 @@
               <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
             </template>
           </el-table-column>
+          <!-- 评估结论：列表接口暂未 include evaluations 时一律「未评估」 -->
+          <el-table-column label="评估" width="110" align="center">
+            <template #default="{ row }">
+              <el-tooltip
+                v-if="getEvalConclusion(row)"
+                :content="getEvalConclusion(row)"
+                placement="top"
+              >
+                <el-tag type="success" size="small">已评估</el-tag>
+              </el-tooltip>
+              <el-tag v-else type="info" size="small">未评估</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="操作" width="220" fixed="right">
             <template #default="{ row }">
               <el-button
@@ -239,127 +252,27 @@
       </el-card>
     </template>
 
-    <!-- 安排面试对话框 -->
-    <el-dialog
+    <!-- 安排面试对话框（抽成组件，与候选人详情共用；编辑回填原未接通，仅覆盖新增） -->
+    <ScheduleInterviewDialog
       v-model="scheduleDialogVisible"
-      :title="scheduleEditId ? '编辑面试安排' : '安排面试'"
-      width="560px"
-      destroy-on-close
-    >
-      <el-form ref="scheduleFormRef" :model="scheduleForm" :rules="scheduleRules" label-width="100px">
-        <el-form-item label="候选人" prop="candidateId">
-          <el-select
-            v-model="scheduleForm.candidateId"
-            filterable
-            remote
-            reserve-keyword
-            placeholder="搜索候选人姓名/手机号"
-            :remote-method="searchCandidates"
-            :loading="candidateSearching"
-            style="width: 100%"
-            :disabled="!!scheduleEditId"
-          >
-            <el-option
-              v-for="c in candidateOptions"
-              :key="c.id"
-              :label="`${c.name} — ${c.phone}`"
-              :value="c.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="关联职位" prop="jobId">
-          <el-select v-model="scheduleForm.jobId" placeholder="选择职位（可选）" clearable style="width: 100%">
-            <el-option v-for="j in jobOptions" :key="j.id" :label="j.title" :value="j.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="面试轮次" prop="round">
-          <el-select v-model="scheduleForm.round" style="width: 100%">
-            <el-option label="初试" value="初试" />
-            <el-option label="复试" value="复试" />
-            <el-option label="终面" value="终面" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="面试方式" prop="type">
-          <el-select v-model="scheduleForm.type" style="width: 100%">
-            <el-option label="电话" value="电话" />
-            <el-option label="视频" value="视频" />
-            <el-option label="现场" value="现场" />
-          </el-select>
-        </el-form-item>
-        <!-- F3-C 考察方向（字典 interview_focus_type，value=code, label=name） -->
-        <el-form-item label="考察方向" prop="focusType">
-          <el-select
-            v-model="scheduleForm.focusType"
-            placeholder="选择考察方向（可选）"
-            clearable
-            style="width: 100%"
-          >
-            <el-option
-              v-for="opt in focusTypeOptions"
-              :key="opt.code"
-              :label="opt.name"
-              :value="opt.code"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="面试官" prop="interviewers">
-          <el-select
-            v-model="scheduleForm.interviewerIds"
-            multiple filterable placeholder="选择面试官"
-            style="width: 100%"
-          >
-            <el-option v-for="u in userOptions" :key="u.id" :label="u.name" :value="u.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="面试时间" prop="scheduledAt">
-          <el-date-picker
-            v-model="scheduleForm.scheduledAt"
-            type="datetime"
-            placeholder="选择日期时间"
-            value-format="YYYY-MM-DD HH:mm:ss"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="面试时长" prop="duration">
-          <el-select v-model="scheduleForm.duration" style="width: 100%">
-            <el-option label="30分钟" :value="30" />
-            <el-option label="45分钟" :value="45" />
-            <el-option label="60分钟" :value="60" />
-            <el-option label="90分钟" :value="90" />
-            <el-option label="120分钟" :value="120" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="面试地点" prop="location">
-          <el-input v-model="scheduleForm.location" placeholder="会议室/视频链接（可选）" />
-        </el-form-item>
-        <el-form-item label="备注" prop="notes">
-          <el-input v-model="scheduleForm.notes" type="textarea" :rows="3" placeholder="面试准备事项等（可选）" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="scheduleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleScheduleSubmit" :loading="scheduleSubmitting">确认</el-button>
-      </template>
-    </el-dialog>
+      @scheduled="fetchInterviews"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import {
-  Calendar, Clock, CircleCheck, TrendCharts, Search, UserFilled,
+  Calendar, Clock, CircleCheck, Search, UserFilled,
   Plus, Warning,
 } from '@element-plus/icons-vue';
 import {
-  getInterviews, createInterview, updateInterview, cancelInterview, completeInterview,
-  type InterviewItem, type InterviewListQuery, type InterviewParams,
+  getInterviews, cancelInterview, completeInterview,
+  type InterviewItem, type InterviewListParams,
 } from '@/api/interview';
-import { getCandidateList } from '@/api/candidate';
-import { getUserList } from '@/api/user';
-import { getJobList } from '@/api/job';
-import { getDictionaries, type DictionaryItem } from '@/api/dictionary';
+import ScheduleInterviewDialog from '@/components/interviews/ScheduleInterviewDialog.vue';
 
 const router = useRouter();
 
@@ -378,6 +291,7 @@ const filterForm = reactive({
 
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const interviewList = ref<InterviewItem[]>([]);
+const scheduleDialogVisible = ref(false);
 
 // ============ 日历相关 ============
 const selectedDate = computed(() => calendarDate.value);
@@ -406,47 +320,11 @@ function formatDateKey(date: Date | string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// ============ 安排面试对话框 ============
-const scheduleDialogVisible = ref(false);
-const scheduleSubmitting = ref(false);
-const scheduleEditId = ref<string | null>(null);
-const scheduleFormRef = ref<FormInstance>();
-const candidateSearching = ref(false);
-
-const scheduleForm = reactive({
-  candidateId: '',
-  jobId: '',
-  round: '初试' as string,
-  type: '现场' as string,
-  interviewerIds: [] as string[],
-  scheduledAt: '',
-  duration: 60,
-  location: '',
-  notes: '',
-  // F3-C 考察方向（字典 code，留空表示未设置）
-  focusType: '' as string,
-});
-
-// F3-C 考察方向字典（缓存到组件级，避免每次打开弹窗都请求）
-const focusTypeOptions = ref<DictionaryItem[]>([]);
-
-const scheduleRules: FormRules = {
-  candidateId: [{ required: true, message: '请选择候选人', trigger: 'change' }],
-  round: [{ required: true, message: '请选择面试轮次', trigger: 'change' }],
-  type: [{ required: true, message: '请选择面试方式', trigger: 'change' }],
-  interviewerIds: [{ required: true, message: '请至少选择一位面试官', trigger: 'change' }],
-  scheduledAt: [{ required: true, message: '请选择面试时间', trigger: 'change' }],
-};
-
-const candidateOptions = ref<Array<{ id: string; name: string; phone: string }>>([]);
-const userOptions = ref<Array<{ id: string; name: string }>>([]);
-const jobOptions = ref<Array<{ id: string; title: string }>>([]);
-
 // ============ 方法 ============
 async function fetchInterviews() {
   loading.value = true;
   try {
-    const params: InterviewListQuery = {
+    const params: InterviewListParams = {
       page: pagination.page,
       pageSize: pagination.pageSize,
     };
@@ -479,45 +357,6 @@ function updateStats() {
   stats.cancelled = all.filter((i) => i.status === 'cancelled' || i.status === 'no_show').length;
 }
 
-async function searchCandidates(query: string) {
-  if (!query) return;
-  candidateSearching.value = true;
-  try {
-    const res = await getCandidateList({ keyword: query, pageSize: 20 }) as any;
-    if (res.success) {
-      candidateOptions.value = res.data || [];
-    }
-  } catch (error) {
-    console.error('搜索候选人失败:', error);
-  } finally {
-    candidateSearching.value = false;
-  }
-}
-
-async function loadUsers() {
-  try {
-    const res = await getUserList({ pageSize: 100 }) as any;
-    if (res.success) {
-      userOptions.value = (res.data || []).map((u: any) => ({
-        id: u.id,
-        name: u.name,
-      }));
-    }
-  } catch { /* ignore */ }
-}
-
-async function loadJobs() {
-  try {
-    const res = await getJobList({ pageSize: 100 }) as any;
-    if (res.success) {
-      jobOptions.value = (res.data || []).map((j: any) => ({
-        id: j.id,
-        title: j.title,
-      }));
-    }
-  } catch { /* ignore */ }
-}
-
 function handleSearch() {
   pagination.page = 1;
   fetchInterviews();
@@ -546,72 +385,8 @@ function handleSizeChange(size: number) {
   fetchInterviews();
 }
 
-async function loadFocusTypeDict() {
-  if (focusTypeOptions.value.length) return;
-  try {
-    const res = await getDictionaries({ category: 'interview_focus_type' });
-    if (res.success) {
-      focusTypeOptions.value = (res.data || []).filter((d: DictionaryItem) => d.enabled);
-    }
-  } catch { /* ignore */ }
-}
-
 function handleSchedule() {
-  scheduleEditId.value = null;
-  scheduleForm.candidateId = '';
-  scheduleForm.jobId = '';
-  scheduleForm.round = '初试';
-  scheduleForm.type = '现场';
-  scheduleForm.interviewerIds = [];
-  scheduleForm.scheduledAt = '';
-  scheduleForm.duration = 60;
-  scheduleForm.location = '';
-  scheduleForm.notes = '';
-  scheduleForm.focusType = '';
   scheduleDialogVisible.value = true;
-  loadUsers();
-  loadJobs();
-  // F3-C 加载考察方向字典（首次为空时拉一次，之后命中缓存）
-  loadFocusTypeDict();
-}
-
-async function handleScheduleSubmit() {
-  const valid = await scheduleFormRef.value?.validate().catch(() => false);
-  if (!valid) return;
-
-  scheduleSubmitting.value = true;
-  try {
-    const data: InterviewParams = {
-      candidateId: scheduleForm.candidateId,
-      jobId: scheduleForm.jobId || undefined,
-      round: scheduleForm.round,
-      type: scheduleForm.type,
-      interviewers: scheduleForm.interviewerIds.map((id) => {
-        const user = userOptions.value.find((u) => u.id === id);
-        return { id, name: user?.name || '' };
-      }),
-      scheduledAt: scheduleForm.scheduledAt,
-      duration: scheduleForm.duration,
-      location: scheduleForm.location || undefined,
-      notes: scheduleForm.notes || undefined,
-      // F3-C 考察方向：空字符串视为未设置
-      focusType: scheduleForm.focusType || undefined,
-    };
-
-    if (scheduleEditId.value) {
-      await updateInterview(scheduleEditId.value, data);
-      ElMessage.success('面试安排已更新');
-    } else {
-      await createInterview(data);
-      ElMessage.success('面试安排创建成功');
-    }
-    scheduleDialogVisible.value = false;
-    fetchInterviews();
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.error || error.message || '操作失败');
-  } finally {
-    scheduleSubmitting.value = false;
-  }
 }
 
 async function handleComplete(row: InterviewItem) {
@@ -674,6 +449,21 @@ function getStatusType(status: string): string {
 
 function getStatusText(status: string): string {
   return { 'scheduled': '待进行', 'completed': '已完成', 'cancelled': '已取消', 'no_show': '未到' }[status] || status;
+}
+
+const EVAL_CONCLUSION_LABEL: Record<string, string> = {
+  pass: '通过',
+  reject: '淘汰',
+  pending: '待定',
+};
+
+function getEvalConclusion(row: InterviewItem): string {
+  // 列表接口当前未 include evaluations，有则展示中文结论，无则空串
+  const raw = (row as InterviewItem & {
+    evaluations?: Array<{ conclusion?: string | null }>;
+  }).evaluations?.[0]?.conclusion;
+  if (!raw) return '';
+  return EVAL_CONCLUSION_LABEL[raw] || raw;
 }
 
 onMounted(() => {

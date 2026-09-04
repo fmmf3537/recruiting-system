@@ -81,11 +81,32 @@
           <el-table-column label="职位">
             <template #default="{ row }">{{ row.job?.title }}</template>
           </el-table-column>
+          <el-table-column label="面试官" min-width="120">
+            <template #default="{ row }">
+              {{ formatInterviewers(row.interviewers) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="方式" width="80">
+            <template #default="{ row }">{{ row.type || '—' }}</template>
+          </el-table-column>
+          <el-table-column label="考察方向" width="100">
+            <template #default="{ row }">{{ row.focusType || '—' }}</template>
+          </el-table-column>
           <el-table-column label="时间">
             <template #default="{ row }">{{ formatDateTime(row.scheduledAt) }}</template>
           </el-table-column>
           <el-table-column label="时长">
             <template #default="{ row }">{{ row.duration }} 分钟</template>
+          </el-table-column>
+          <el-table-column label="状态" width="90">
+            <template #default="{ row }">{{ interviewStatusText(row.status) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="90">
+            <template #default="{ row }">
+              <el-button size="small" type="primary" link @click="goToInterviewDetail(row)">
+                详情
+              </el-button>
+            </template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
@@ -95,6 +116,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { TableSkeleton, CardSkeleton } from '@/components/Skeleton';
 import request from '@/utils/request';
@@ -126,8 +148,13 @@ interface HiringCandidateRow {
 }
 
 interface HiringInterviewRow {
+  id: string;
   scheduledAt: string;
   duration: number;
+  type?: string;
+  status?: string;
+  focusType?: string | null;
+  interviewers?: Array<{ id?: string; name?: string }>;
   candidate?: { name?: string };
   job?: { title?: string } | null;
 }
@@ -135,6 +162,12 @@ interface HiringInterviewRow {
 interface ApiSuccess<T> {
   success: boolean;
   data: T;
+}
+
+// 面试官数组 → 逗号分隔的姓名（empty/undefined → '—'）
+function formatInterviewers(list?: Array<{ name?: string }>): string {
+  if (!Array.isArray(list) || !list.length) return '—';
+  return list.map((i) => i.name || '').filter(Boolean).join('、') || '—';
 }
 
 const activeTab = ref('overview');
@@ -146,6 +179,24 @@ const candidatesLoading = ref(false);
 const candidates = ref<HiringCandidateRow[]>([]);
 const interviewsLoading = ref(false);
 const interviews = ref<HiringInterviewRow[]>([]);
+
+const router = useRouter();
+
+const INTERVIEW_STATUS_TEXT: Record<string, string> = {
+  scheduled: '待进行',
+  completed: '已完成',
+  cancelled: '已取消',
+  no_show: '未到',
+};
+
+function interviewStatusText(status?: string): string {
+  if (!status) return '—';
+  return INTERVIEW_STATUS_TEXT[status] || status;
+}
+
+function goToInterviewDetail(row: HiringInterviewRow) {
+  router.push(`/interviews/${row.id}`);
+}
 
 function formatDateTime(value: string): string {
   const d = new Date(value);

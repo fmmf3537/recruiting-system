@@ -67,7 +67,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '面试官工作台',
           icon: User,
-          role: ['admin', 'interviewer'],
+          role: ['admin', 'interviewer', 'hiring_manager'],
         },
       },
       {
@@ -149,7 +149,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/interviews/index.vue'),
         meta: {
           title: '面试管理',
-          hidden: true,
+          role: ['admin', 'hr', 'hiring_manager'],
         },
       },
       // 注意：/interviews/my 必须放在 /interviews/:id 之前，否则会被动态路由吞掉

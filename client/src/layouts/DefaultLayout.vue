@@ -199,8 +199,13 @@ const menuItems = computed(() => {
     items.push({ path: '/candidates', title: '候选人管理', icon: UserFilled });
   }
 
-  if (role === 'admin' || role === 'interviewer') {
+  if (role === 'admin' || role === 'interviewer' || role === 'hiring_manager') {
     items.push({ path: '/interview', title: '面试官工作台', icon: Calendar });
+  }
+
+  // 面试管理：HR / 管理员 / 用人经理安排与查看面试（面试官走工作台）
+  if (role === 'admin' || role === 'hr' || role === 'hiring_manager') {
+    items.push({ path: '/interviews', title: '面试管理', icon: Calendar });
   }
 
   if (role !== 'interviewer') {

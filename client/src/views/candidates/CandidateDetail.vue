@@ -521,6 +521,14 @@
         <el-button type="primary" @click="handleCommSubmit" :loading="commSubmitting">确认添加</el-button>
       </template>
     </el-dialog>
+
+    <!-- 本页内嵌安排面试（预填当前候选人，不再跳列表页） -->
+    <ScheduleInterviewDialog
+      v-model="scheduleDialogVisible"
+      :initial-candidate-id="candidateId"
+      :initial-candidate-name="candidate?.name"
+      @scheduled="fetchCandidateInterviews"
+    />
   </div>
 </template>
 
@@ -551,6 +559,7 @@ import { resolveFileUrl } from '@/utils/file';
 import { useResumeParserStore } from '@/stores/resumeParser';
 import MatchScoreCard from '@/components/candidates/MatchScoreCard.vue';
 import ResumeUpload from './ResumeUpload.vue';
+import ScheduleInterviewDialog from '@/components/interviews/ScheduleInterviewDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -571,6 +580,7 @@ const tagSelectValue = ref('');
 
 // 面试安排
 const candidateInterviews = ref<InterviewItem[]>([]);
+const scheduleDialogVisible = ref(false);
 
 // 沟通记录
 const candidateCommunications = ref<CommunicationItem[]>([]);
@@ -1031,9 +1041,9 @@ async function handleCommSubmit() {
   }
 }
 
-// 安排面试（跳转到面试管理页面）
+// 安排面试：打开本页内嵌弹窗（预填当前候选人）
 function handleScheduleInterview() {
-  router.push('/interviews');
+  scheduleDialogVisible.value = true;
 }
 
 function getInterviewStatusType(status: string): string {

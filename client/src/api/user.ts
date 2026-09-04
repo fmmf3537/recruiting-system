@@ -86,6 +86,26 @@ export function getApproverOptions(): Promise<ApproverOptionsData> {
   return request.get('/users/approver-options') as Promise<ApproverOptionsData>;
 }
 
+// 面试官选项（安排面试时可选；登录可读）
+export interface InterviewerOption {
+  id: string;
+  name: string;
+  department?: string | null;
+}
+
+export interface InterviewerOptionsData {
+  success: boolean;
+  data: InterviewerOption[];
+}
+
+/**
+ * 可选面试官列表（interviewer / hr / hiring_manager / admin）
+ * 登录可读；勿用 getUserList（/users 仅 admin）
+ */
+export function getInterviewerOptions(): Promise<InterviewerOptionsData> {
+  return request.get('/users/interviewer-options') as Promise<InterviewerOptionsData>;
+}
+
 /**
  * 获取用户详情
  * @param id 用户ID
