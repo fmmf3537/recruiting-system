@@ -1,10 +1,16 @@
 import { Router, type Router as RouterType } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
 import { dictionaryController } from '../controllers/dictionary.controller';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate } from '../middleware/validate';
 
 const router: RouterType = Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 // 查询参数验证
 const listQuerySchema = z.object({
@@ -45,6 +51,24 @@ router.get(
   authenticate,
   validate(listQuerySchema, 'query'),
   dictionaryController.getDictionaries
+);
+
+/**
+ * GET /api/dictionaries/categories
+ * 分类清单（所有登录用户可读，供前端分类动态化）
+ */
+router.get('/categories', authenticate, dictionaryController.getCategories);
+
+/**
+ * POST /api/dictionaries/import
+ * 批量导入 Excel（仅管理员）；内存收文件，校验在 controller
+ */
+router.post(
+  '/import',
+  authenticate,
+  authorize('admin'),
+  upload.single('file'),
+  dictionaryController.importDictionaries
 );
 
 /**

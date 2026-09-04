@@ -1,10 +1,16 @@
 import prisma from '../lib/prisma';
+import { logger } from '../lib/logger';
 import { AppError } from '../middleware/errorHandler';
 import { pinyin } from 'pinyin-pro';
+import {
+  MAX_IMPORT_ERROR_DETAILS,
+  parseImportRow,
+  type DictionaryImportRawRow,
+} from '../utils/xlsx-import';
 
 // 默认字典数据：按 category 分组
 // description 可选：matching_dimension 等需要在 description 存附加信息（权重等）的字典携带该字段
-const DEFAULT_DICTIONARIES: Record<
+export const DEFAULT_DICTIONARIES: Record<
   string,
   Array<{ code: string; name: string; sortOrder: number; description?: string }>
 > = {
@@ -124,6 +130,60 @@ export interface UpdateDictionaryInput {
   sortOrder?: number;
   enabled?: boolean;
   description?: string;
+}
+
+export interface DictionaryImportError {
+  row: number;
+  reason: string;
+}
+
+export interface DictionaryImportResult {
+  success: number;
+  skipped: number;
+  failed: number;
+  errors: DictionaryImportError[];
+}
+
+function importRowReason(err: unknown, row: number): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  const prefix = `第 ${row} 行：`;
+  return msg.startsWith(prefix) ? msg.slice(prefix.length) : msg;
+}
+
+function capImportErrors(
+  errors: DictionaryImportError[],
+  failed: number
+): DictionaryImportError[] {
+  if (errors.length <= MAX_IMPORT_ERROR_DETAILS) {
+    return errors;
+  }
+  const capped = errors.slice(0, MAX_IMPORT_ERROR_DETAILS);
+  const last = capped[MAX_IMPORT_ERROR_DETAILS - 1];
+  capped[MAX_IMPORT_ERROR_DETAILS - 1] = {
+    row: last.row,
+    reason: `${last.reason}；…等 ${failed} 条错误`,
+  };
+  return capped;
+}
+
+async function writeImportLog(
+  userId: string,
+  targetId: string,
+  detail: { success: number; skipped: number; failed: number }
+): Promise<void> {
+  try {
+    await prisma.operationLog.create({
+      data: {
+        userId,
+        targetType: 'Dictionary',
+        targetId,
+        action: 'dictionary_import',
+        detail,
+      },
+    });
+  } catch (err) {
+    logger.error({ err, action: 'dictionary_import', targetId }, '[Dictionary] OperationLog 写入失败');
+  }
 }
 
 export class DictionaryService {
@@ -284,6 +344,119 @@ export class DictionaryService {
     }
 
     await prisma.dictionary.delete({ where: { id } });
+  }
+
+  /**
+   * 分类清单：内置 DEFAULT_DICTIONARIES 键 ∪ 库中已有分类，去重排序。
+   * 供前端分类动态化；内置分类即使无数据也返回。
+   */
+  async getCategories(): Promise<string[]> {
+    const rows = await prisma.dictionary.findMany({
+      select: { category: true },
+      distinct: ['category'],
+    });
+    const set = new Set<string>([
+      ...Object.keys(DEFAULT_DICTIONARIES),
+      ...rows.map((r) => r.category),
+    ]);
+    return Array.from(set).sort();
+  }
+
+  /**
+   * 批量导入：逐行手工 upsert，不调用 ensureDefaults / getDictionaries。
+   * parseSkipped 为解析阶段已跳过的表头/空行/说明行数。
+   */
+  async importDictionaries(
+    rows: DictionaryImportRawRow[],
+    userId: string,
+    parseSkipped = 0
+  ): Promise<DictionaryImportResult> {
+    if (!rows.length) {
+      throw new AppError('文件没有有效数据行', 400);
+    }
+
+    const dbCats = await prisma.dictionary.findMany({
+      select: { category: true },
+      distinct: ['category'],
+    });
+    const knownCategories = new Set<string>([
+      ...Object.keys(DEFAULT_DICTIONARIES),
+      ...dbCats.map((r) => r.category),
+    ]);
+
+    let skipped = parseSkipped;
+    let failed = 0;
+    const errors: DictionaryImportError[] = [];
+    // 同文件内 (category, code) 后行覆盖前行，最终只写库一次
+    const pending = new Map<string, ReturnType<typeof parseImportRow>>();
+
+    for (const raw of rows) {
+      try {
+        const parsed = parseImportRow(raw);
+        if (!knownCategories.has(parsed.category)) {
+          throw new AppError(`第 ${raw.row} 行：未知分类`, 400);
+        }
+        const key = `${parsed.category}::${parsed.code}`;
+        if (pending.has(key)) {
+          skipped += 1;
+        }
+        pending.set(key, parsed);
+      } catch (err) {
+        failed += 1;
+        errors.push({ row: raw.row, reason: importRowReason(err, raw.row) });
+      }
+    }
+
+    let success = 0;
+    for (const parsed of pending.values()) {
+      try {
+        const existing = await prisma.dictionary.findFirst({
+          where: { category: parsed.category, code: parsed.code },
+        });
+        if (existing) {
+          await prisma.dictionary.update({
+            where: { id: existing.id },
+            data: {
+              name: parsed.name,
+              sortOrder: parsed.sortOrder,
+              enabled: parsed.enabled,
+              description: parsed.description,
+            },
+          });
+        } else {
+          await prisma.dictionary.create({
+            data: {
+              category: parsed.category,
+              code: parsed.code,
+              name: parsed.name,
+              sortOrder: parsed.sortOrder,
+              enabled: parsed.enabled,
+              description: parsed.description,
+            },
+          });
+        }
+        success += 1;
+      } catch (err) {
+        failed += 1;
+        errors.push({ row: parsed.row, reason: importRowReason(err, parsed.row) });
+      }
+    }
+
+    const categories = Array.from(
+      new Set(
+        [...pending.values()].map((r) => r.category).concat(rows.map((r) => r.category.trim()).filter(Boolean))
+      )
+    );
+    const targetId = categories.length === 1 ? categories[0] : 'multiple';
+
+    await writeImportLog(userId, targetId, { success, skipped, failed });
+
+    return {
+      success,
+      skipped,
+      failed,
+      errors: capImportErrors(errors, failed),
+    };
   }
 }
 
