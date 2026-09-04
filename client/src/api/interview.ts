@@ -79,6 +79,7 @@ export interface InterviewListParams {
   pageSize?: number;
   candidateId?: string;
   jobId?: string;
+  round?: string;
   status?: string;
   startDate?: string;
   endDate?: string;
