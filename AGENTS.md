@@ -469,15 +469,17 @@ Nginx (:80)
 - 切片提示词放 `docs/cursor-prompts/<切片ID>.md`，先提交提示词再启动执行器；执行 agent 不跑验收、不 commit，验收由审核方亲手重跑。
 - 阶段 5 切片进度（PRD 见根目录 PRD_阶段5 文档，全部完成）：S0 工具链 ✅ / F2-S ✅ / F2-C ✅ / F1-S ✅ / F1-C ✅ / F3-S ✅ / F3-C ✅ / F5-S ✅ / F5-C ✅ / F4-S1 ✅ / F4-S2 ✅ / F4-C ✅ / M6 ✅
   - 阶段 5 迁移 6 个已全部 apply 到 dev 库：`20260901000000_add_user_role_hr` / `20260901000001_rename_member_to_hr` / `20260901000000_add_ai_match_score` / `20260902000000_add_interview_question_outline` / `20260902130000_add_agency_referral` / `20260902150000_add_hr_score`
+- **字典导入导出（2026-09-03）**：DICT-S1 服务端（xlsx 依赖 + POST /import 逐行 upsert + GET /categories）+ DICT-C1 前端（导出/导入弹窗/模板/分类 radio 动态化）✅ 见 PRD_字典导入导出_20260903.md
+- **面试流程修复（2026-09-03，INTV 系列）**：INTV-S（权限修正：complete 限 admin/该场面试官、cancel 限 admin/hr、interviewerGuard 开放 hiring_manager、GET /users/interviewer-options）+ INTV-C（面试管理入口恢复、候选人详情内嵌安排弹窗、面试官下拉新接口、工作台一键二连+大纲生成、hiring_manager 双视角）+ INTV-S2（列表 include evaluations + round 筛选）✅
 - **验收基线（各切片完成后实测最新值，lint 类命令一律用 `lint:check` 无 --fix 变体，防误改源码）**：
 
 | 命令 | 基线 |
 |---|---|
-| `server pnpm test` | 54 文件 / 561 用例全过（M6 后） |
+| `server pnpm test` | 63 文件 / 611 用例全过（INTV-S2 后） |
 | `server pnpm build`（tsc） | 0 错误 |
-| `server pnpm lint:check` | 15600 errors / 253 warnings（存量债，不得新增；实测漂移已更新，勿回退到旧值 15567e/240w） |
-| `client pnpm type-check` | 90 个存量 TS 错误（不得新增；实测漂移已更新，勿回退到旧值 78） |
-| `client pnpm lint:check` | 137 errors / 231 warnings（不得新增） |
+| `server pnpm lint:check` | 17354 errors / 267 warnings（存量债含全仓 CRLF 累积，不得新增；实测漂移已更新） |
+| `client pnpm type-check` | 88 个存量 TS 错误（不得新增；INTV-C 修了 2 条存量，勿回退到旧值 90） |
+| `client pnpm lint:check` | 137 errors / 224 warnings（不得新增；INTV-C 时清了 7 条存量 warning，勿回退到旧值 231） |
 
 - Git Bash 中 pnpm/opencode 的 shim 有路径串扰，须用 `cmd.exe //c` 调用（runner 内部已是 cmd 调用，不受影响）。
 
