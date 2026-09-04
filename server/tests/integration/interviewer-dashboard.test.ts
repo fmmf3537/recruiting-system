@@ -145,21 +145,29 @@ describe('interviewer 工作台', () => {
     expect(emptyRes.body.data).toEqual([]);
   });
 
-  it('hr / hiring_manager 访问 /api/interview/* 返回 403', async () => {
+  it('hr 访问 /api/interview/* 返回 403；hiring_manager（作为该场面试官）可访问', async () => {
     const paths = [
       ...WORKBENCH_GETS,
       `/api/interview/${ASSIGNED_ID}/evaluation`,
     ];
-    for (const role of ['hr', 'hiring_manager']) {
-      for (const path of WORKBENCH_GETS) {
-        await request(app).get(path).set('x-test-role', role).expect(403);
-      }
-      await request(app)
-        .put(`/api/interview/${ASSIGNED_ID}/evaluation`)
-        .set('x-test-role', role)
-        .send(EVAL_BODY)
-        .expect(403);
+    // INTV-S：hiring_manager 兼具面试官身份，工作台开放（/today 等 GET 放行）；
+    // 评估 PUT 走「该场面试官」精确校验——mock 的 authenticate 固定 userId=user-1，
+    // 且 ASSIGNED_ID 的 interviewers 含 user-1（见上方 findMany mock），
+    // 故 HM 作为该场面试官 PUT 应 200；hr 不在工作台角色 → 全部 403
+    for (const path of WORKBENCH_GETS) {
+      await request(app).get(path).set('x-test-role', 'hr').expect(403);
+      await request(app).get(path).set('x-test-role', 'hiring_manager').expect(200);
     }
+    await request(app)
+      .put(`/api/interview/${ASSIGNED_ID}/evaluation`)
+      .set('x-test-role', 'hr')
+      .send(EVAL_BODY)
+      .expect(403);
+    await request(app)
+      .put(`/api/interview/${ASSIGNED_ID}/evaluation`)
+      .set('x-test-role', 'hiring_manager')
+      .send(EVAL_BODY)
+      .expect(200);
     expect(paths.length).toBeGreaterThan(0);
   });
 

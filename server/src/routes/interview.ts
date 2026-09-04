@@ -7,7 +7,12 @@ import prisma from '../lib/prisma';
 
 const router: RouterType = Router();
 
-const interviewerGuard = [authenticate, requireRole('admin', 'interviewer')] as const;
+// 用人经理（hiring_manager）作为面试官参场时也需要工作台/评估入口；
+// service 层有「该场面试官」精确校验，role 放开不产生越权
+const interviewerGuard = [
+  authenticate,
+  requireRole('admin', 'interviewer', 'hiring_manager'),
+] as const;
 
 /**
  * 从面试列表中筛出 interviewers JSON 含指定 userId 的面试 id（纯函数，供单测）

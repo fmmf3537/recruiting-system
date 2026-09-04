@@ -137,6 +137,25 @@ router.get(
 );
 
 /**
+ * GET /api/users/interviewer-options
+ * 可选面试官列表（interviewer / hr / hiring_manager / admin），供面试安排选择面试官
+ * 权限：登录用户（仅返回 id/name/department，无敏感信息）
+ * 注意：注册在 /:id 之前，避免被当作 id 匹配
+ */
+router.get(
+  '/interviewer-options',
+  authenticate,
+  asyncHandler(async (_req, res) => {
+    const users = await prisma.user.findMany({
+      where: { role: { in: ['interviewer', 'hr', 'hiring_manager', 'admin'] } },
+      select: { id: true, name: true, department: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    res.json({ success: true, data: users });
+  }),
+);
+
+/**
  * GET /api/users/:id
  * 获取单个成员信息
  */

@@ -129,10 +129,16 @@ export class InterviewController {
 
   /**
    * POST /api/interviews/:id/complete
-   * 标记面试完成
+   * 标记面试完成：admin 直通；其余角色须为该场面试官之一
    */
   async completeInterview(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      const userId = req.user!.userId;
+      // 仅面试官之一可标记完成（admin 直通）；hiring_manager 同为面试官可完成，
+      // 但普通 interviewer 只能完成自己参与的那场
+      if (req.user!.role !== 'admin') {
+        await interviewSchedulerService.assertInterviewerOf(req.params.id, userId);
+      }
       await interviewSchedulerService.completeInterview(req.params.id);
 
       res.json({

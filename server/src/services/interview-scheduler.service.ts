@@ -415,6 +415,27 @@ export class InterviewSchedulerService {
   }
 
   /**
+   * 校验当前用户是否为该场面试官之一（按 interviewers JSON 的 id 匹配）
+   * 不存在 → 404；不在名单 → 403。admin 旁路由 controller 处理，本方法不做角色判断。
+   */
+  async assertInterviewerOf(interviewId: string, userId: string): Promise<void> {
+    const interview = await prisma.interview.findUnique({
+      where: { id: interviewId },
+      select: { interviewers: true },
+    });
+    if (!interview) {
+      throw new AppError('面试安排不存在', 404);
+    }
+    // Prisma Json 可能是 JsonValue，操作前收窄为数组
+    const list = Array.isArray(interview.interviewers)
+      ? (interview.interviewers as Array<{ id?: string }>)
+      : [];
+    if (!list.some((u) => u.id === userId)) {
+      throw new AppError('仅参与本次面试的面试官可标记完成', 403);
+    }
+  }
+
+  /**
    * 标记面试完成（状态联动到反馈录入）
    */
   async completeInterview(id: string): Promise<Interview> {
