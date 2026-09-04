@@ -35,7 +35,31 @@
             <el-input v-model="forms[row.provider].baseUrl" placeholder="https://" />
           </el-form-item>
           <el-form-item label="模型">
-            <el-input v-model="forms[row.provider].model" placeholder="模型名" maxlength="100" />
+            <div class="model-row">
+              <el-select
+                v-model="forms[row.provider].model"
+                filterable
+                allow-create
+                default-first-option
+                placeholder="选择或输入模型名"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="m in MODEL_OPTIONS[row.provider] || []"
+                  :key="m"
+                  :label="m"
+                  :value="m"
+                />
+              </el-select>
+              <el-button
+                link
+                type="primary"
+                class="model-doc-btn"
+                @click="openModelDoc(row.provider)"
+              >
+                获取官方模型
+              </el-button>
+            </div>
           </el-form-item>
           <el-form-item label="API Key">
             <el-input
@@ -101,6 +125,26 @@ const forms = reactive<Record<AiProviderId, ProviderForm>>({
 const saving = reactive<Record<string, boolean>>({});
 const activating = reactive<Record<string, boolean>>({});
 const testing = reactive<Record<string, boolean>>({});
+
+/** 各 provider 常用模型预置（allow-create 仍可手输不在列表的模型） */
+const MODEL_OPTIONS: Record<string, string[]> = {
+  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  zhipu: ['glm-4-flash', 'glm-4-plus', 'glm-4-long'],
+  kimi: ['moonshot-v1-8k', 'moonshot-v1-32k', 'kimi-latest'],
+  minimax: ['abab6.5s-chat', 'abab6.5s-pro', 'MiniMax-M2.7', 'MiniMax-Text-01'],
+};
+
+const MODEL_DOC_URLS: Record<string, string> = {
+  deepseek: 'https://platform.deepseek.com/api-docs',
+  zhipu: 'https://open.bigmodel.cn/dev/api',
+  kimi: 'https://platform.moonshot.cn/docs',
+  minimax: 'https://platform.minimaxi.com/document/Models',
+};
+
+function openModelDoc(provider: string) {
+  const url = MODEL_DOC_URLS[provider];
+  if (url) window.open(url, '_blank', 'noopener');
+}
 
 function statusLabel(row: AiProviderItem): string {
   if (row.isActive) return '启用中';
@@ -243,6 +287,16 @@ onMounted(() => {
     margin-top: 4px;
     font-size: 12px;
     color: #909399;
+  }
+  .model-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+  .model-doc-btn {
+    align-self: flex-start;
+    padding: 0;
   }
 }
 </style>

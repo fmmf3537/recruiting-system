@@ -1,6 +1,10 @@
 import { env } from './env';
 import { llmCallDuration } from './metrics';
 import { getActiveLlmConfig } from '../services/ai-config.service';
+import { extractJsonFromLlmContent } from '../utils/llm-json';
+
+// 对外再导出，满足 LLM-FIX「从 llm.ts 导出」约定
+export { extractJsonFromLlmContent };
 
 // LLM 请求超时（简历解析文本较长，给足 60s；防止 LLM 挂起导致 BullMQ worker 永久占用）
 const LLM_TIMEOUT_MS = 60_000;
@@ -61,7 +65,7 @@ async function callLLM(
         model: config.model,
         messages,
         temperature: 0.1,
-        max_tokens: options?.maxTokens ?? 4000,
+        max_tokens: options?.maxTokens ?? 8000,
       }),
     });
 
@@ -122,16 +126,7 @@ ${resumeText}
     console.log('[LLM] resume extraction completed');
   }
 
-  let jsonStr = result.content.trim();
-  
-  // 移除 ```json 和 ``` 标记
-  if (jsonStr.startsWith('```json')) {
-    jsonStr = jsonStr.slice(7);
-  }
-  if (jsonStr.endsWith('```')) {
-    jsonStr = jsonStr.slice(0, -3);
-  }
-  jsonStr = jsonStr.trim();
+  const jsonStr = extractJsonFromLlmContent(result.content);
 
   try {
     return JSON.parse(jsonStr);

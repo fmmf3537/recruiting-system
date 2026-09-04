@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma';
 import { callLLM } from '../lib/llm';
+import { extractJsonFromLlmContent } from '../utils/llm-json';
 import { AppError } from '../middleware/errorHandler';
 import {
   buildCandidateVisibilityWhere,
@@ -115,15 +116,7 @@ ${JSON.stringify(candidatesJson, null, 2)}
   try {
     const result = await callLLM(userPrompt, systemPrompt);
 
-    let jsonStr = result.content.trim();
-    if (jsonStr.startsWith('```json')) {
-      jsonStr = jsonStr.slice(7);
-    }
-    if (jsonStr.endsWith('```')) {
-      jsonStr = jsonStr.slice(0, -3);
-    }
-    jsonStr = jsonStr.trim();
-
+    const jsonStr = extractJsonFromLlmContent(result.content);
     const parsed = JSON.parse(jsonStr);
     const recommendations: MatchResult[] = parsed.recommendations || [];
 

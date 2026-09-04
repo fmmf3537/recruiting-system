@@ -1,6 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 import { callLLM } from '../lib/llm';
+import { extractJsonFromLlmContent } from '../utils/llm-json';
 import prisma from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 
@@ -84,13 +85,9 @@ export interface OutlineUser {
 
 // ============ 工具函数 ============
 
-/** 从 LLM 返回的 JSON 中剥掉 ```json 围栏（与 match-score / jd-assist 同款） */
+/** 委托统一提取：兼容推理模型 thinking/response 前缀与 ```json 围栏 */
 function stripJsonFence(text: string): string {
-  let s = text.trim();
-  if (s.startsWith('```json')) s = s.slice(7);
-  if (s.startsWith('```')) s = s.slice(3);
-  if (s.endsWith('```')) s = s.slice(0, -3);
-  return s.trim();
+  return extractJsonFromLlmContent(text);
 }
 
 /**

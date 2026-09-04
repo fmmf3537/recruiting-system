@@ -178,6 +178,25 @@ describe('InterviewOutlineService - 面试问题一键生成单元测试', () =>
     );
   });
 
+  it('LLM 返回 M2.7 thinking 段前缀时仍能解析成功', async () => {
+    vi.mocked(prisma.interview.findUnique).mockResolvedValue(baseInterview as any);
+    // 模拟推理模型输出：thinking...\n\nresponse\n\n{JSON}
+    callLLMMock.mockResolvedValueOnce({
+      content: `thinking 分析候选人背景\n\nresponse\n\n${JSON.stringify(validOutlineJson)}`,
+    });
+
+    const result = await generateOutline(
+      INT_ID,
+      { focusType: 'hr' },
+      { userId: USER_ID, role: 'admin', department: null },
+    );
+
+    expect(result.version).toBe(1);
+    expect(result.outline.sections).toHaveLength(1);
+    expect(result.outline.sections[0].theme).toBe('求职动机');
+    expect(callLLMMock).toHaveBeenCalledTimes(1);
+  });
+
   it('带 adjustNote 再生成 v2：prompt 中包含上一版内容与调整指令', async () => {
     vi.mocked(prisma.interview.findUnique).mockResolvedValue(baseInterview as any);
     // 已有 v1
