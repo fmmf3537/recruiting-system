@@ -134,16 +134,19 @@
       </el-form>
     </el-card>
 
-    <!-- 批量操作栏 -->
-    <div v-if="selectedCandidates.length > 0" class="batch-bar">
-      <span class="batch-info">已选择 {{ selectedCandidates.length }} 位候选人</span>
+    <!-- 批量操作栏：既有「批量推进 / 批量打标签 / 取消」保留；加入人才库/导出/批量淘汰因无独立接口不新增 -->
+    <div
+      v-if="selectedCandidates.length > 0"
+      :class="uiNewListLayout ? 'batch-bar ui-batch-bar' : 'batch-bar'"
+    >
+      <span class="batch-info">{{ uiNewListLayout ? '已选' : '已选择' }} {{ selectedCandidates.length }} 位候选人</span>
       <el-button type="primary" size="small" @click="showBatchAdvance">
         <el-icon><Promotion /></el-icon>批量推进
       </el-button>
       <el-button type="warning" size="small" @click="showBatchTag">
         <el-icon><CollectionTag /></el-icon>批量打标签
       </el-button>
-      <el-button size="small" @click="clearSelection">取消选择</el-button>
+      <el-button size="small" @click="clearSelection">{{ uiNewListLayout ? '取消' : '取消选择' }}</el-button>
     </div>
 
     <!-- 数据表格 -->
@@ -158,14 +161,29 @@
         style="width: 100%"
         @row-click="handleRowClick"
         @selection-change="handleSelectionChange"
+        :row-class-name="uiNewListLayout ? uiCandRowClass : undefined"
         highlight-current-row
       >
         <el-table-column type="selection" width="50" align="center" />
-        <el-table-column type="index" label="序号" width="70" align="center" />
+        <!-- UI-S2：序号列无 prop 绑定，新布局移除（数据不受影响）；开关关闭时保留 -->
+        <el-table-column v-if="!uiNewListLayout" type="index" label="序号" width="70" align="center" />
 
-        <el-table-column prop="name" label="候选人" min-width="150">
+        <el-table-column prop="name" label="候选人" :min-width="uiNewListLayout ? 200 : 150">
           <template #default="{ row }">
-            <div class="candidate-info">
+            <!-- UI-S2：头像 + 姓名 + 手机号，解决姓名竖排断行；未授权标识按 Guard 保留 -->
+            <div v-if="uiNewListLayout" class="ui-cand-cell">
+              <span class="ui-cand-avatar">{{ row.name?.charAt(0) ?? '?' }}</span>
+              <span class="ui-cand-meta">
+                <span class="ui-cand-name-row">
+                  <span class="ui-cand-name">{{ row.name || '未填写' }}</span>
+                  <el-tooltip v-if="!row.consentAt" content="尚未记录授权同意，请在详情页补充" placement="top">
+                    <el-tag type="danger" size="small" effect="plain" class="consent-tag">未授权</el-tag>
+                  </el-tooltip>
+                </span>
+                <span class="ui-cand-phone">{{ row.phone || '未填写' }}</span>
+              </span>
+            </div>
+            <div v-else class="candidate-info">
               <el-avatar :size="36" :icon="UserFilled" />
               <div class="candidate-detail">
                 <div class="candidate-name">
@@ -183,9 +201,13 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="currentStage" label="当前阶段" width="120" align="center">
+        <el-table-column prop="currentStage" label="当前阶段" :width="uiNewListLayout ? 110 : 120" align="center">
           <template #default="{ row }">
-            <el-tag :type="getStageType(row.currentStage)" effect="light" class="stage-tag">
+            <!-- UI-S2：沿用既有阶段取值，仅改 pill 配色 -->
+            <span v-if="uiNewListLayout" class="ui-stage-pill" :class="getStagePillClass(row.currentStage)">
+              {{ row.currentStage || '未填写' }}
+            </span>
+            <el-tag v-else :type="getStageType(row.currentStage)" effect="light" class="stage-tag">
               {{ row.currentStage }}
             </el-tag>
           </template>
@@ -193,7 +215,14 @@
 
         <el-table-column prop="stageStatus" label="状态" width="100" align="center">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.stageStatus)" size="small">
+            <!-- UI-S2：in_progress 视为正常留空；passed/rejected 显示弱化小标 -->
+            <span
+              v-if="uiNewListLayout && row.stageStatus && row.stageStatus !== 'in_progress'"
+              class="ui-status-muted"
+            >
+              {{ getStatusText(row.stageStatus) }}
+            </span>
+            <el-tag v-else-if="!uiNewListLayout" :type="getStatusType(row.stageStatus)" size="small">
               {{ getStatusText(row.stageStatus) }}
             </el-tag>
           </template>
@@ -211,14 +240,36 @@
               >
                 {{ job.job?.title || '未知职位' }}
               </el-tag>
-              <span v-if="!row.candidateJobs?.length" class="no-job">-</span>
+              <span v-if="!row.candidateJobs?.length" :class="uiNewListLayout ? 'ui-placeholder' : 'no-job'">
+                {{ uiNewListLayout ? '未填写' : '-' }}
+              </span>
             </div>
           </template>
         </el-table-column>
 
         <el-table-column prop="tags" label="标签" min-width="120">
           <template #default="{ row }">
-            <div class="tag-list">
+            <!-- UI-S2：最多 1 个 chip，其余 +N；空则未填写 -->
+            <div v-if="uiNewListLayout" class="ui-tag-list">
+              <el-tag
+                v-if="row.tags?.length"
+                size="small"
+                :color="row.tags[0].color"
+                effect="light"
+                class="candidate-tag"
+              >
+                {{ row.tags[0].name }}
+              </el-tag>
+              <el-tooltip
+                v-if="row.tags?.length > 1"
+                :content="row.tags.slice(1).map((t) => t.name).join('、')"
+                placement="top"
+              >
+                <span class="ui-tag-more">+{{ row.tags.length - 1 }}</span>
+              </el-tooltip>
+              <span v-if="!row.tags?.length" class="ui-placeholder">未填写</span>
+            </div>
+            <div v-else class="tag-list">
               <el-tag
                 v-for="tag in row.tags?.slice(0, 3)"
                 :key="tag.id"
@@ -234,7 +285,12 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="source" label="来源" width="120" align="center" />
+        <el-table-column prop="source" label="来源" width="120" align="center">
+          <template v-if="uiNewListLayout" #default="{ row }">
+            <span v-if="!row.source" class="ui-placeholder">未填写</span>
+            <span v-else>{{ row.source }}</span>
+          </template>
+        </el-table-column>
 
         <el-table-column prop="education" label="学历" width="100" align="center">
           <template #default="{ row }">
@@ -244,28 +300,57 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="createdAt" label="入库时间" width="160">
+        <!-- UI-S2：入库时间加原生 sortable（当前页排序，不改请求参数） -->
+        <el-table-column prop="createdAt" label="入库时间" width="160" :sortable="uiNewListLayout ? true : false">
           <template #default="{ row }">
             {{ formatDate(row.createdAt) }}
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" :width="uiNewListLayout ? 72 : 220" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" link size="small" @click.stop="handleDetail(row)">
-              详情
-            </el-button>
-            <el-button v-if="canAdvance(row)" type="success" link size="small" @click.stop="handleAdvance(row)">
-              推进
-            </el-button>
-            <el-button v-if="row.stageStatus !== 'rejected'" type="danger" link size="small" @click.stop="handleReject(row)">
-              淘汰
-            </el-button>
-            <el-button v-if="canDelete(row)" type="danger" link size="small" @click.stop="handleDelete(row)">
-              删除
-            </el-button>
+            <!-- UI-S2：操作收纳，危险操作进下拉并二次确认（功能一个不少） -->
+            <template v-if="uiNewListLayout">
+              <el-button type="primary" link size="small" @click.stop="handleDetail(row)">详情</el-button>
+              <el-dropdown
+                v-if="canAdvance(row) || row.stageStatus !== 'rejected' || canDelete(row)"
+                trigger="click"
+                @command="(cmd) => handleRowCommand(cmd, row)"
+              >
+                <el-button link size="small" @click.stop>⋯</el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="canAdvance(row)" command="advance">推进</el-dropdown-item>
+                    <el-dropdown-item
+                      v-if="row.stageStatus !== 'rejected'"
+                      command="reject"
+                      :divided="canAdvance(row)"
+                    >淘汰</el-dropdown-item>
+                    <el-dropdown-item v-if="canDelete(row)" command="delete">删除</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </template>
+            <template v-else>
+              <el-button type="primary" link size="small" @click.stop="handleDetail(row)">
+                详情
+              </el-button>
+              <el-button v-if="canAdvance(row)" type="success" link size="small" @click.stop="handleAdvance(row)">
+                推进
+              </el-button>
+              <el-button v-if="row.stageStatus !== 'rejected'" type="danger" link size="small" @click.stop="handleReject(row)">
+                淘汰
+              </el-button>
+              <el-button v-if="canDelete(row)" type="danger" link size="small" @click.stop="handleDelete(row)">
+                删除
+              </el-button>
+            </template>
           </template>
         </el-table-column>
+        <!-- UI-S2：空态仅在已加载且 0 条时由 el-table #empty 展示（加载中走 TableSkeleton） -->
+        <template v-if="uiNewListLayout" #empty>
+          <EmptyState type="empty" title="暂无候选人" action-text="上传简历" @action="showResumeUpload = true" />
+        </template>
       </el-table>
 
       <!-- 分页 -->
@@ -412,7 +497,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onActivated, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { storeToRefs } from 'pinia';
 import { TableSkeleton } from '@/components/Skeleton';
+import EmptyState from '@/components/common/EmptyState.vue';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
 import { Plus, Search, UserFilled, Upload, Promotion, CollectionTag } from '@element-plus/icons-vue';
 import {
@@ -428,6 +515,7 @@ import {
 import { getPipelineStages } from '@/api/pipeline-template';
 import { getTags, type Tag } from '@/api/tag';
 import { useAuthStore } from '@/stores/auth';
+import { useAppStore } from '@/stores/app';
 import { useDictionaryStore } from '@/stores/dictionary';
 import { useResumeParserStore } from '@/stores/resumeParser';
 // F5-C：猎头渠道来源筛选（仅 admin / hr 加载）
@@ -436,6 +524,8 @@ import ResumeUpload from './ResumeUpload.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
+const appStore = useAppStore();
+const { uiNewListLayout } = storeToRefs(appStore);
 const dictionaryStore = useDictionaryStore();
 
 // ============ 数据 ============
@@ -609,6 +699,14 @@ function getStageType(stage: string): string {
   const map: Record<string, string> = { '入库': 'info', '初筛': '', '复试': 'warning', '终面': 'warning', '拟录用': 'success', 'Offer': 'success', '入职': 'danger' };
   return map[stage] || '';
 }
+// UI-S2：阶段 pill class，取值与 getStageType 同一套枚举，只换视觉
+function getStagePillClass(stage: string): string {
+  if (stage === '入库' || stage === '初筛') return 'ui-stage-pill--new';
+  if (stage === '复试' || stage === '终面') return 'ui-stage-pill--interview';
+  if (stage === '拟录用' || stage === 'Offer') return 'ui-stage-pill--offer';
+  if (stage === '入职') return 'ui-stage-pill--hired';
+  return 'ui-stage-pill--new';
+}
 function getStatusType(status: string): string {
   return { 'in_progress': 'warning', 'passed': 'success', 'rejected': 'danger' }[status] || 'info';
 }
@@ -621,6 +719,10 @@ function canAdvance(row: CandidateItem): boolean {
 function canDelete(row: CandidateItem): boolean {
   const currentUser = authStore.userInfo;
   return currentUser?.id === row.createdById || currentUser?.role === 'admin';
+}
+// UI-S2：已淘汰行弱化（opacity 0.72，不改背景、不加删除线）
+function uiCandRowClass({ row }: { row: CandidateItem }) {
+  return row.stageStatus === 'rejected' ? 'ui-cand-row--rejected' : '';
 }
 
 async function handleDelete(row: CandidateItem) {
@@ -645,6 +747,12 @@ async function handleDelete(row: CandidateItem) {
 function handleAdd() { router.push('/candidates/create'); }
 function handleRowClick(row: CandidateItem) { handleDetail(row); }
 function handleDetail(row: CandidateItem) { router.push(`/candidates/${row.id}`); }
+// UI-S2：下拉命令分发到既有处理函数，不重写业务逻辑
+function handleRowCommand(cmd: string | number, row: CandidateItem) {
+  if (cmd === 'advance') handleAdvance(row);
+  else if (cmd === 'reject') handleReject(row);
+  else if (cmd === 'delete') handleDelete(row);
+}
 
 function handleAdvance(row: CandidateItem) {
   currentCandidate.value = row;
@@ -827,5 +935,102 @@ onActivated(() => { fetchCandidateList(); });
   display: flex;
   justify-content: center;
   padding: 60px 0;
+}
+// ============ UI-S2：列表信息密度（仅新增 class，不覆写 Element Plus 全局）============
+.ui-batch-bar {
+  background-color: $ui-gray-50;
+  border: $ui-border-width solid $ui-border-color-light;
+  border-radius: $ui-radius-sm;
+}
+.ui-cand-cell {
+  display: flex;
+  align-items: center;
+  gap: $ui-space-sm;
+  min-width: 0;
+}
+.ui-cand-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: $ui-gray-200;
+  color: $ui-gray-700;
+  font-size: $ui-font-md;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ui-cand-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.ui-cand-name-row {
+  display: flex;
+  align-items: center;
+  gap: $ui-space-xs;
+  min-width: 0;
+}
+.ui-cand-name {
+  font-weight: 600;
+  color: $ui-gray-900;
+  font-size: $ui-font-md;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-cand-phone {
+  font-size: $ui-font-xs;
+  color: $ui-gray-500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ui-stage-pill {
+  display: inline-block;
+  min-width: 52px;
+  padding: 2px 10px;
+  border-radius: $ui-radius-pill;
+  font-size: $ui-font-sm;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+}
+.ui-stage-pill--new {
+  background: $ui-stage-bg-new;
+  color: $ui-stage-fg-default;
+}
+.ui-stage-pill--interview {
+  background: $ui-stage-bg-interview;
+  color: $ui-stage-fg-strong;
+}
+.ui-stage-pill--offer {
+  background: $ui-stage-bg-offer;
+  color: $ui-color-success;
+}
+.ui-stage-pill--hired {
+  background: $ui-color-success;
+  color: #fff;
+}
+.ui-status-muted {
+  font-size: $ui-font-xs;
+  color: $ui-gray-500;
+}
+.ui-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $ui-space-xs;
+  .candidate-tag { color: #fff; border: none; }
+}
+.ui-tag-more {
+  font-size: $ui-font-xs;
+  color: $ui-gray-500;
+  cursor: default;
+}
+:deep(.ui-cand-row--rejected) {
+  opacity: 0.72;
 }
 </style>

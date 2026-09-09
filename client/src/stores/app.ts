@@ -21,6 +21,8 @@ export const useAppStore = defineStore('app', () => {
   const tabs = ref<TabItem[]>([]);
   const activeTab = ref<string>('');
   const isLoading = ref(false);
+  // UI-S2：候选人列表新布局开关，默认关闭（灰度）。开启：localStorage.setItem('ui:new-layout:UI-S2','true') 后刷新
+  const uiNewListLayout = ref(localStorage.getItem('ui:new-layout:UI-S2') === 'true');
 
   // Actions
 
@@ -92,6 +94,7 @@ export const useAppStore = defineStore('app', () => {
     tabs,
     activeTab,
     isLoading,
+    uiNewListLayout,
     toggleSidebar,
     setSidebarCollapsed,
     setTheme,
