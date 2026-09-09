@@ -78,14 +78,18 @@
         <el-table-column prop="jobTitle" label="应聘职位" min-width="180">
           <template #default="{ row }">
             <div class="job-info">
-              <span class="job-title">{{ row.candidate?.candidateJobs?.[0]?.job?.title || '-' }}</span>
+              <!-- UI-S0：空值展示语义化（数据未改动） -->
+              <span v-if="!row.candidate?.candidateJobs?.[0]?.job?.title" class="ui-placeholder">未填写</span>
+              <span v-else class="job-title">{{ row.candidate?.candidateJobs?.[0]?.job?.title }}</span>
             </div>
           </template>
         </el-table-column>
 
         <el-table-column prop="salary" label="薪资" width="150" align="center">
           <template #default="{ row }">
-            <span class="salary-text">{{ row.salary || '-' }}</span>
+            <!-- UI-S0：空值展示语义化（数据未改动） -->
+            <span v-if="!row.salary" class="ui-placeholder">未填写</span>
+            <span v-else class="salary-text">{{ row.salary }}</span>
           </template>
         </el-table-column>
 
@@ -97,7 +101,9 @@
 
         <el-table-column prop="expectedJoinDate" label="预计入职" width="140" align="center">
           <template #default="{ row }">
-            {{ row.expectedJoinDate ? formatDate(row.expectedJoinDate) : '-' }}
+            <!-- UI-S0：空值展示语义化（数据未改动） -->
+            <span v-if="!row.expectedJoinDate" class="ui-placeholder">未填写</span>
+            <span v-else>{{ formatDate(row.expectedJoinDate) }}</span>
           </template>
         </el-table-column>
 

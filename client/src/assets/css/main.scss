@@ -86,3 +86,33 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+// ============ UI-S0：界面状态体系 ============
+.ui-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $ui-space-xl $ui-space-lg;
+  text-align: center;
+  color: $ui-gray-500;
+  font-size: $ui-font-base;
+}
+.ui-state__title {
+  font-size: $ui-font-md;
+  color: $ui-gray-700;
+  margin: $ui-space-sm 0 $ui-space-xs;
+}
+.ui-state__desc {
+  font-size: $ui-font-sm;
+  color: $ui-gray-500;
+  margin: 0 0 $ui-space-md;
+}
+.ui-empty {
+  border: $ui-border-width dashed $ui-gray-300;
+  border-radius: $ui-radius-md;
+}
+.ui-placeholder {
+  color: $ui-gray-500;
+  font-size: $ui-font-sm;
+} // 替代 "-"

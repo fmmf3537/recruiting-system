@@ -106,13 +106,19 @@
               {{ formatDate(offer.offerDate) }}
             </el-descriptions-item>
             <el-descriptions-item label="预计入职日期">
-              {{ offer.expectedJoinDate ? formatDate(offer.expectedJoinDate) : '-' }}
+              <!-- UI-S0：空值展示语义化（数据未改动） -->
+              <span v-if="!offer.expectedJoinDate" class="ui-placeholder">未填写</span>
+              <span v-else>{{ formatDate(offer.expectedJoinDate) }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="实际入职日期" v-if="offer.joined">
-              {{ offer.actualJoinDate ? formatDate(offer.actualJoinDate) : '-' }}
+              <!-- UI-S0：空值展示语义化（数据未改动） -->
+              <span v-if="!offer.actualJoinDate" class="ui-placeholder">未填写</span>
+              <span v-else>{{ formatDate(offer.actualJoinDate) }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="关联职位" :span="2">
-              {{ offer.candidate?.candidateJobs?.[0]?.job?.title || '-' }}
+              <!-- UI-S0：空值展示语义化（数据未改动） -->
+              <span v-if="!offer.candidate?.candidateJobs?.[0]?.job?.title" class="ui-placeholder">未填写</span>
+              <span v-else>{{ offer.candidate?.candidateJobs?.[0]?.job?.title }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="审批状态">
               {{ getStatusText(offer.status) }}

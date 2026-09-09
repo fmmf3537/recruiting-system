@@ -225,7 +225,9 @@
 
         <el-table-column prop="workYears" label="经验" width="80" align="center">
           <template #default="{ row }">
-            {{ row.workYears ? row.workYears + '年' : '-' }}
+            <!-- UI-S0：空值展示语义化（数据未改动） -->
+            <span v-if="!row.workYears" class="ui-placeholder">未填写</span>
+            <span v-else>{{ row.workYears }}年</span>
           </template>
         </el-table-column>
 

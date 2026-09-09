@@ -238,7 +238,9 @@
 
         <el-table-column prop="education" label="学历" width="100" align="center">
           <template #default="{ row }">
-            {{ row.education || '-' }}
+            <!-- UI-S0：空值展示语义化（数据未改动） -->
+            <span v-if="!row.education" class="ui-placeholder">未填写</span>
+            <span v-else>{{ row.education }}</span>
           </template>
         </el-table-column>
 

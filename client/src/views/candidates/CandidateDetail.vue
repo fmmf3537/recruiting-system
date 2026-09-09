@@ -54,18 +54,46 @@
               <el-tag v-else type="danger" size="small">未授权</el-tag>
               <div v-if="candidate.consentNote" class="consent-note">{{ candidate.consentNote }}</div>
             </el-descriptions-item>
-            <el-descriptions-item label="性别">{{ candidate.gender || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="年龄">{{ candidate.age ? candidate.age + '岁' : '-' }}</el-descriptions-item>
+            <!-- UI-S0：空值展示语义化（数据未改动） -->
+            <el-descriptions-item label="性别">
+              <span v-if="!candidate.gender" class="ui-placeholder">未填写</span>
+              <span v-else>{{ candidate.gender }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="年龄">
+              <span v-if="!candidate.age" class="ui-placeholder">未填写</span>
+              <span v-else>{{ candidate.age }}岁</span>
+            </el-descriptions-item>
             <el-descriptions-item label="手机号">{{ candidate.phone }}</el-descriptions-item>
             <el-descriptions-item label="邮箱">{{ candidate.email }}</el-descriptions-item>
-            <el-descriptions-item label="学历">{{ candidate.education || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="院校">{{ candidate.school || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="工作年限">{{ candidate.workYears ? candidate.workYears + '年' : '-' }}</el-descriptions-item>
-            <el-descriptions-item label="当前公司">{{ candidate.currentCompany || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="当前职位">{{ candidate.currentPosition || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="期望薪资">{{ candidate.expectedSalary || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="学历">
+              <span v-if="!candidate.education" class="ui-placeholder">未填写</span>
+              <span v-else>{{ candidate.education }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="院校">
+              <span v-if="!candidate.school" class="ui-placeholder">未填写</span>
+              <span v-else>{{ candidate.school }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="工作年限">
+              <span v-if="!candidate.workYears" class="ui-placeholder">未填写</span>
+              <span v-else>{{ candidate.workYears }}年</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="当前公司">
+              <span v-if="!candidate.currentCompany" class="ui-placeholder">未填写</span>
+              <span v-else>{{ candidate.currentCompany }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="当前职位">
+              <span v-if="!candidate.currentPosition" class="ui-placeholder">未填写</span>
+              <span v-else>{{ candidate.currentPosition }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="期望薪资">
+              <span v-if="!candidate.expectedSalary" class="ui-placeholder">未填写</span>
+              <span v-else>{{ candidate.expectedSalary }}</span>
+            </el-descriptions-item>
             <el-descriptions-item label="来源渠道">{{ candidate.source }}</el-descriptions-item>
-            <el-descriptions-item label="推荐人">{{ candidate.referrer || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="推荐人">
+              <span v-if="!candidate.referrer" class="ui-placeholder">未填写</span>
+              <span v-else>{{ candidate.referrer }}</span>
+            </el-descriptions-item>
             <el-descriptions-item label="简历附件">
               <el-link
                 v-if="candidate.resumeUrl"
@@ -76,7 +104,8 @@
               >
                 下载简历
               </el-link>
-              <span v-else>-</span>
+              <!-- UI-S0：空值展示语义化（数据未改动） -->
+              <span v-else class="ui-placeholder">未填写</span>
             </el-descriptions-item>
           </el-descriptions>
 
@@ -242,9 +271,16 @@
             </div>
           </template>
           <el-descriptions :column="1">
-            <el-descriptions-item label="薪资">{{ candidate.offer.salary || '-' }}</el-descriptions-item>
+            <!-- UI-S0：空值展示语义化（数据未改动） -->
+            <el-descriptions-item label="薪资">
+              <span v-if="!candidate.offer.salary" class="ui-placeholder">未填写</span>
+              <span v-else>{{ candidate.offer.salary }}</span>
+            </el-descriptions-item>
             <el-descriptions-item label="Offer日期">{{ formatDate(candidate.offer.offerDate) }}</el-descriptions-item>
-            <el-descriptions-item label="预计入职">{{ candidate.offer.expectedJoinDate ? formatDate(candidate.offer.expectedJoinDate) : '-' }}</el-descriptions-item>
+            <el-descriptions-item label="预计入职">
+              <span v-if="!candidate.offer.expectedJoinDate" class="ui-placeholder">未填写</span>
+              <span v-else>{{ formatDate(candidate.offer.expectedJoinDate) }}</span>
+            </el-descriptions-item>
             <el-descriptions-item label="入职状态">
               <el-tag :type="candidate.offer.joined ? 'success' : 'info'">
                 {{ candidate.offer.joined ? '已入职' : '未入职' }}

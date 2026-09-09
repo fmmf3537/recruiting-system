@@ -37,3 +37,61 @@ $spacing-sm: 8px;
 $spacing-md: 16px;
 $spacing-lg: 24px;
 $spacing-xl: 32px;
+
+// ============ 本轮新增：UI Token 层（UI-S0）============
+// 说明：仅新增，不修改上方任何既有变量，避免全站样式突变。
+
+// 语义色（后续切片统一引用这些，不再直接写 #RRGGBB）
+$ui-color-primary: $primary-color;
+$ui-color-primary-hover: #66b1ff;
+$ui-color-success: $success-color;
+$ui-color-warning: $warning-color;
+$ui-color-danger: $danger-color;
+
+// 阶段色阶（招聘阶段 tag 专用，浅底深字）
+$ui-stage-bg-new: #f1efe8; // 入库/初筛
+$ui-stage-bg-interview: #b5d4f4; // 面试中
+$ui-stage-bg-offer: #e1f5ee; // 拟录用/Offer
+$ui-stage-bg-hired: #c0dd97; // 已入职
+$ui-stage-fg-default: #5f5e5a;
+$ui-stage-fg-strong: #0c447c;
+
+// 中性灰阶（统一"多种灰"问题）
+$ui-gray-50: #fafafa;
+$ui-gray-100: #f5f7fa;
+$ui-gray-200: #ebeef5;
+$ui-gray-300: #dcdfe6;
+$ui-gray-500: #909399;
+$ui-gray-700: #606266;
+$ui-gray-900: #303133;
+
+// 间距（4 的倍数）
+$ui-space-xs: 4px;
+$ui-space-sm: 8px;
+$ui-space-md: 12px;
+$ui-space-lg: 16px;
+$ui-space-xl: 24px;
+
+// 字号（只允许这 5 档）
+$ui-font-xs: 11px;
+$ui-font-sm: 12px;
+$ui-font-base: 13px;
+$ui-font-md: 14px;
+$ui-font-lg: 15px;
+$ui-font-metric: 24px; // KPI 数字
+
+// 圆角
+$ui-radius-sm: 6px;
+$ui-radius-md: 8px;
+$ui-radius-lg: 12px;
+$ui-radius-pill: 999px;
+
+// 边框（统一 0.5px，替代现在的 1px 参差）
+$ui-border-width: 0.5px;
+$ui-border-color: $ui-gray-300;
+$ui-border-color-light: $ui-gray-200;
+
+// 层级
+$ui-z-sticky: 10;
+$ui-z-dropdown: 100;
+$ui-z-dialog: 1000;
