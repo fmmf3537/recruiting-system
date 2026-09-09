@@ -134,9 +134,16 @@ UI-S2
 ### 4.2 开关与回退（**强制**）
 - 在 `client/src/stores/app.ts`（或就近的 UI 状态处）新增：`uiNewListLayout`（默认 **true** = 新布局）。
 - 模板上用 `v-if="uiNewListLayout"` / `v-else` 切换新旧列渲染；**旧分支保留完整原代码**（不删），确保开关关闭时 100% 回到改造前。
-- 开关**默认必须为 `false`（灰度）**：`const uiNewListLayout = ref(localStorage.getItem('ui:new-layout:UI-S2') === 'true');`
-  理由：系统已在生产使用，HR 已习惯现有列布局，默认全量切换会一次性改变所有人的日常操作界面。确认稳定后再由人工置 `true`。
-  ⚠️ 不要写成 `!== 'false'`（那会导致键缺失时默认开启）。
+- 开关**默认开启**（`!== 'false'`，键缺失即启用新布局）；保留开关只为保留一键回退能力：
+
+  ```ts
+  const uiNewListLayout = ref(localStorage.getItem('ui:new-layout:UI-S2') !== 'false');
+  ```
+
+  回退：`localStorage.setItem('ui:new-layout:UI-S2', 'false')` 后刷新。
+
+  > 策略说明（2026-09-09 更新）：切片经审计确认无回归后，即由人工改为默认开启，不再长期灰度。
+  > **但 UI-S1（导航分组）属于例外**——它改变所有人找菜单的路径，影响面最大，仍应默认关闭灰度，确认稳定后再开启。
 - 报告写明回退方式（开关置 false 或 localStorage 键 `ui:new-layout:UI-S2=false`）。
 
 ### 4.3 不改的部分（明确列出，防止误伤）
