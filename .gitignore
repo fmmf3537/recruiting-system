@@ -75,3 +75,24 @@ logs/
 
 # 切片流水线会话锁（接力/手动会话互斥，绝不提交）
 .slice-lock
+
+# 本地 AI 工具临时修复（dsh profile 包版本覆盖，含本机绝对路径）
+.dsh-fix-web/
+
+# 本地切片执行器（Cursor Agent CLI runner，硬编码本机 cursor-agent 路径）
+scripts/cursor-exec.cmd
+scripts/cursor-run.ps1
+
+# 用户手册制作流水线（截图产物 + 本地脚本，均属本地开发产物）
+docs/screenshots/
+docs/check.py
+docs/cleanup-and-embed.py
+docs/embed-screenshots.py
+docs/strip-placeholders.py
+docs/debug-login.cjs
+docs/screenshot.cjs
+docs/fix-detail.cjs
+docs/fix-screenshots.cjs
+
+# 使用手册（对外交付文档，走文档平台，不进代码仓库）
+招聘系统用户手册.md
