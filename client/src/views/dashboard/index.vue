@@ -4,7 +4,8 @@
 
     <!-- 统计卡片 -->
     <el-row :gutter="20" class="stats-row">
-      <el-col :xs="24" :sm="12" :lg="8">
+      <!-- UI-S4：lg 8→6，四张卡一行（原 4×8=32>24 导致第四张换行留白） -->
+      <el-col :xs="24" :sm="12" :lg="newLayout ? 6 : 8">
         <el-card shadow="hover" class="stat-card" @click="goTo('/candidates')">
           <div class="stat-content">
             <div class="stat-icon blue">
@@ -24,7 +25,8 @@
         </el-card>
       </el-col>
 
-      <el-col :xs="24" :sm="12" :lg="8">
+      <!-- UI-S4：lg 8→6，四张卡一行（原 4×8=32>24 导致第四张换行留白） -->
+      <el-col :xs="24" :sm="12" :lg="newLayout ? 6 : 8">
         <el-card shadow="hover" class="stat-card" @click="goTo('/jobs')">
           <div class="stat-content">
             <div class="stat-icon green">
@@ -39,7 +41,8 @@
         </el-card>
       </el-col>
 
-      <el-col :xs="24" :sm="12" :lg="8">
+      <!-- UI-S4：lg 8→6，四张卡一行（原 4×8=32>24 导致第四张换行留白） -->
+      <el-col :xs="24" :sm="12" :lg="newLayout ? 6 : 8">
         <el-card shadow="hover" class="stat-card" @click="goTo('/offers')">
           <div class="stat-content">
             <div class="stat-icon orange">
@@ -54,7 +57,8 @@
         </el-card>
       </el-col>
 
-      <el-col :xs="24" :sm="12" :lg="8">
+      <!-- UI-S4：lg 8→6，四张卡一行（原 4×8=32>24 导致第四张换行留白） -->
+      <el-col :xs="24" :sm="12" :lg="newLayout ? 6 : 8">
         <el-card shadow="hover" class="stat-card" @click="goTo('/hc-requests')">
           <div class="stat-content">
             <div class="stat-icon purple">
@@ -111,7 +115,14 @@
               </el-radio-group>
             </div>
           </template>
-          <div ref="funnelChartRef" class="funnel-chart"></div>
+          <div v-if="newLayout && isFunnelEmpty" class="funnel-empty">
+            <EmptyState
+              type="empty"
+              title="暂无招聘数据"
+              description="当前时间范围内没有候选人流转记录"
+            />
+          </div>
+          <div v-show="!newLayout || !isFunnelEmpty" ref="funnelChartRef" class="funnel-chart"></div>
         </el-card>
       </el-col>
 
@@ -167,6 +178,7 @@ import { CardSkeleton } from '@/components/Skeleton';
 import { ElMessage } from 'element-plus';
 import { useAuthStore } from '@/stores/auth';
 import PersonalScoreCard from '@/components/dashboard/PersonalScoreCard.vue';
+import EmptyState from '@/components/common/EmptyState.vue';
 import {
   User,
   Briefcase,
@@ -192,6 +204,8 @@ import { getHCRequests } from '@/api/hc-request';
 
 const router = useRouter();
 const authStore = useAuthStore();
+// UI-S4：新布局开关（关闭时回到改造前栅格与图表配置）；默认开启。回退：localStorage.setItem('ui:new-layout:UI-S4','false')
+const newLayout = ref(localStorage.getItem('ui:new-layout:UI-S4') !== 'false');
 // member 归一为 hr（与菜单/路由守卫一致）
 const isHrRole = computed(() => {
   const raw = authStore.userInfo?.role;
@@ -227,6 +241,9 @@ const funnelData = ref<{ value: number; name: string; itemStyle: { color: string
   { value: 0, name: 'Offer接受', itemStyle: { color: '#73c0de' } },
   { value: 0, name: '成功入职', itemStyle: { color: '#3ba272' } },
 ]);
+
+// UI-S4：所有阶段均为 0 时视为空（不新增接口，纯前端判断）
+const isFunnelEmpty = computed(() => funnelData.value.every((d) => !d.value));
 
 // 根据时间范围类型计算起止日期
 function getDateRangeByType(type: string): { startDate: string; endDate: string } {
@@ -302,55 +319,91 @@ function formatTime(timeStr: string): string {
   }
 }
 
-// 初始化漏斗图
-function initFunnelChart() {
-  if (!funnelChartRef.value) return;
-  
-  funnelChart = echarts.init(funnelChartRef.value);
-  
-  const option: EChartsOption = {
-    tooltip: {
-      trigger: 'item',
-      formatter: '{b}: {c}人 ({d}%)',
-    },
+// UI-S4：漏斗配置统一入口，供初始化与时间范围切换共用，避免两处配置漂移
+function buildFunnelOption(): EChartsOption {
+  // 开关关闭：完整保留改造前配置，便于一键回退对比
+  if (!newLayout.value) {
+    return {
+      tooltip: {
+        trigger: 'item',
+        formatter: '{b}: {c}人 ({d}%)',
+      },
+      series: [
+        {
+          name: '招聘漏斗',
+          type: 'funnel',
+          left: '10%',
+          top: 20,
+          bottom: 20,
+          width: '80%',
+          min: 0,
+          max: 100,
+          minSize: '0%',
+          maxSize: '100%',
+          sort: 'descending',
+          gap: 2,
+          label: {
+            show: true,
+            position: 'inside',
+            formatter: '{b}\n{c}人',
+            fontSize: 12,
+          },
+          labelLine: {
+            show: false,
+          },
+          itemStyle: {
+            borderColor: '#fff',
+            borderWidth: 1,
+          },
+          emphasis: {
+            label: {
+              fontSize: 14,
+            },
+          },
+          data: funnelData.value,
+        },
+      ],
+    };
+  }
+
+  return {
+    tooltip: { trigger: 'item', formatter: '{b}: {c}人 ({d}%)' },
     series: [
       {
         name: '招聘漏斗',
         type: 'funnel',
-        left: '10%',
+        left: '5%',
         top: 20,
         bottom: 20,
-        width: '80%',
-        min: 0,
-        max: 100,
-        minSize: '0%',
+        width: '55%',
+        // UI-S4：删除硬编码 min/max，改为按数据自适应（原 min:0/max:100 会压扁小值阶段）
+        // UI-S4：minSize 0%→20%，保证每一层都有可容纳图形的最小高度
+        minSize: '20%',
         maxSize: '100%',
         sort: 'descending',
         gap: 2,
         label: {
           show: true,
-          position: 'inside',
-          formatter: '{b}\n{c}人',
+          position: 'right', // UI-S4：由 inside 改为右侧外显，彻底解决细条内文字重叠
+          formatter: '{b} {c}人',
           fontSize: 12,
         },
-        labelLine: {
-          show: false,
-        },
-        itemStyle: {
-          borderColor: '#fff',
-          borderWidth: 1,
-        },
-        emphasis: {
-          label: {
-            fontSize: 14,
-          },
-        },
+        labelLine: { show: true, length: 12, lineStyle: { width: 1 } },
+        itemStyle: { borderColor: '#fff', borderWidth: 1 },
+        emphasis: { label: { fontSize: 14 } },
         data: funnelData.value,
       },
     ],
   };
-  
-  funnelChart.setOption(option);
+}
+
+// 初始化漏斗图
+function initFunnelChart() {
+  if (!funnelChartRef.value) return;
+
+  funnelChart = echarts.init(funnelChartRef.value);
+
+  funnelChart.setOption(buildFunnelOption());
 }
 
 // 获取漏斗图数据
@@ -365,7 +418,9 @@ async function fetchFunnelStats() {
         name: item.stage,
         itemStyle: { color: colors[index] || '#5470c6' },
       }));
-      funnelChart?.setOption({ series: [{ data: funnelData.value }] });
+      funnelChart?.setOption(buildFunnelOption());
+      // UI-S4：空态切回图表时容器可能刚从 display:none 恢复，补一次 resize
+      nextTick(() => funnelChart?.resize());
     }
   } catch (error) {
     console.error('获取漏斗数据失败:', error);
@@ -558,6 +613,14 @@ onUnmounted(() => {
 .funnel-chart {
   width: 100%;
   height: 350px;
+}
+
+.funnel-empty {
+  width: 100%;
+  height: 350px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 // 动态列表

@@ -182,6 +182,8 @@ use([
 
 const activeTab = ref('funnel');
 const loading = ref(false);
+// UI-S4：新布局开关（关闭时回到改造前漏斗配置）；默认开启。回退：localStorage.setItem('ui:new-layout:UI-S4','false')
+const newLayout = ref(localStorage.getItem('ui:new-layout:UI-S4') !== 'false');
 
 // 时间范围筛选
 const dateRange = ref<[string, string] | null>(null);
@@ -232,47 +234,89 @@ const funnelData = ref<
   { stage: string; count: number; conversion: number; dropOff: number }[]
 >([]);
 
-const funnelOption = computed(() => ({
-  title: { text: '招聘漏斗分析', left: 'center' },
-  tooltip: {
+const funnelOption = computed(() => {
+  // 数据映射保持不变，仅图表视觉配置随开关切换
+  const data = funnelData.value.map((item, index) => ({
+    value: item.count,
+    name: item.stage,
+    itemStyle: {
+      color: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272'][index],
+    },
+  }));
+
+  const tooltip = {
     trigger: 'item',
     formatter: '{b}: {c}人 ({d}%)',
-  },
-  series: [
-    {
-      name: '招聘漏斗',
-      type: 'funnel',
-      left: '10%',
-      top: 60,
-      bottom: 60,
-      width: '80%',
-      min: 0,
-      max: 1000,
-      minSize: '0%',
-      maxSize: '100%',
-      sort: 'descending',
-      gap: 2,
-      label: {
-        show: true,
-        position: 'inside',
-        formatter: '{b}\n{c}人',
-        fontSize: 12,
-      },
-      labelLine: { show: false },
-      itemStyle: { borderColor: '#fff', borderWidth: 1 },
-      emphasis: {
-        label: { fontSize: 14 },
-      },
-      data: funnelData.value.map((item, index) => ({
-        value: item.count,
-        name: item.stage,
-        itemStyle: {
-          color: ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272'][index],
+  };
+
+  // 开关关闭：完整保留改造前配置
+  if (!newLayout.value) {
+    return {
+      title: { text: '招聘漏斗分析', left: 'center' },
+      tooltip,
+      series: [
+        {
+          name: '招聘漏斗',
+          type: 'funnel',
+          left: '10%',
+          top: 60,
+          bottom: 60,
+          width: '80%',
+          min: 0,
+          max: 1000,
+          minSize: '0%',
+          maxSize: '100%',
+          sort: 'descending',
+          gap: 2,
+          label: {
+            show: true,
+            position: 'inside',
+            formatter: '{b}\n{c}人',
+            fontSize: 12,
+          },
+          labelLine: { show: false },
+          itemStyle: { borderColor: '#fff', borderWidth: 1 },
+          emphasis: {
+            label: { fontSize: 14 },
+          },
+          data,
         },
-      })),
-    },
-  ],
-}));
+      ],
+    };
+  }
+
+  // UI-S4：删除硬编码 min/max，minSize 0%→20%，标签右侧外显
+  return {
+    title: { text: '招聘漏斗分析', left: 'center' },
+    tooltip,
+    series: [
+      {
+        name: '招聘漏斗',
+        type: 'funnel',
+        left: '5%',
+        top: 60,
+        bottom: 60,
+        width: '55%',
+        minSize: '20%',
+        maxSize: '100%',
+        sort: 'descending',
+        gap: 2,
+        label: {
+          show: true,
+          position: 'right',
+          formatter: '{b} {c}人',
+          fontSize: 12,
+        },
+        labelLine: { show: true, length: 12, lineStyle: { width: 1 } },
+        itemStyle: { borderColor: '#fff', borderWidth: 1 },
+        emphasis: {
+          label: { fontSize: 14 },
+        },
+        data,
+      },
+    ],
+  };
+});
 
 // ============ 招聘周期数据 ============
 const cycleData = ref<Array<{ stage: string; avgDays: number; maxDays: number; minDays: number; totalCount: number }>>([]);
