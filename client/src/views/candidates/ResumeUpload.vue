@@ -78,6 +78,8 @@
 
       <div class="result-actions">
         <el-button @click="handleBack">重新上传</el-button>
+        <!-- UI-S3：保留原「填充到表单」，新增完整表单入口；不删除既有按钮 -->
+        <el-button @click="handleGoToFullForm">在完整表单中补充信息</el-button>
         <el-button type="primary" @click="handleConfirm">填充到表单</el-button>
       </div>
     </div>
@@ -86,12 +88,17 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { UploadFilled } from '@element-plus/icons-vue';
 import { parseResume, getParseResumeStatus, type ResumeParseResult } from '@/api/candidate';
 import { uploadFile } from '@/utils/request';
+import { useResumeParserStore } from '@/stores/resumeParser';
 
 const visible = defineModel<boolean>({ default: false });
+const route = useRoute();
+const router = useRouter();
+const resumeParserStore = useResumeParserStore();
 
 const emit = defineEmits<{
   (e: 'confirm', data: ResumeParseResult): void;
@@ -186,6 +193,22 @@ function handleConfirm() {
   }
   visible.value = false;
   handleBack();
+}
+
+/** UI-S3：Pinia 暂存解析结果后进入 CandidateForm；已在表单/详情则走原 confirm，避免误建重复 */
+function handleGoToFullForm() {
+  if (!parsedData.value) return;
+  const data = parsedData.value;
+  resumeParserStore.setParsedData(data);
+  const onForm = route.name === 'CandidateCreate' || route.name === 'CandidateEdit';
+  const onDetail = route.name === 'CandidateDetail';
+  visible.value = false;
+  handleBack();
+  if (onForm || onDetail) {
+    emit('confirm', data);
+    return;
+  }
+  router.push('/candidates/create');
 }
 
 function formatDateRange(start?: string, end?: string): string {

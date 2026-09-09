@@ -13,6 +13,22 @@
         </div>
       </template>
 
+      <!-- UI-S3：录入入口合并——引导先传简历，减少手填；开关关闭时不渲染 -->
+      <div v-if="uiS3Enabled && !isEdit" class="ui-entry-tip">
+        <div class="ui-entry-tip__row">
+          <span>有简历？上传后自动填入，省去手打</span>
+          <el-button size="small" type="primary" @click="showUploader = !showUploader">
+            上传简历解析
+          </el-button>
+        </div>
+        <p class="ui-entry-tip__hint">没有简历？直接手动填写 ↓</p>
+      </div>
+      <ResumeUpload
+        v-if="uiS3Enabled && !isEdit"
+        v-model="showUploader"
+        @confirm="handleResumeParsed"
+      />
+
       <el-form
         ref="formRef"
         :model="formData"
@@ -46,7 +62,12 @@
               <el-row :gutter="20">
                 <el-col :span="12">
                   <el-form-item label="手机号" prop="phone">
-                    <el-input v-model="formData.phone" placeholder="请输入手机号" />
+                    <el-input v-model="formData.phone" placeholder="请输入手机号" @blur="handlePhoneBlur" />
+                    <!-- UI-S3：失焦查重提示（非阻断，不替代保存时查重） -->
+                    <div v-if="uiS3Enabled && phoneDupHint" class="ui-phone-dup">
+                      该手机号已存在：{{ phoneDupHint.name }}（{{ phoneDupHint.stage }}）·
+                      <el-button link type="primary" @click="goDupCandidate">点击查看</el-button>
+                    </div>
                   </el-form-item>
                 </el-col>
                 <el-col :span="12">
@@ -360,15 +381,18 @@ import {
   createCandidate,
   updateCandidate,
   getCandidateById,
+  getCandidateList,
   type CreateCandidateParams,
   type UpdateCandidateParams,
   type WorkHistory,
+  type ResumeParseResult,
 } from '@/api/candidate';
 import { getJobList, type JobItem } from '@/api/job';
 import { getTags, type Tag } from '@/api/tag';
 import { uploadFile } from '@/utils/request';
 import { useDictionaryStore } from '@/stores/dictionary';
 import { useResumeParserStore } from '@/stores/resumeParser';
+import ResumeUpload from './ResumeUpload.vue';
 
 const route = useRoute();
 const dictionaryStore = useDictionaryStore();
@@ -382,6 +406,12 @@ const loading = ref(false);
 const submitting = ref(false);
 const formRef = ref<FormInstance>();
 const jobList = ref<JobItem[]>([]);
+
+// UI-S3：新布局开关，默认开启；回退：localStorage.setItem('ui:new-layout:UI-S3','false') 后刷新
+const uiS3Enabled = localStorage.getItem('ui:new-layout:UI-S3') !== 'false';
+const showUploader = ref(false);
+const phoneDupHint = ref<{ id: string; name: string; stage: string } | null>(null);
+let phoneCheckSeq = 0;
 
 // 授权同意（个保法合规）：勾选状态独立于表单数据，保存时转换为 consentAt/consentNote
 const consented = ref(false);
@@ -581,6 +611,7 @@ async function handleSubmit() {
     } else {
       const res = await createCandidate({ ...formData, ...consentPayload });
       if (res.success) {
+        // UI-S3：保存时查重保留，与失焦提示并存
         // 有查重警告时显示确认弹窗
         if (res.warning && res.duplicates && res.duplicates.length > 0) {
           const duplicateInfo = res.duplicates.map(d => 
@@ -649,33 +680,115 @@ function resetForm() {
   consentNote.value = '';
 }
 
+// UI-S3：解析字段 → 表单字段映射（只映射能确定的；rawText 无对应表单项，跳过）
+const RESUME_FIELD_MAP: Record<string, keyof CreateCandidateParams> = {
+  name: 'name',
+  phone: 'phone',
+  email: 'email',
+  gender: 'gender',
+  age: 'age',
+  workYears: 'workYears',
+  education: 'education',
+  school: 'school',
+  currentCompany: 'currentCompany',
+  currentPosition: 'currentPosition',
+  expectedSalary: 'expectedSalary',
+  skills: 'skills',
+  resumeUrl: 'resumeUrl',
+  workHistory: 'workHistory',
+};
+
+function isFormValueEmpty(value: unknown): boolean {
+  if (Array.isArray(value)) return value.length === 0;
+  return value === undefined || value === null || value === '';
+}
+
+/** UI-S3：解析结果只填空字段，已填内容保持不变；顶部引导与列表跳转共用 */
+function handleResumeParsed(parsed: ResumeParseResult) {
+  resumeParserStore.setParsedData(parsed);
+  let filled = 0;
+  (Object.keys(RESUME_FIELD_MAP) as Array<keyof typeof RESUME_FIELD_MAP>).forEach((fromKey) => {
+    const toKey = RESUME_FIELD_MAP[fromKey];
+    const raw = parsed[fromKey as keyof ResumeParseResult];
+    if (raw === null || raw === undefined || raw === '') return;
+    if (Array.isArray(raw) && raw.length === 0) return;
+    if (!isFormValueEmpty(formData[toKey])) return;
+
+    if (fromKey === 'gender') {
+      if (raw === '男' || raw === '女') {
+        formData.gender = raw;
+        filled += 1;
+      }
+      return;
+    }
+    if (fromKey === 'workHistory' && Array.isArray(raw)) {
+      formData.workHistory = (raw as WorkHistory[]).map((w) => ({
+        company: w.company || '',
+        position: w.position || '',
+        startDate: w.startDate,
+        endDate: w.endDate,
+        description: w.description || '',
+      }));
+      filled += 1;
+      return;
+    }
+    if (fromKey === 'skills' && Array.isArray(raw)) {
+      formData.skills = [...(raw as string[])];
+      filled += 1;
+      return;
+    }
+    if (toKey === 'age' || toKey === 'workYears') {
+      if (typeof raw === 'number') {
+        formData[toKey] = raw;
+        filled += 1;
+      }
+      return;
+    }
+    if (typeof raw === 'string') {
+      Object.assign(formData, { [toKey]: raw });
+      filled += 1;
+    }
+  });
+  showUploader.value = false;
+  ElMessage.success(`已自动填充 ${filled} 项，请核对`);
+}
+
 function fillFromParsedResume() {
   const data = resumeParserStore.parsedData;
   if (data) {
-    // 使用 splice 逐字段写入，确保 Vue 响应式系统正确追踪
-    formData.name = data.name || '';
-    formData.phone = data.phone || '';
-    formData.email = data.email || '';
-    formData.gender = (data.gender === '男' || data.gender === '女') ? data.gender : undefined;
-    formData.age = data.age || undefined;
-    formData.education = data.education || '';
-    formData.school = data.school || '';
-    formData.workYears = data.workYears || undefined;
-    formData.currentCompany = data.currentCompany || '';
-    formData.currentPosition = data.currentPosition || '';
-    formData.expectedSalary = data.expectedSalary || '';
-    formData.skills = data.skills ? [...data.skills] : [];
-    formData.resumeUrl = data.resumeUrl || '';
-    // 深拷贝工作经历，确保响应式追踪
-    formData.workHistory = data.workHistory?.map((w: WorkHistory) => ({
-      company: w.company || '',
-      position: w.position || '',
-      startDate: w.startDate,
-      endDate: w.endDate,
-      description: w.description || '',
-    })) || [];
-    ElMessage.success('简历信息已填充，请确认并补充其他信息');
+    handleResumeParsed(data);
   }
+}
+
+/** UI-S3：失焦用现有列表接口按关键词检索，本地比对手机号；不阻断提交 */
+async function handlePhoneBlur() {
+  if (!uiS3Enabled) return;
+  const seq = (phoneCheckSeq += 1);
+  phoneDupHint.value = null;
+  const phone = (formData.phone || '').trim();
+  if (!/^1[3-9]\d{9}$/.test(phone)) return;
+  try {
+    const res = await getCandidateList({ keyword: phone, page: 1, pageSize: 20 });
+    if (seq !== phoneCheckSeq) return;
+    if (!res.success) return;
+    const hit = res.data.find(
+      (c) => c.phone === phone && (!isEdit.value || c.id !== candidateId.value)
+    );
+    if (hit) {
+      phoneDupHint.value = {
+        id: hit.id,
+        name: hit.name,
+        stage: hit.currentStage || '未知阶段',
+      };
+    }
+  } catch {
+    // 失焦查重失败不打断填写
+  }
+}
+
+function goDupCandidate() {
+  if (!phoneDupHint.value) return;
+  router.push(`/candidates/${phoneDupHint.value.id}`);
 }
 
 function addWorkHistory() {
@@ -799,6 +912,37 @@ onActivated(init);
         margin-bottom: 0;
       }
     }
+  }
+
+  // UI-S3：录入入口引导（仅新增 class，不覆写 Element Plus 全局样式）
+  .ui-entry-tip {
+    margin: 0 20px 20px;
+    padding: $ui-space-lg $ui-space-xl;
+    background: $ui-gray-50;
+    border: 1px solid $ui-border-color-light;
+    border-radius: $ui-radius-md;
+
+    .ui-entry-tip__row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: $ui-space-lg;
+      color: $ui-gray-900;
+      font-size: $ui-font-md;
+    }
+
+    .ui-entry-tip__hint {
+      margin: $ui-space-sm 0 0;
+      color: $ui-gray-500;
+      font-size: $ui-font-sm;
+    }
+  }
+
+  .ui-phone-dup {
+    margin-top: $ui-space-xs;
+    font-size: $ui-font-sm;
+    color: $ui-color-warning;
+    line-height: 1.5;
   }
 }
 </style>
