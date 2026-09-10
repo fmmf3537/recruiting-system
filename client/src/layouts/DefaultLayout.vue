@@ -15,18 +15,43 @@
         :default-active="activeMenu"
         :collapse="appStore.sidebarCollapsed"
         :collapse-transition="false"
+        :default-openeds="uiNewNavLayout ? groupedMenuOpenedIndexes : []"
         router
         class="sidebar-menu"
         background-color="#304156"
         text-color="#bfcbd9"
         active-text-color="#409EFF"
       >
-        <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
-          <el-icon>
-            <component :is="item.icon" />
-          </el-icon>
-          <template #title>{{ item.title }}</template>
-        </el-menu-item>
+        <!-- UI-S1：开关打开时按职能分组；关闭时保持原扁平列表 -->
+        <template v-if="uiNewNavLayout">
+          <el-sub-menu
+            v-for="group in groupedMenuItems"
+            :key="group.title"
+            :index="group.title"
+          >
+            <template #title>
+              <span>{{ group.title }}</span>
+            </template>
+            <el-menu-item
+              v-for="item in group.items"
+              :key="item.path"
+              :index="item.path"
+            >
+              <el-icon>
+                <component :is="item.icon" />
+              </el-icon>
+              <template #title>{{ item.title }}</template>
+            </el-menu-item>
+          </el-sub-menu>
+        </template>
+        <template v-else>
+          <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
+            <el-icon>
+              <component :is="item.icon" />
+            </el-icon>
+            <template #title>{{ item.title }}</template>
+          </el-menu-item>
+        </template>
       </el-menu>
     </el-aside>
 
@@ -41,7 +66,14 @@
             <Fold v-if="!appStore.sidebarCollapsed" />
             <Expand v-else />
           </el-icon>
-          <span class="page-title">{{ route.meta.title }}</span>
+          <span v-if="!uiNewNavLayout" class="page-title">{{ route.meta.title }}</span>
+          <span v-else class="page-title page-breadcrumb">
+            <template v-if="breadcrumbGroupTitle">
+              <span class="breadcrumb-group">{{ breadcrumbGroupTitle }}</span>
+              <span class="breadcrumb-sep">/</span>
+            </template>
+            <span class="breadcrumb-current">{{ route.meta.title }}</span>
+          </span>
         </div>
         
         <div class="header-right">
@@ -176,6 +208,30 @@ const sidebarWidth = computed(() => appStore.sidebarCollapsed ? '64px' : '210px'
 // 当前激活的菜单
 const activeMenu = computed(() => route.path);
 
+// UI-S1：新布局开关，默认开启。回退：localStorage.setItem('ui:new-layout:UI-S1','false') 后刷新
+const uiNewNavLayout = ref(localStorage.getItem('ui:new-layout:UI-S1') !== 'false');
+
+// UI-S1：菜单分组映射（与 router 解耦，不改路由文件）
+const MENU_GROUPS: { title: string; paths: string[] }[] = [
+  { title: '招聘作业', paths: ['/dashboard', '/hiring', '/jobs', '/candidates', '/offers'] },
+  { title: '面试', paths: ['/interview', '/interviews'] },
+  { title: '数据与考核', paths: ['/stats', '/hr-score/my', '/hr-score/team'] },
+  {
+    title: '设置与管理',
+    paths: [
+      '/hc-requests',
+      '/users',
+      '/settings/agencies',
+      '/settings/dictionary',
+      '/settings/tags',
+      '/settings/pipeline-templates',
+      '/settings/ai',
+      '/settings/automation-rules',
+      '/notifications',
+    ],
+  },
+];
+
 // 菜单项
 const menuItems = computed(() => {
   const items = [
@@ -239,6 +295,39 @@ const menuItems = computed(() => {
   }
   
   return items;
+});
+
+// UI-S1：按映射表分组；空组隐藏；未映射 path 归入末尾「其他」
+const groupedMenuItems = computed(() => {
+  const items = menuItems.value;
+  const byPath = new Map(items.map((item) => [item.path, item]));
+  const groupedPaths = new Set<string>();
+  const groups: { title: string; items: typeof items }[] = [];
+
+  for (const group of MENU_GROUPS) {
+    group.paths.forEach((p) => groupedPaths.add(p));
+    const matched = group.paths
+      .map((p) => byPath.get(p))
+      .filter((item): item is (typeof items)[number] => item !== undefined);
+    if (matched.length > 0) {
+      groups.push({ title: group.title, items: matched });
+    }
+  }
+
+  const rest = items.filter((item) => !groupedPaths.has(item.path));
+  if (rest.length > 0) {
+    groups.push({ title: '其他', items: rest });
+  }
+  return groups;
+});
+
+const groupedMenuOpenedIndexes = computed(() => groupedMenuItems.value.map((g) => g.title));
+
+// UI-S1：面包屑分组名；未在 MENU_GROUPS 中（含「其他」）则只显示页面名
+const breadcrumbGroupTitle = computed(() => {
+  const path = route.path;
+  const found = MENU_GROUPS.find((group) => group.paths.includes(path));
+  return found ? found.title : null;
 });
 
 // 处理下拉菜单命令
@@ -376,6 +465,22 @@ onUnmounted(() => {
     .page-title {
       font-size: 16px;
       font-weight: 500;
+    }
+
+    // UI-S1：开关打开时的面包屑，不影响关闭态的 page-title
+    .page-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: $ui-space-sm;
+
+      .breadcrumb-group {
+        color: $ui-gray-500;
+        font-weight: 400;
+      }
+
+      .breadcrumb-sep {
+        color: $ui-gray-300;
+      }
     }
   }
   
