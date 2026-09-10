@@ -28,15 +28,15 @@ export default defineConfig({
     navigationTimeout: 30000,
   },
   projects: [
-    // 现有 13 个 spec 仍走 helpers 硬编码 JWT，不挂 storageState；忽略 _smoke
+    // 现有 13 个 spec 仍走 helpers 硬编码 JWT，不挂 storageState；忽略 _*.spec.ts（role project 专用）
     {
       name: 'chromium',
-      testIgnore: ['**/_smoke.spec.ts'],
+      testIgnore: ['**/_*.spec.ts'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'admin',
-      testMatch: ['**/_smoke.spec.ts'],
+      testMatch: ['**/_*.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/admin.json',
@@ -44,7 +44,7 @@ export default defineConfig({
     },
     {
       name: 'hr',
-      testMatch: ['**/_smoke.spec.ts'],
+      testMatch: ['**/_*.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/hr.json',
@@ -52,7 +52,7 @@ export default defineConfig({
     },
     {
       name: 'hiring_manager',
-      testMatch: ['**/_smoke.spec.ts'],
+      testMatch: ['**/_*.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/hiring_manager.json',
@@ -60,7 +60,7 @@ export default defineConfig({
     },
     {
       name: 'interviewer',
-      testMatch: ['**/_smoke.spec.ts'],
+      testMatch: ['**/_*.spec.ts'],
       use: {
         ...devices['Desktop Chrome'],
         storageState: '.auth/interviewer.json',

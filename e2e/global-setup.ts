@@ -13,7 +13,6 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '..');
 const AUTH_DIR = path.join(__dirname, '.auth');
 const SERVER_DIR = path.join(REPO_ROOT, 'server');
-const CLIENT_DIR = path.join(REPO_ROOT, 'client');
 
 const E2E_DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -121,83 +120,64 @@ function killProcessTree(child: ChildProcess): void {
   }
 }
 
-async function startTempServers(): Promise<ChildProcess[]> {
-  const children: ChildProcess[] = [];
+/** 临时启动 server（仅 API 登录需要；复用已存在的 server） */
+async function startTempServer(): Promise<ChildProcess | null> {
   const serverEnv = buildServerEnv();
 
   const needServer = await waitForPort('127.0.0.1', API_PORT, 1500).then(
     () => false,
     () => true
   );
-  const needClient = await waitForPort('127.0.0.1', CLIENT_PORT, 1500).then(
-    () => false,
-    () => true
-  );
 
-  if (needServer) {
-    console.log('[global-setup] 临时启动 server :3001 ...');
-    const server = spawn(
-      'pnpm',
-      ['exec', 'tsx', '--import', './src/lib/tracing.ts', 'src/index.ts'],
-      { cwd: SERVER_DIR, env: serverEnv, stdio: 'ignore', shell: true }
-    );
-    children.push(server);
-    await waitForPort('127.0.0.1', API_PORT);
-  } else {
+  if (!needServer) {
     console.log('[global-setup] 复用已有 server :3001');
+    return null;
   }
 
-  if (needClient) {
-    console.log('[global-setup] 临时启动 client :5174 ...');
-    const client = spawn('pnpm', ['exec', 'vite', '--port', String(CLIENT_PORT)], {
-      cwd: CLIENT_DIR,
-      env: process.env,
-      stdio: 'ignore',
-      shell: true,
-    });
-    children.push(client);
-    await waitForPort('127.0.0.1', CLIENT_PORT);
-  } else {
-    console.log('[global-setup] 复用已有 client :5174');
-  }
-
-  return children;
+  console.log('[global-setup] 临时启动 server :3001 ...');
+  const server = spawn(
+    'pnpm',
+    ['exec', 'tsx', '--import', './src/lib/tracing.ts', 'src/index.ts'],
+    { cwd: SERVER_DIR, env: serverEnv, stdio: 'ignore', shell: true }
+  );
+  await waitForPort('127.0.0.1', API_PORT);
+  return server;
 }
 
-/** 4 角色 UI 登录，写入 e2e/.auth/<role>.json */
-async function loginViaUIAndSave(role: Role): Promise<void> {
+/** 4 角色登录（API 签发 JWT → 构造 storageState），绕过登录限流（auth.ts loginLimiter 固定 windowMs/max，不读 env） */
+async function loginViaAPIAndSave(role: Role): Promise<void> {
   const { email, password } = CREDENTIALS[role];
-  const browser = await chromium.launch();
-  const context = await browser.newContext({ baseURL: BASE_URL });
-  const page = await context.newPage();
-
-  try {
-    await page.goto('/login');
-
-    const emailInput = page.locator('input[type="email"]');
-    if ((await emailInput.count()) > 0) {
-      await emailInput.first().fill(email);
-    } else {
-      await page.locator('input').first().fill(email);
-    }
-
-    await page.locator('input[type="password"]').fill(password);
-
-    const submit = page.locator(
-      'button[type="submit"], button:has-text("登录"), .login-button'
-    );
-    await submit.first().click();
-
-    await page.waitForURL((url) => !url.pathname.startsWith('/login'), {
-      timeout: 15000,
-    });
-
-    const outPath = path.join(AUTH_DIR, `${role}.json`);
-    await context.storageState({ path: outPath });
-    console.log(`[global-setup] 已写入 storageState: ${outPath}`);
-  } finally {
-    await browser.close();
+  const res = await fetch(`http://localhost:${API_PORT}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    throw new Error(`[global-setup] ${role} 登录失败: HTTP ${res.status}`);
   }
+  const json = (await res.json()) as {
+    token: string;
+    user: { id: string; email: string; name: string; role: string; department: string | null; createdAt: string };
+  };
+
+  const outPath = path.join(AUTH_DIR, `${role}.json`);
+  await fs.promises.writeFile(
+    outPath,
+    JSON.stringify({
+      cookies: [],
+      origins: [
+        {
+          origin: BASE_URL,
+          localStorage: [
+            { name: 'ats_token', value: json.token },
+            { name: 'ats_user', value: JSON.stringify(json.user) },
+          ],
+        },
+      ],
+    }),
+    'utf8'
+  );
+  console.log(`[global-setup] 已写入 storageState: ${outPath}`);
 }
 
 async function globalSetup(_config: FullConfig): Promise<void> {
@@ -206,18 +186,17 @@ async function globalSetup(_config: FullConfig): Promise<void> {
   await ensureInfra();
   migrateAndSeed();
 
-  // Playwright 的 webServer 在 globalSetup 之后才启动，故此处临时拉起供 UI 登录
-  const children = await startTempServers();
+  // Playwright 的 webServer 在 globalSetup 之后才启动；临时起 server 供 API 登录签发 JWT。
+  // （不再起 client / 浏览器：API 登录绕开登录页与限流，client 由正式 webServer 拉起）
+  const serverChild = await startTempServer();
   try {
     for (const role of ROLES) {
-      await loginViaUIAndSave(role);
+      await loginViaAPIAndSave(role);
     }
   } finally {
-    for (const child of children) {
-      killProcessTree(child);
-    }
-    if (children.length > 0) {
-      console.log('[global-setup] 已关闭临时 server/client（正式 webServer 随后由 Playwright 拉起）');
+    if (serverChild) {
+      killProcessTree(serverChild);
+      console.log('[global-setup] 已关闭临时 server（正式 webServer 随后由 Playwright 拉起）');
     }
   }
 }
