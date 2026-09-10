@@ -82,6 +82,10 @@ logs/
 # 本地切片执行器（Cursor Agent CLI runner，硬编码本机 cursor-agent 路径）
 scripts/cursor-exec.cmd
 scripts/cursor-run.ps1
+scripts/wait-slice.ps1
+
+# DSH skill 本地缓存（runner / staging / logs / cursor 等，绝对禁止入库）
+.dsh/
 
 # 用户手册制作流水线（截图产物 + 本地脚本，均属本地开发产物）
 docs/screenshots/
