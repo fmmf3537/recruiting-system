@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "招聘管理系统 E2E 测试",
   "private": true,
+  "type": "module",
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",
