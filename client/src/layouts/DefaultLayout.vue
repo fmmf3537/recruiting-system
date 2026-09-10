@@ -30,6 +30,9 @@
             :index="group.title"
           >
             <template #title>
+              <el-icon>
+                <component :is="group.icon" />
+              </el-icon>
               <span>{{ group.title }}</span>
             </template>
             <el-menu-item
@@ -150,6 +153,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue';
+import type { Component } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import { useAppStore } from '@/stores/app';
@@ -212,12 +216,14 @@ const activeMenu = computed(() => route.path);
 const uiNewNavLayout = ref(localStorage.getItem('ui:new-layout:UI-S1') !== 'false');
 
 // UI-S1：菜单分组映射（与 router 解耦，不改路由文件）
-const MENU_GROUPS: { title: string; paths: string[] }[] = [
-  { title: '招聘作业', paths: ['/dashboard', '/hiring', '/jobs', '/candidates', '/offers'] },
-  { title: '面试', paths: ['/interview', '/interviews'] },
-  { title: '数据与考核', paths: ['/stats', '/hr-score/my', '/hr-score/team'] },
+// UI-S1-fix1：分组标题带图标，折叠态 64px 下仍可见
+const MENU_GROUPS: { title: string; icon: Component; paths: string[] }[] = [
+  { title: '招聘作业', icon: Briefcase, paths: ['/dashboard', '/hiring', '/jobs', '/candidates', '/offers'] },
+  { title: '面试', icon: Calendar, paths: ['/interview', '/interviews'] },
+  { title: '数据与考核', icon: TrendCharts, paths: ['/stats', '/hr-score/my', '/hr-score/team'] },
   {
     title: '设置与管理',
+    icon: Setting,
     paths: [
       '/hc-requests',
       '/users',
@@ -302,7 +308,7 @@ const groupedMenuItems = computed(() => {
   const items = menuItems.value;
   const byPath = new Map(items.map((item) => [item.path, item]));
   const groupedPaths = new Set<string>();
-  const groups: { title: string; items: typeof items }[] = [];
+  const groups: { title: string; icon: Component; items: typeof items }[] = [];
 
   for (const group of MENU_GROUPS) {
     group.paths.forEach((p) => groupedPaths.add(p));
@@ -310,13 +316,14 @@ const groupedMenuItems = computed(() => {
       .map((p) => byPath.get(p))
       .filter((item): item is (typeof items)[number] => item !== undefined);
     if (matched.length > 0) {
-      groups.push({ title: group.title, items: matched });
+      groups.push({ title: group.title, icon: group.icon, items: matched });
     }
   }
 
   const rest = items.filter((item) => !groupedPaths.has(item.path));
   if (rest.length > 0) {
-    groups.push({ title: '其他', items: rest });
+    // UI-S1-fix1：兜底组同样带图标，避免未来未映射菜单折叠后空白
+    groups.push({ title: '其他', icon: Connection, items: rest });
   }
   return groups;
 });
