@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --import ./src/lib/tracing.ts src/index.ts",
+    "dev:e2e": "tsx --import ./src/lib/tracing.ts src/index.ts",
     "build": "tsc",
     "start": "node --import ./dist/lib/tracing.js dist/index.js",
     "lint": "node --max-old-space-size=8192 ./node_modules/eslint/bin/eslint.js src --ext .ts --fix",
@@ -18,6 +19,7 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:test-users": "tsx prisma/seed-test-users.ts",
+    "db:seed:minimal": "tsx prisma/seed-e2e-minimal.ts",
     "db:reset": "prisma migrate reset",
     "test": "vitest run",
     "test:watch": "vitest",

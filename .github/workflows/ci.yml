@@ -72,3 +72,85 @@ jobs:
         with:
           directory: ./server/coverage
           fail_ci_if_error: false
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: e2e_only_pw
+          POSTGRES_DB: e2e_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      CI: true
+      PORT: '3001'
+      # GHA services 独占 5432/6379（与本地 e2e 5433/6381 不同）
+      DATABASE_URL: postgresql://postgres:e2e_only_pw@localhost:5432/e2e_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: e2e-only-secret-must-be-at-least-32-chars
+      CORS_ORIGIN: http://localhost:5174
+      SMTP_HOST: ''
+      SMTP_USER: ''
+      SMTP_PASS: ''
+      ANONYMIZE_CRON: ''
+      EVALUATION_REMINDER_CRON: ''
+      REMINDER_CRON_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - name: Install server dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: server
+      - name: Install client dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: client
+      - name: Install e2e dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: e2e
+      - name: Generate Prisma client
+        run: npx prisma generate
+        working-directory: server
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+        working-directory: server
+      - name: Minimal seed
+        run: pnpm db:seed:minimal
+        working-directory: server
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: e2e
+      - name: Run E2E smoke (4 role projects)
+        run: >
+          pnpm test --project=admin --project=hr
+          --project=hiring_manager --project=interviewer
+          tests/_smoke.spec.ts
+        working-directory: e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7

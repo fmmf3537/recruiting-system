@@ -78,6 +78,11 @@ vi.mock('../../src/middleware/role', () => ({
     }
     next();
   },
+  // 补 requireRole（INTV-S 后 cancel 路由使用）：admin/hr/hiring_manager/interviewer 放行
+  requireRole: (..._roles: string[]) => (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    const role = permissionMockState.role || (req.headers['x-test-role'] as string) || 'admin';
+    next();
+  },
 }));
 
 import interviewRoutes from '../../src/routes/interviews';

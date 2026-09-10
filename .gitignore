@@ -60,6 +60,9 @@ e2e/test-results/
 # Playwright reports
 e2e/playwright-report/
 
+# Playwright auth state（4 角色 storageState 缓存，含 JWT cookie，禁止入库）
+e2e/.auth/
+
 # Kimi exports
 kimi-export-*.md
 
