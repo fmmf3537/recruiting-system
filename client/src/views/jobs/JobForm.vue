@@ -138,23 +138,45 @@
 
             <!-- 职位描述 -->
             <div class="form-section">
-              <h3 class="section-title">职位描述</h3>
-              <!-- AI 辅助操作：interviewer 隐藏（服务端仍会兜底拦截） -->
-              <el-form-item v-if="canAi" label-width="0" class="jd-ai-actions">
-                <el-button
-                  type="primary"
-                  plain
-                  :disabled="jdIsEmpty"
-                  @click="handlePolishClick"
-                >
-                  <el-icon><MagicStick /></el-icon>AI 完善建议
-                </el-button>
-                <el-button type="success" plain @click="openDraftDialog">
-                  <el-icon><MagicStick /></el-icon>AI 辅助生成
-                </el-button>
-              </el-form-item>
+              <!-- UI-S5：新布局将 AI 入口收到标题行右端；关闭开关时恢复原独立整行 -->
+              <div v-if="newLayout" class="jd-section-header">
+                <span class="jd-section-title">职位描述</span>
+                <!-- AI 辅助操作：interviewer 隐藏（服务端仍会兜底拦截） -->
+                <el-form-item v-if="canAi" label-width="0" class="jd-ai-actions">
+                  <el-button
+                    size="small"
+                    type="primary"
+                    plain
+                    :disabled="jdIsEmpty"
+                    @click="handlePolishClick"
+                  >
+                    <el-icon><MagicStick /></el-icon>AI 完善建议
+                  </el-button>
+                  <el-button size="small" type="success" plain @click="openDraftDialog">
+                    <el-icon><MagicStick /></el-icon>AI 辅助生成
+                  </el-button>
+                </el-form-item>
+              </div>
+              <template v-else>
+                <h3 class="section-title">职位描述</h3>
+                <!-- AI 辅助操作：interviewer 隐藏（服务端仍会兜底拦截） -->
+                <el-form-item v-if="canAi" label-width="0" class="jd-ai-actions">
+                  <el-button
+                    type="primary"
+                    plain
+                    :disabled="jdIsEmpty"
+                    @click="handlePolishClick"
+                  >
+                    <el-icon><MagicStick /></el-icon>AI 完善建议
+                  </el-button>
+                  <el-button type="success" plain @click="openDraftDialog">
+                    <el-icon><MagicStick /></el-icon>AI 辅助生成
+                  </el-button>
+                </el-form-item>
+              </template>
               <el-form-item prop="description" label-width="0">
                 <QuillEditor
+                  :key="quillToolbarKey"
                   v-model:content="formData.description"
                   contentType="html"
                   theme="snow"
@@ -171,6 +193,7 @@
               <h3 class="section-title">任职要求</h3>
               <el-form-item prop="requirements" label-width="0">
                 <QuillEditor
+                  :key="quillToolbarKey + '-req'"
                   v-model:content="formData.requirements"
                   contentType="html"
                   theme="snow"
@@ -187,6 +210,13 @@
             <!-- 其他设置 -->
             <div class="form-section settings-section">
               <h3 class="section-title">其他设置</h3>
+
+              <!-- UI-S5：发布前检查栏插在 status 之前；开关关闭不渲染 -->
+              <JobPublishChecklist
+                v-if="newLayout"
+                :items="checklist"
+                @locate="locateField"
+              />
 
               <el-form-item label="职位状态" prop="status">
                 <el-radio-group v-model="formData.status">
@@ -279,6 +309,7 @@ import { useDictionaryStore } from '@/stores/dictionary';
 import { useAuthStore } from '@/stores/auth';
 import JdPolishDialog from '@/components/jobs/JdPolishDialog.vue';
 import JdDraftDialog from '@/components/jobs/JdDraftDialog.vue';
+import JobPublishChecklist from '@/components/jobs/JobPublishChecklist.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -304,6 +335,11 @@ const submitting = ref(false);
 
 // 表单引用
 const formRef = ref();
+
+// UI-S5：新布局开关，默认开启。回退：localStorage.setItem('ui:new-layout:UI-S5','false') 后刷新
+const newLayout = ref(localStorage.getItem('ui:new-layout:UI-S5') !== 'false');
+// Quill 仅在挂载时读 options，开关变化时用 key 重建编辑器（不改 v-model / 其他 props）
+const quillToolbarKey = computed(() => (newLayout.value ? 'slim' : 'full'));
 
 // 表单数据
 const formData = reactive<CreateJobParams>({
@@ -335,27 +371,38 @@ const jdMeta = computed(() => ({
   type: formData.type || undefined,
 }));
 
-// 编辑器配置
-const editorOptions = {
+// UI-S5：原完整工具栏（回退用，勿删）
+const EDITOR_TOOLBAR_FULL = [
+  ['bold', 'italic', 'underline', 'strike'],
+  ['blockquote', 'code-block'],
+  [{ header: 1 }, { header: 2 }],
+  [{ list: 'ordered' }, { list: 'bullet' }],
+  [{ script: 'sub' }, { script: 'super' }],
+  [{ indent: '-1' }, { indent: '+1' }],
+  [{ direction: 'rtl' }],
+  [{ size: ['small', false, 'large', 'huge'] }],
+  [{ header: [1, 2, 3, 4, 5, 6, false] }],
+  [{ color: [] }, { background: [] }],
+  [{ font: [] }],
+  [{ align: [] }],
+  ['clean'],
+];
+
+// UI-S5：精简工具栏（加粗 / 标题 / 列表 / 清除格式）
+const EDITOR_TOOLBAR_SLIM = [
+  ['bold', 'italic'],
+  [{ header: [1, 2, 3, false] }],
+  [{ list: 'ordered' }, { list: 'bullet' }],
+  ['clean'],
+];
+
+// 编辑器配置（开关关闭时恢复原工具栏）
+const editorOptions = computed(() => ({
   modules: {
-    toolbar: [
-      ['bold', 'italic', 'underline', 'strike'],
-      ['blockquote', 'code-block'],
-      [{ header: 1 }, { header: 2 }],
-      [{ list: 'ordered' }, { list: 'bullet' }],
-      [{ script: 'sub' }, { script: 'super' }],
-      [{ indent: '-1' }, { indent: '+1' }],
-      [{ direction: 'rtl' }],
-      [{ size: ['small', false, 'large', 'huge'] }],
-      [{ header: [1, 2, 3, 4, 5, 6, false] }],
-      [{ color: [] }, { background: [] }],
-      [{ font: [] }],
-      [{ align: [] }],
-      ['clean'],
-    ],
+    toolbar: newLayout.value ? EDITOR_TOOLBAR_SLIM : EDITOR_TOOLBAR_FULL,
   },
   placeholder: '请输入内容...',
-};
+}));
 
 // 表单验证规则
 const formRules = {
@@ -382,6 +429,41 @@ const formRules = {
     { required: true, message: '请输入任职要求', trigger: 'blur' },
   ],
 };
+
+type FormRuleItem = { required?: boolean; message?: string };
+
+// UI-S5：空值判断（空串 / undefined / null / 空数组为空；数字 0 视为已填）
+function isEmpty(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (typeof value === 'number') return false;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '') return true;
+    // Quill 空文档占位，与 handleSubmit 既有判断对齐，不新增校验规则
+    if (trimmed === '<p><br></p>') return true;
+    return trimmed.replace(/<[^>]+>/g, '').trim() === '';
+  }
+  return false;
+}
+
+// UI-S5：基于现有 formRules 推导必填项，不新增/修改任何校验规则
+const checklist = computed(() =>
+  Object.entries(formRules)
+    .filter(([, rules]) => (rules as FormRuleItem[]).some((r) => r?.required))
+    .map(([prop, rules]) => {
+      const r = (rules as FormRuleItem[]).find((x) => x?.required);
+      return {
+        prop,
+        label: r?.message ?? prop,
+        done: !isEmpty(formData[prop as keyof typeof formData]),
+      };
+    }),
+);
+
+function locateField(prop: string) {
+  formRef.value?.scrollToField(prop);
+}
 
 function resetForm() {
   Object.assign(formData, {
@@ -595,6 +677,26 @@ onActivated(init);
     margin: 0 0 20px;
     padding-bottom: 10px;
     border-bottom: 1px solid #ebeef5;
+  }
+}
+
+// UI-S5：职位描述标题行 + 右侧 AI 按钮
+.jd-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid $ui-gray-200;
+
+  .jd-section-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: $ui-gray-900;
+  }
+
+  .jd-ai-actions {
+    margin-bottom: 0;
   }
 }
 
