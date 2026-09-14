@@ -1,31 +1,73 @@
 import type { Page } from '@playwright/test';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-export const TEST_EMAIL = 'admin@example.com';
+// ESM 无 __dirname 全局，从 import.meta.url 推导（Node 18+）
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// 预生成的 JWT token（有效期30天），完全绕过登录 API 和限流
-const TEST_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJjbW5zYXh5YjgwMDAwOHJ1dDFwbDY5cmN6IiwiZW1haWwiOiJhZG1pbkBleGFtcGxlLmNvbSIsImRlcGFydG1lbnQiOm51bGwsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3Nzc3NTM2NiwiZXhwIjoxNzgwMzY3MzY2fQ.DE8OEKA8gmoaMv94Trz2Izi4JKTRfV0Urrm1N8SuGCs';
+const AUTH_DIR = path.join(__dirname, '..', '.auth');
+
+/** 与 e2e/global-setup.ts 产出对齐的 storageState 格式 */
+interface StorageState {
+  cookies: unknown[];
+  origins: Array<{
+    origin: string;
+    localStorage: Array<{ name: string; value: string }>;
+  }>;
+}
+
+/** 读取指定角色的 storageState（由 global-setup 预先产出） */
+function loadStorageState(
+  role: 'admin' | 'hr' | 'hiring_manager' | 'interviewer'
+): StorageState {
+  const file = path.join(AUTH_DIR, `${role}.json`);
+  if (!fs.existsSync(file)) {
+    throw new Error(`storageState 缺失: ${file}（请先跑 global-setup 生成 .auth/*.json）`);
+  }
+  return JSON.parse(fs.readFileSync(file, 'utf8')) as StorageState;
+}
 
 /**
- * 通过预生成 JWT 直接注入 localStorage，完全不经过后端登录 API
- * 避免 express-rate-limit 429 频控问题
+ * 通过预生成 storageState 注入 localStorage 登录（不再用过期硬编码 JWT）
+ *
+ * 用 page.addInitScript 在每次 navigation 前自动注入，
+ * 比 evaluate 更稳定（避免 race condition）。
+ *
+ * @param page Playwright Page
+ * @param role 登录角色（默认 admin）
  */
-export async function login(page: Page) {
-  await page.context().clearCookies();
-  await page.goto('/login');
-  await page.waitForLoadState('networkidle');
+export async function login(page: Page): Promise<void>;
+export async function login(
+  page: Page,
+  role: 'admin' | 'hr' | 'hiring_manager' | 'interviewer'
+): Promise<void>;
+export async function login(
+  page: Page,
+  role: 'admin' | 'hr' | 'hiring_manager' | 'interviewer' = 'admin'
+): Promise<void> {
+  const state = loadStorageState(role);
+  const tokenEntry = state.origins[0]?.localStorage.find((x) => x.name === 'ats_token');
+  const userEntry = state.origins[0]?.localStorage.find((x) => x.name === 'ats_user');
+  if (!tokenEntry || !userEntry) {
+    throw new Error(`${role}.json 缺少 ats_token / ats_user entry`);
+  }
 
-  await page.evaluate((token) => {
-    localStorage.setItem('ats_token', token);
-    localStorage.setItem('ats_user', JSON.stringify({
-      id: 'cmnsaxyb800008rut1pl69rcz',
-      email: TEST_EMAIL,
-      name: '系统管理员',
-      role: 'admin',
-      department: null,
-      createdAt: '2026-04-10T02:43:57.044Z',
-    }));
-  }, TEST_TOKEN);
+  // 在每次 page.goto 前注入 localStorage（自动应用）
+  await page.addInitScript(
+    ({ token, user }) => {
+      localStorage.setItem('ats_token', token);
+      localStorage.setItem('ats_user', user);
+    },
+    { token: tokenEntry.value, user: userEntry.value }
+  );
 
   await page.goto('/dashboard');
   await page.waitForLoadState('networkidle');
 }
+
+/**
+ * 兼容旧 TEST_EMAIL 常量（auth.spec.ts 用）
+ * 与 seed-test-users.ts 的 admin 邮箱对齐
+ */
+export const TEST_EMAIL = 'admin@test.local';

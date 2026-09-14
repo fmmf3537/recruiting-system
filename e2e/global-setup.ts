@@ -73,6 +73,8 @@ function buildServerEnv(): NodeJS.ProcessEnv {
     HIRING_DIGEST_CRON: '',
     INTERVIEWER_REMINDER_CRON: '',
     HR_SCORE_CRON: '',
+    // E2E 关闭全局限流（登录/预热大量请求会触发 429）
+    RATE_LIMIT_DISABLED: 'true',
   };
 }
 
@@ -105,6 +107,12 @@ function migrateAndSeed(): void {
   // 走 minimal seed（内部复用 seedTestUsers + PipelineTemplate）
   console.log('[global-setup] pnpm db:seed:minimal ...');
   execSync('pnpm db:seed:minimal', { cwd: SERVER_DIR, env, stdio: 'inherit' });
+
+  // 可选：E2E_SEED_DATA=true 时灌入 UI 测试所需的业务数据（职位/候选人/面试/沟通/Offer/编制/通知）
+  if (process.env.E2E_SEED_DATA === 'true') {
+    console.log('[global-setup] pnpm db:seed:e2e-data ...');
+    execSync('pnpm db:seed:e2e-data', { cwd: SERVER_DIR, env, stdio: 'inherit' });
+  }
 }
 
 function killProcessTree(child: ChildProcess): void {

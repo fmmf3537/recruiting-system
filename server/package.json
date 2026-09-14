@@ -20,6 +20,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:test-users": "tsx prisma/seed-test-users.ts",
     "db:seed:minimal": "tsx prisma/seed-e2e-minimal.ts",
+    "db:seed:e2e-data": "tsx prisma/seed-e2e-data.ts",
     "db:reset": "prisma migrate reset",
     "test": "vitest run",
     "test:watch": "vitest",

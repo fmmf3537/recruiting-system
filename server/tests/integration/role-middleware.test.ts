@@ -6,6 +6,50 @@ import interviewWorkbenchRoutes from '../../src/routes/interview';
 import candidateRoutes from '../../src/routes/candidates';
 import { errorHandler } from '../../src/middleware/errorHandler';
 
+// 在模块加载前设置测试环境变量（env.ts 在 import 时即读取校验）
+vi.hoisted(() => {
+  process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_db';
+  process.env.JWT_SECRET = 'test-secret-key-for-testing-only-32ch';
+  process.env.JWT_EXPIRES_IN = '7d';
+  process.env.NODE_ENV = 'test';
+});
+
+vi.mock('../../src/lib/redis', () => ({
+  redis: { del: vi.fn(async () => 1) },
+  getFromCache: vi.fn(async () => null),
+  setCache: vi.fn(async () => undefined),
+  clearListCache: vi.fn(),
+  clearStatsCache: vi.fn(),
+  connectRedis: vi.fn(),
+}));
+
+// Mock Prisma（路由内调用 job/candidateJob/offer/interview 的 count/findMany）
+vi.mock('../../src/lib/prisma', () => ({
+  default: {
+    job: {
+      count: vi.fn(async () => 0),
+      findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => null),
+      findUnique: vi.fn(async () => null),
+    },
+    candidateJob: {
+      count: vi.fn(async () => 0),
+      findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => null),
+    },
+    offer: {
+      count: vi.fn(async () => 0),
+      findMany: vi.fn(async () => []),
+      findUnique: vi.fn(async () => null),
+      update: vi.fn(async () => ({})),
+    },
+    interview: {
+      count: vi.fn(async () => 0),
+      findMany: vi.fn(async () => []),
+    },
+  },
+}));
+
 vi.mock('../../src/middleware/auth', () => ({
   authenticate: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
     const header = req.headers['x-test-role'];

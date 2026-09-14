@@ -65,13 +65,15 @@ app.use(compression());
 app.set('trust proxy', 1);
 
 // 全局限流：15 分钟内最多 1000 次请求
+// E2E 测试环境（RATE_LIMIT_DISABLED=true）直接跳过限流，避免测试因请求量超限 429
+const isRateLimitDisabled = process.env.RATE_LIMIT_DISABLED === 'true';
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  // K8s 探针 / Prometheus 抓取不计入全局限流
-  skip: (req) => req.path === '/api/health' || req.path === '/api/metrics',
+  // K8s 探针 / Prometheus 抓取不计入全局限流；E2E 测试环境全免
+  skip: (req) => isRateLimitDisabled || req.path === '/api/health' || req.path === '/api/metrics',
   message: {
     success: false,
     error: '请求过于频繁，请稍后再试',

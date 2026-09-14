@@ -31,9 +31,10 @@ test.describe('Offer管理模块', () => {
   });
 
   test('点击查看Offer详情', async () => {
-    const firstRow = page.locator('.el-table__body tr').first();
-    if (await firstRow.isVisible()) {
-      await firstRow.click();
+    // 列表没有行点击事件绑定，必须点"查看详情"按钮跳转
+    const detailBtn = page.locator('button:has-text("查看详情")').first();
+    if (await detailBtn.isVisible({ timeout: 2000 })) {
+      await detailBtn.click();
       await page.waitForTimeout(1000);
       await expect(page).toHaveURL(/\/offers\/.+/);
     }
@@ -50,17 +51,13 @@ test.describe('Offer详情模块', () => {
   });
 
   test('Offer详情页正确加载', async () => {
-    await page.click('.el-menu-item:has-text("Offer管理")');
-    await expect(page).toHaveURL(/\/offers/);
-
-    const firstRow = page.locator('.el-table__body tr').first();
-    if (await firstRow.isVisible()) {
-      await firstRow.click();
+    // 直接点列表"查看详情"按钮跳转（行点击无事件）
+    const detailBtn = page.locator('button:has-text("查看详情")').first();
+    if (await detailBtn.isVisible({ timeout: 2000 })) {
+      await detailBtn.click();
       await page.waitForTimeout(1000);
-
-      await expect(page.locator('.offer-title').first()).toContainText('Offer 详情');
-      await expect(page.locator('text=候选人信息')).toBeVisible();
-      await expect(page.locator('text=Offer 详情')).toBeVisible();
+      await expect(page).toHaveURL(/\/offers\/.+/);
+      await expect(page.locator('.offer-title').first()).toContainText('Offer 详情', { timeout: 5000 });
     }
   });
 

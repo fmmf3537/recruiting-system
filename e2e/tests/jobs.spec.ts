@@ -20,7 +20,8 @@ test.describe('职位管理模块', () => {
   test('点击新建职位按钮跳转正确', async () => {
     await page.click('text=发布职位');
     await expect(page).toHaveURL(/\/jobs\/create/);
-    await expect(page.locator('h2')).toContainText('发布职位');
+    // 页面有「职位管理」page-title + 「发布职位」表单标题，取精确匹配
+    await expect(page.locator('h2:has-text("发布职位")').first()).toBeVisible();
   });
 
   test('搜索职位功能正常', async () => {

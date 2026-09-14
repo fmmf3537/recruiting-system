@@ -79,7 +79,8 @@ test.describe('导航模块', () => {
   });
 
   test('侧边栏菜单正确显示', async ({ page }) => {
-    await expect(page.locator('.sidebar-container')).toBeVisible();
+    // 新版布局菜单容器类名是 .sidebar-menu（旧 .sidebar-container 已废弃）
+    await expect(page.locator('.sidebar-menu, .sidebar-container').first()).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("仪表盘")')).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("职位管理")')).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("候选人管理")')).toBeVisible();

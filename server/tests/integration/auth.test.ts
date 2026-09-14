@@ -298,7 +298,7 @@ describe('认证与账号安全 API 测试', () => {
             userId: ADMIN_ID,
             targetType: 'User',
             targetId: MEMBER_ID,
-            action: 'password_reset',
+            action: 'reset_password',
           }),
         })
       );

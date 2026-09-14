@@ -13,10 +13,12 @@ test.describe('面试管理模块', () => {
     await expect(page.locator('.el-table')).toBeVisible();
   });
 
-  test('搜索框可见', async ({ page }) => {
-    const searchInput = page.locator('input[placeholder*="搜索"]').first();
-    const visible = await searchInput.isVisible({ timeout: 2000 });
-    expect(visible).toBeTruthy();
+  test('筛选器可见', async ({ page }) => {
+    // 面试管理页筛选器是日期选择器（开始/结束日期）+ 轮次/状态下拉，无「搜索」输入框
+    const filterVisible =
+      (await page.locator('input[placeholder="开始日期"]').isVisible({ timeout: 2000 })) ||
+      (await page.locator('.el-select').first().isVisible({ timeout: 2000 }).catch(() => false));
+    expect(filterVisible).toBeTruthy();
   });
 
   test('面试列表可排序', async ({ page }) => {

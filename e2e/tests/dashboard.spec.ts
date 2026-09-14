@@ -59,8 +59,10 @@ test.describe('数据统计模块', () => {
   });
 
   test('招聘漏斗Tab正确显示', async () => {
-    await expect(page.locator('text=招聘漏斗')).toBeVisible();
-    await expect(page.locator('.funnel-chart')).toBeVisible();
+    // 侧边栏菜单与内容区都有"招聘漏斗"，加 .first() 限定
+    await expect(page.locator('text=招聘漏斗').first()).toBeVisible();
+    // v-chart 渲染出 2 个 .funnel-chart 元素（实例 + 容器），加 .first()
+    await expect(page.locator('.funnel-chart').first()).toBeVisible();
   });
 
   test('招聘周期Tab正确显示', async () => {

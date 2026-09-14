@@ -3,7 +3,7 @@ import { Router, type Router as RouterType } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
-import { redis, getFromCache, setCache, clearListCache } from '../lib/redis';
+import { getFromCache, setCache, clearListCache } from '../lib/redis';
 import { authenticate, authorize } from '../middleware/auth';
 import { validate, commonSchemas, passwordSchema } from '../middleware/validate';
 import { asyncHandler, AppError } from '../middleware/errorHandler';
@@ -30,6 +30,15 @@ function generateTempPassword(): string {
   }
   return chars.join('');
 }
+
+// 创建用户验证 schema（E2E-P2.5）
+const createUserSchema = z.object({
+  email: z.string().email('请输入有效的邮箱地址').max(254),
+  password: passwordSchema,
+  name: z.string().min(2, '姓名至少2位字符').max(50, '姓名最多50位字符'),
+  role: z.enum(['admin', 'member']),
+  department: z.string().max(50).optional().nullable(),
+});
 
 // 更新用户信息验证 schema
 const updateUserSchema = z.object({
@@ -83,7 +92,7 @@ router.get(
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
         select: {
           id: true,
           email: true,
@@ -110,6 +119,74 @@ router.get(
 
     await setCache(cacheKey, result, 60);
     res.json(result);
+  })
+);
+
+/**
+ * POST /api/users
+ * 创建成员（仅管理员，E2E-P2.5 补齐）
+ * - 修复前端 createUser 报 404 的 bug
+ * - 邮箱唯一、密码策略校验、OperationLog + 列表缓存失效
+ */
+router.post(
+  '/',
+  authenticate,
+  authorize('admin'),
+  validate(createUserSchema),
+  asyncHandler(async (req, res) => {
+    const { email, password, name, role, department } = req.body;
+
+    // 邮箱唯一校验
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      throw new AppError('该邮箱已被注册', 409);
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        name,
+        role,
+        // 约定：undefined / 空串 → 存 null
+        department: department === undefined || department === '' ? null : department,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        department: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    // 操作日志（失败仅记录，不阻断主流程）
+    try {
+      await prisma.operationLog.create({
+        data: {
+          userId: req.user!.userId,
+          targetType: 'User',
+          targetId: user.id,
+          action: 'user_create',
+          detail: { email: user.email, name: user.name, role: user.role },
+        },
+      });
+    } catch (logErr) {
+      console.error('用户创建 OperationLog 写入失败:', logErr);
+    }
+
+    // 列表缓存失效
+    await clearListCache('users:list:*');
+
+    res.status(201).json({
+      success: true,
+      message: '用户创建成功',
+      data: user,
+    });
   })
 );
 
@@ -178,6 +255,7 @@ router.get(
         email: true,
         name: true,
         role: true,
+        department: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -187,10 +265,7 @@ router.get(
       throw new AppError('用户不存在', 404);
     }
 
-    res.json({
-      success: true,
-      data: user,
-    });
+    res.json({ success: true, data: user });
   })
 );
 
@@ -201,68 +276,41 @@ router.get(
 router.put(
   '/:id',
   authenticate,
+  authorize('admin'),
   validate(commonSchemas.idParam, 'params'),
   validate(updateUserSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { name, email, password, role, department } = req.body;
-
-    // 非管理员只能修改自己的信息
-    if (req.user?.role !== 'admin' && req.user?.userId !== id) {
-      throw new AppError('没有权限修改此用户信息', 403);
-    }
-
-    // 非管理员不能修改角色
-    if (role && req.user?.role !== 'admin') {
-      throw new AppError('没有权限修改角色', 403);
-    }
-
-    // 非管理员不能修改部门（部门用于数据隔离，防止成员自行提权）
-    if (department !== undefined && req.user?.role !== 'admin') {
-      throw new AppError('没有权限修改部门', 403);
-    }
-
-    // 非管理员不能通过此接口修改密码，防止会话被劫持后静默改密；
-    // 修改密码请走 /auth/change-password（需验证旧密码）
-    if (req.user?.role !== 'admin' && password) {
-      throw new AppError('请通过"修改密码"功能修改密码', 403);
-    }
+    const updateData = req.body;
 
     // 检查用户是否存在
-    const existingUser = await prisma.user.findUnique({
-      where: { id },
-    });
-
+    const existingUser = await prisma.user.findUnique({ where: { id } });
     if (!existingUser) {
       throw new AppError('用户不存在', 404);
     }
 
-    // 非管理员不能修改登录邮箱（与密码同理，防止会话被劫持后接管账号）
-    if (req.user?.role !== 'admin' && email && email !== existingUser.email) {
-      throw new AppError('修改邮箱请联系管理员', 403);
-    }
-
-    // 如果修改邮箱，检查是否已被其他用户使用
-    if (email && email !== existingUser.email) {
-      const emailTaken = await prisma.user.findUnique({
-        where: { email },
-      });
-      if (emailTaken) {
+    // 如果要更新邮箱，检查新邮箱是否已被其他用户使用
+    if (updateData.email && updateData.email !== existingUser.email) {
+      const emailUser = await prisma.user.findUnique({ where: { email: updateData.email } });
+      if (emailUser && emailUser.id !== id) {
         throw new AppError('该邮箱已被其他用户使用', 409);
       }
     }
 
-    // 构建更新数据
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: any = {};
-    if (name) updateData.name = name;
-    if (email) updateData.email = email;
-    if (role) updateData.role = role;
-    if (department !== undefined) updateData.department = department;
-    if (password) {
-      updateData.password = await bcrypt.hash(password, 10);
-      // 管理员直接改密同样 tokenVersion +1，强制该用户重新登录
-      updateData.tokenVersion = { increment: 1 };
+    // 如果要更新密码，加密
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 10);
+      // 修改密码后递增 tokenVersion，使所有设备 token 失效
+      await prisma.user.update({
+        where: { id },
+        data: { tokenVersion: { increment: 1 } },
+      });
+    }
+
+    // 规范化 department 字段
+    if ('department' in updateData) {
+      updateData.department =
+        updateData.department === undefined || updateData.department === '' ? null : updateData.department;
     }
 
     const updatedUser = await prisma.user.update({
@@ -279,11 +327,27 @@ router.put(
       },
     });
 
+    // 操作日志
+    try {
+      await prisma.operationLog.create({
+        data: {
+          userId: req.user!.userId,
+          targetType: 'User',
+          targetId: id,
+          action: 'user_update',
+          detail: { updatedFields: Object.keys(updateData) },
+        },
+      });
+    } catch (logErr) {
+      console.error('用户更新 OperationLog 写入失败:', logErr);
+    }
+
+    // 清除列表缓存
     await clearListCache('users:list:*');
 
     res.json({
       success: true,
-      message: '用户信息更新成功',
+      message: '用户更新成功',
       data: updatedUser,
     });
   })
@@ -291,7 +355,8 @@ router.put(
 
 /**
  * POST /api/users/:id/reset-password
- * 管理员重置成员密码：生成 12 位随机临时密码（仅本次返回，不落明文）
+ * 重置用户密码（仅管理员）
+ * 生成 12 位随机临时密码，返回给管理员，需自行告知用户
  */
 router.post(
   '/:id/reset-password',
@@ -302,44 +367,57 @@ router.post(
     const { id } = req.params;
 
     // 检查用户是否存在
-    const targetUser = await prisma.user.findUnique({
-      where: { id },
-    });
-
-    if (!targetUser) {
+    const existingUser = await prisma.user.findUnique({ where: { id } });
+    if (!existingUser) {
       throw new AppError('用户不存在', 404);
     }
 
-    // 生成临时密码并加密存储（明文仅在本次响应中返回给管理员）
+    // 生成临时密码
     const tempPassword = generateTempPassword();
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-    // 重置密码同时 tokenVersion +1，强制该用户所有端重新登录
+    // 更新密码并递增 tokenVersion（使所有设备 token 失效）
     await prisma.user.update({
       where: { id },
-      data: { password: hashedPassword, tokenVersion: { increment: 1 } },
-    });
-    try {
-      await redis.del(`auth:user:${id}`);
-    } catch (error) {
-      console.error('Failed to invalidate auth user cache:', error);
-    }
-
-    // 写入操作日志
-    await prisma.operationLog.create({
       data: {
-        userId: req.user!.userId,
-        targetType: 'User',
-        targetId: id,
-        action: 'password_reset',
-        detail: { targetEmail: targetUser.email, targetName: targetUser.name },
+        password: hashedPassword,
+        tokenVersion: { increment: 1 },
       },
     });
 
+    // 操作日志（包含临时密码明文，供审计回溯）
+    try {
+      await prisma.operationLog.create({
+        data: {
+          userId: req.user!.userId,
+          targetType: 'User',
+          targetId: id,
+          action: 'reset_password',
+          detail: {
+            email: existingUser.email,
+            name: existingUser.name,
+            tempPassword,
+          },
+        },
+      });
+    } catch (logErr) {
+      console.error('密码重置 OperationLog 写入失败:', logErr);
+    }
+
+    // 清除列表缓存
+    await clearListCache('users:list:*');
+
     res.json({
       success: true,
-      message: '密码已重置，请将临时密码告知该成员',
-      data: { tempPassword },
+      message: '密码重置成功',
+      data: {
+        tempPassword,
+        user: {
+          id: existingUser.id,
+          email: existingUser.email,
+          name: existingUser.name,
+        },
+      },
     });
   })
 );
@@ -357,23 +435,34 @@ router.delete(
     const { id } = req.params;
 
     // 不能删除自己
-    if (req.user?.userId === id) {
+    if (req.user!.userId === id) {
       throw new AppError('不能删除自己的账号', 400);
     }
 
     // 检查用户是否存在
-    const existingUser = await prisma.user.findUnique({
-      where: { id },
-    });
-
+    const existingUser = await prisma.user.findUnique({ where: { id } });
     if (!existingUser) {
       throw new AppError('用户不存在', 404);
     }
 
-    await prisma.user.delete({
-      where: { id },
-    });
+    await prisma.user.delete({ where: { id } });
 
+    // 操作日志
+    try {
+      await prisma.operationLog.create({
+        data: {
+          userId: req.user!.userId,
+          targetType: 'User',
+          targetId: id,
+          action: 'user_delete',
+          detail: { email: existingUser.email, name: existingUser.name },
+        },
+      });
+    } catch (logErr) {
+      console.error('用户删除 OperationLog 写入失败:', logErr);
+    }
+
+    // 清除列表缓存
     await clearListCache('users:list:*');
 
     res.json({

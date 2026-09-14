@@ -52,7 +52,8 @@ const updateCandidateSchema = z.object({
   name: z.string().min(2).max(50).optional(),
   phone: z.string().min(11).max(20).optional(),
   email: z.string().email().max(254).optional().or(z.literal('')),
-  gender: z.enum(['男', '女']).optional(),
+  // 编辑回填：DB 为 null / 空串都合法（未填性别、无简历候选人可正常保存）
+  gender: z.enum(['男', '女']).optional().nullable(),
   age: z.number().int().min(18).max(70).optional(),
   education: z.string().max(50).optional(),
   school: z.string().max(100).optional(),
@@ -60,7 +61,7 @@ const updateCandidateSchema = z.object({
   currentCompany: z.string().max(100).optional(),
   currentPosition: z.string().max(100).optional(),
   expectedSalary: z.string().max(50).optional(),
-  resumeUrl: z.string().url().max(2048).optional(),
+  resumeUrl: z.string().url().max(2048).optional().nullable().or(z.literal('')),
   source: z.string().max(50).optional(),
   sourceNote: z.string().max(500).optional(),
   referrer: z.string().max(50).optional(),

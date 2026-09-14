@@ -91,6 +91,8 @@ export default defineConfig({
         HIRING_DIGEST_CRON: '',
         INTERVIEWER_REMINDER_CRON: '',
         HR_SCORE_CRON: '',
+        // E2E 关闭全局限流（大量 API 用例会触发 429，本项豁免）
+        RATE_LIMIT_DISABLED: 'true',
       },
     },
     {

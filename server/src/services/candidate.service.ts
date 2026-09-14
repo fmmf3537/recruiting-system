@@ -185,21 +185,24 @@ export class CandidateService {
     );
 
     // 创建候选人
+    // 注：Candidate 表 name/phone/email/education/source 均为必填 String（无默认），
+    // API schema 却宽松 optional；此处统一兜底，避免不传字段导致 Prisma 500
     const candidate = await prisma.candidate.create({
       data: {
-        name: data.name,
-        phone: data.phone,
-        email: data.email,
+        name: data.name || '未命名候选人',
+        phone: data.phone || '未填写',
+        email: data.email || '',
+        education: data.education || '其他',
         gender: data.gender,
         age: data.age,
-        education: data.education,
         school: data.school,
         workYears: data.workYears,
         currentCompany: data.currentCompany,
         currentPosition: data.currentPosition,
         expectedSalary: data.expectedSalary,
         resumeUrl: data.resumeUrl,
-        source: data.source,
+        // 渠道必填（DB String 非空）；API optional，缺省兜底为「其他」
+        source: data.source || '其他',
         sourceNote: data.sourceNote,
         referrer: data.referrer,
         intro: data.intro,

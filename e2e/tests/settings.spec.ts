@@ -9,7 +9,8 @@ test.describe('自动化邮件规则', () => {
   });
 
   test('自动化邮件规则页正确加载', async ({ page }) => {
-    await expect(page.locator('.page-title').first()).toContainText('自动化邮件规则');
+    // h2.page-title 精确定位页面标题（避免匹配到面包屑「设置与管理/自动化邮件」）
+    await expect(page.locator('h2.page-title:has-text("自动化邮件规则")').first()).toBeVisible();
     await expect(page.locator('.el-table')).toBeVisible();
   });
 
@@ -51,7 +52,7 @@ test.describe('字典管理', () => {
   });
 
   test('字典管理页正确加载', async ({ page }) => {
-    await expect(page.locator('.page-title').first()).toContainText('字典管理');
+    await expect(page.locator('h2.page-title:has-text("字典管理")').first()).toBeVisible();
   });
 });
 
@@ -63,7 +64,7 @@ test.describe('标签管理', () => {
   });
 
   test('标签管理页正确加载', async ({ page }) => {
-    await expect(page.locator('.page-title').first()).toContainText('标签管理');
+    await expect(page.locator('h2.page-title:has-text("标签管理")').first()).toBeVisible();
   });
 });
 
@@ -75,6 +76,6 @@ test.describe('邮件模板管理', () => {
   });
 
   test('邮件模板页正确加载', async ({ page }) => {
-    await expect(page.locator('.page-title').first()).toContainText('邮件模板');
+    await expect(page.locator('h2.page-title:has-text("邮件模板")').first()).toBeVisible();
   });
 });

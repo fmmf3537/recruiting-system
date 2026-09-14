@@ -20,7 +20,8 @@ test.describe('候选人管理模块', () => {
   test('点击新建候选人按钮跳转正确', async () => {
     await page.click('text=新增候选人');
     await expect(page).toHaveURL(/\/candidates\/create/);
-    await expect(page.locator('h2')).toContainText('新增候选人');
+    // 页面有「候选人管理」page-title h2 + 表单「新增候选人」h2，取精确匹配
+    await expect(page.locator('h2:has-text("新增候选人")').first()).toBeVisible();
   });
 
   test('搜索候选人功能正常', async () => {
