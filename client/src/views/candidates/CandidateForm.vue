@@ -36,6 +36,7 @@
         label-width="100px"
         class="candidate-form"
         size="large"
+        :disabled="loading"
       >
         <el-row :gutter="40">
           <el-col :span="14">
@@ -403,6 +404,7 @@ const isEdit = computed(() => !!route.params.id);
 const candidateId = computed(() => route.params.id as string);
 
 const loading = ref(false);
+let detailInflight = 0;
 const submitting = ref(false);
 const formRef = ref<FormInstance>();
 const jobList = ref<JobItem[]>([]);
@@ -500,6 +502,8 @@ async function fetchTags() {
 
 async function fetchCandidateDetail() {
   if (!isEdit.value) return;
+  // keep-alive 下 onMounted + onActivated 会并发各拉一次；全部完成前保持 loading，避免迟到 GET 覆盖用户已填内容
+  detailInflight += 1;
   loading.value = true;
   try {
     const res = await getCandidateById(candidateId.value);
@@ -542,7 +546,10 @@ async function fetchCandidateDetail() {
   } catch (error) {
     ElMessage.error('获取候选人详情失败');
   } finally {
-    loading.value = false;
+    detailInflight -= 1;
+    if (detailInflight === 0) {
+      loading.value = false;
+    }
   }
 }
 

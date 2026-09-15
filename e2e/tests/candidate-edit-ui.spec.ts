@@ -58,14 +58,27 @@ test.describe('候选人信息编辑 UI', () => {
       // 2. 登录（P9 helpers：storageState 注入 + 跳 dashboard）
       await login(page);
 
-      // 3. 直达该候选人详情页
+      // 3. 直达该候选人详情页（限定详情页 h3，避免 keep-alive 仪表盘同名 class 干扰）
       await page.goto(`/candidates/${candidate.id}`);
       await page.waitForLoadState('networkidle');
-      await expect(page.locator('.candidate-name')).toContainText(`UI编辑源-${suffix}`, { timeout: 10000 });
+      await expect(page.locator('.candidate-detail-page .candidate-name')).toContainText(`UI编辑源-${suffix}`, { timeout: 10000 });
 
-      // 4. 点「编辑」→ 进编辑页
+      // 4. 点「编辑」→ 进编辑页；先等详情 GET 回填完成，避免异步 Object.assign 覆盖已填内容
+      const editDetailLoaded = page.waitForResponse(
+        (r) => {
+          const url = r.url();
+          const detailPath = `/api/candidates/${candidate.id}`;
+          return (
+            r.request().method() === 'GET' &&
+            url.includes(detailPath) &&
+            !url.includes(`${detailPath}/`)
+          );
+        },
+        { timeout: 10000 }
+      );
       await page.click('button:has-text("编辑")');
       await expect(page).toHaveURL(/\/candidates\/.+\/edit/, { timeout: 10000 });
+      await editDetailLoaded;
 
       // 5. 改姓名 + 手机号（姓名 min(2)；手机号 11 位）
       const newName = `UI编辑后-${suffix}`;
@@ -93,7 +106,7 @@ test.describe('候选人信息编辑 UI', () => {
         page.goto(`/candidates/${candidate.id}`, { waitUntil: 'networkidle' }),
       ]);
       detailRes.body().then((b) => console.log('[DEBUG] detail GET status:', detailRes.status(), '| name =', b?.name ?? 'n/a')).catch(() => {});
-      await expect(page.locator('.candidate-name')).toContainText(newName, { timeout: 10000 });
+      await expect(page.locator('.candidate-detail-page .candidate-name')).toContainText(newName, { timeout: 10000 });
     } finally {
       // 清理（API 软删）
       await fetch(`${API_BASE}/api/candidates/${candidate.id}`, {
