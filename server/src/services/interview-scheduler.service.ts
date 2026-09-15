@@ -86,6 +86,50 @@ export interface InterviewListItem {
   evaluations: Array<{ conclusion: string | null; submittedAt: string }>;
 }
 
+/** 比较面试官 id 集合（忽略顺序与姓名） */
+function sameInterviewerIds(
+  a: Array<{ id: string }>,
+  b: Array<{ id: string }>
+): boolean {
+  if (a.length !== b.length) return false;
+  const ids = new Set(a.map((i) => i.id));
+  return b.every((i) => ids.has(i.id));
+}
+
+/** 收集实际变更字段名，供 OperationLog.changedFields 使用 */
+function collectChangedFields(
+  existing: {
+    round: string;
+    type: string;
+    location: string | null;
+    notes: string | null;
+    scheduledAt: Date;
+    duration: number;
+    focusType?: string | null;
+  },
+  data: UpdateInterviewInput,
+  nextScheduledAt: Date,
+  prevInterviewers: Array<{ id: string }>,
+  nextInterviewers: Array<{ id: string }>
+): string[] {
+  const changed: string[] = [];
+  if (data.round !== undefined && data.round !== existing.round) changed.push('round');
+  if (data.type !== undefined && data.type !== existing.type) changed.push('type');
+  if (data.location !== undefined && data.location !== existing.location) changed.push('location');
+  if (data.notes !== undefined && data.notes !== existing.notes) changed.push('notes');
+  if (data.duration !== undefined && data.duration !== existing.duration) changed.push('duration');
+  if (data.focusType !== undefined && data.focusType !== existing.focusType) {
+    changed.push('focusType');
+  }
+  if (data.scheduledAt !== undefined && nextScheduledAt.getTime() !== existing.scheduledAt.getTime()) {
+    changed.push('scheduledAt');
+  }
+  if (data.interviewers !== undefined && !sameInterviewerIds(prevInterviewers, nextInterviewers)) {
+    changed.push('interviewers');
+  }
+  return changed;
+}
+
 /**
  * 面试安排服务
  * 处理面试的创建、查询、更新、取消等业务逻辑
@@ -121,51 +165,14 @@ export class InterviewSchedulerService {
       }
     }
 
-    // 面试官冲突检测
+    // 面试官冲突检测（创建时不排除任何 id）
     const scheduledAt = new Date(data.scheduledAt);
     const duration = data.duration || 60;
-    const scheduledEnd = new Date(scheduledAt.getTime() + duration * 60000);
-
-    const interviewerIds = data.interviewers.map((i) => i.id);
-    const conflicts = await prisma.interview.findMany({
-      where: {
-        status: InterviewStatus.scheduled,
-        AND: [
-          { scheduledAt: { lt: scheduledEnd } },
-          {
-            // 面试结束时间 > 新面试开始时间
-            // 用 scheduledAt + (duration minutes * 60000 ms) 判定
-            scheduledAt: { gte: new Date(scheduledAt.getTime() - 120 * 60000) },
-          },
-        ],
-      },
-      include: {
-        candidate: { select: { name: true } },
-      },
-    });
-
-    // 检查是否有面试官冲突（在 JS 层面精确判断时间重叠）
-    for (const conflict of conflicts) {
-      const conflictEnd = new Date(
-        conflict.scheduledAt.getTime() + conflict.duration * 60000
-      );
-      if (conflictEnd <= scheduledAt || conflict.scheduledAt >= scheduledEnd) {
-        continue; // 无时间重叠
-      }
-
-      const conflictInterviewers = conflict.interviewers as Array<{ id: string; name: string }>;
-      const overlappingInterviewers = conflictInterviewers.filter((ci) =>
-        interviewerIds.includes(ci.id)
-      );
-
-      if (overlappingInterviewers.length > 0) {
-        const names = overlappingInterviewers.map((i) => i.name).join('、');
-        throw new AppError(
-          `面试官 ${names} 在 ${conflict.scheduledAt.toLocaleString('zh-CN')} 已有面试安排（候选人：${conflict.candidate.name}）`,
-          409
-        );
-      }
-    }
+    await this.assertNoInterviewerConflicts(
+      data.interviewers.map((i) => i.id),
+      scheduledAt,
+      duration
+    );
 
     // 创建面试
     const interview = await prisma.interview.create({
@@ -350,14 +357,17 @@ export class InterviewSchedulerService {
   }
 
   /**
-   * 更新面试安排
+   * 更新面试安排（仅 scheduled；改时间/时长/面试官需冲突检测并排除自身）
    */
   async updateInterview(
     id: string,
     data: UpdateInterviewInput,
     scope?: CandidateVisibilityScope
   ): Promise<Interview> {
-    const existing = await prisma.interview.findUnique({ where: { id } });
+    const existing = await prisma.interview.findUnique({
+      where: { id },
+      include: { candidate: { select: { id: true, name: true, createdById: true } } },
+    });
     if (!existing) {
       throw new AppError('面试安排不存在', 404);
     }
@@ -367,6 +377,31 @@ export class InterviewSchedulerService {
 
     if (existing.status !== InterviewStatus.scheduled) {
       throw new AppError('只能修改待进行的面试安排', 400);
+    }
+
+    const prevInterviewers = (existing.interviewers as Array<{ id: string; name: string }>) || [];
+    const nextInterviewers = data.interviewers !== undefined ? data.interviewers : prevInterviewers;
+    const nextScheduledAt =
+      data.scheduledAt !== undefined ? new Date(data.scheduledAt) : existing.scheduledAt;
+    const nextDuration = data.duration !== undefined ? data.duration : existing.duration;
+
+    // 时间 / 时长 / 面试官任一变化才做冲突检测，且必须排除当前面试 id
+    if (
+      data.scheduledAt !== undefined ||
+      data.duration !== undefined ||
+      data.interviewers !== undefined
+    ) {
+      await this.assertNoInterviewerConflicts(
+        nextInterviewers.map((i) => i.id),
+        nextScheduledAt,
+        nextDuration,
+        id
+      );
+    }
+
+    const interviewersChanged = !sameInterviewerIds(prevInterviewers, nextInterviewers);
+    if (data.interviewers !== undefined && interviewersChanged) {
+      await this.syncInterviewEvaluations(id, nextInterviewers);
     }
 
     const updateData: Prisma.InterviewUpdateInput = {};
@@ -390,18 +425,83 @@ export class InterviewSchedulerService {
     });
 
     await clearListCache('interviews:list:*');
+
+    const operatorId = scope?.userId || existing.createdById;
+    await this.writeInterviewOperationLog(operatorId, id, 'interview_updated', {
+      changedFields: collectChangedFields(
+        existing,
+        data,
+        nextScheduledAt,
+        prevInterviewers,
+        nextInterviewers
+      ),
+      from: {
+        round: existing.round,
+        scheduledAt: existing.scheduledAt.toISOString(),
+        interviewerIds: prevInterviewers.map((i) => i.id),
+        location: existing.location,
+      },
+      to: {
+        round: data.round !== undefined ? data.round : existing.round,
+        scheduledAt: nextScheduledAt.toISOString(),
+        interviewerIds: nextInterviewers.map((i) => i.id),
+        location: data.location !== undefined ? data.location : existing.location,
+      },
+      notesChanged: data.notes !== undefined && data.notes !== existing.notes,
+    });
+
+    // 通知候选人负责人 + 新增面试官（失败不阻断）
+    const candidateName = existing.candidate?.name || '候选人';
+    const interviewTime = nextScheduledAt.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const nextRound = data.round !== undefined ? data.round : existing.round;
+    if (existing.candidate?.createdById) {
+      void notificationService
+        .createNotification({
+          recipientId: existing.candidate.createdById,
+          title: `面试变更：${candidateName}`,
+          content: `${candidateName} 的${nextRound}安排已更新，时间：${interviewTime}，时长${nextDuration}分钟`,
+          type: 'interview_updated',
+          businessId: id,
+          businessType: 'interview',
+        })
+        .catch((e) => console.error('[Notification] 面试更新通知发送失败:', e));
+    }
+    const prevIdSet = new Set(prevInterviewers.map((i) => i.id));
+    nextInterviewers
+      .filter((i) => !prevIdSet.has(i.id))
+      .forEach((interviewer) => {
+        void notificationService
+          .createNotification({
+            recipientId: interviewer.id,
+            title: `面试邀请：${candidateName}`,
+            content: `您被指定为「${candidateName}」的${nextRound}面试官，时间：${interviewTime}，时长${nextDuration}分钟`,
+            type: 'interview_updated',
+            businessId: id,
+            businessType: 'interview',
+          })
+          .catch(() => {});
+      });
+
     return interview;
   }
 
   /**
-   * 取消面试
+   * 取消面试（状态改为 cancelled，不物理删除；completed 不可取消）
    */
   async cancelInterview(
     id: string,
     reason?: string,
     scope?: CandidateVisibilityScope
   ): Promise<Interview> {
-    const existing = await prisma.interview.findUnique({ where: { id } });
+    const existing = await prisma.interview.findUnique({
+      where: { id },
+      include: { candidate: { select: { id: true, name: true, createdById: true } } },
+    });
     if (!existing) {
       throw new AppError('面试安排不存在', 404);
     }
@@ -428,6 +528,41 @@ export class InterviewSchedulerService {
     });
 
     await clearListCache('interviews:list:*');
+
+    const operatorId = scope?.userId || existing.createdById;
+    await this.writeInterviewOperationLog(operatorId, id, 'interview_cancelled', {
+      reason: reason || '',
+    });
+
+    // 通知候选人负责人与所有面试官（失败不阻断）
+    const candidateName = existing.candidate?.name || '候选人';
+    const reasonSuffix = reason ? `，原因：${reason}` : '';
+    if (existing.candidate?.createdById) {
+      void notificationService
+        .createNotification({
+          recipientId: existing.candidate.createdById,
+          title: `面试取消：${candidateName}`,
+          content: `${candidateName} 的${existing.round}已取消${reasonSuffix}`,
+          type: 'interview_cancelled',
+          businessId: id,
+          businessType: 'interview',
+        })
+        .catch((e) => console.error('[Notification] 面试取消通知发送失败:', e));
+    }
+    const cancelInterviewers = (existing.interviewers as Array<{ id: string; name: string }>) || [];
+    cancelInterviewers.forEach((interviewer) => {
+      void notificationService
+        .createNotification({
+          recipientId: interviewer.id,
+          title: `面试取消：${candidateName}`,
+          content: `「${candidateName}」的${existing.round}已取消${reasonSuffix}`,
+          type: 'interview_cancelled',
+          businessId: id,
+          businessType: 'interview',
+        })
+        .catch(() => {});
+    });
+
     return interview;
   }
 
@@ -537,6 +672,118 @@ export class InterviewSchedulerService {
       },
       orderBy: { scheduledAt: 'asc' },
     });
+  }
+
+  /**
+   * 面试官时间冲突检测；excludeInterviewId 用于更新时排除自身，避免自己和自己冲突
+   */
+  private async assertNoInterviewerConflicts(
+    interviewerIds: string[],
+    scheduledAt: Date,
+    duration: number,
+    excludeInterviewId?: string
+  ): Promise<void> {
+    const scheduledEnd = new Date(scheduledAt.getTime() + duration * 60000);
+
+    const conflicts = await prisma.interview.findMany({
+      where: {
+        status: InterviewStatus.scheduled,
+        ...(excludeInterviewId ? { id: { not: excludeInterviewId } } : {}),
+        AND: [
+          { scheduledAt: { lt: scheduledEnd } },
+          {
+            // 粗筛：开始时间落在新面试前 480 分钟内（时长上限 480），精确重叠在 JS 判断
+            scheduledAt: { gte: new Date(scheduledAt.getTime() - 480 * 60000) },
+          },
+        ],
+      },
+      include: {
+        candidate: { select: { name: true } },
+      },
+    });
+
+    for (const conflict of conflicts) {
+      const conflictEnd = new Date(
+        conflict.scheduledAt.getTime() + conflict.duration * 60000
+      );
+      if (conflictEnd <= scheduledAt || conflict.scheduledAt >= scheduledEnd) {
+        continue; // 无时间重叠
+      }
+
+      const conflictInterviewers = conflict.interviewers as Array<{ id: string; name: string }>;
+      const overlappingInterviewers = conflictInterviewers.filter((ci) =>
+        interviewerIds.includes(ci.id)
+      );
+
+      if (overlappingInterviewers.length > 0) {
+        const names = overlappingInterviewers.map((i) => i.name).join('、');
+        throw new AppError(
+          `面试官 ${names} 在 ${conflict.scheduledAt.toLocaleString('zh-CN')} 已有面试安排（候选人：${conflict.candidate.name}）`,
+          409
+        );
+      }
+    }
+  }
+
+  /**
+   * 同步面试官变更到 InterviewEvaluation：新增待填、删除未提交；已提交者禁止移除
+   */
+  private async syncInterviewEvaluations(
+    interviewId: string,
+    nextInterviewers: Array<{ id: string; name: string }>
+  ): Promise<void> {
+    const existingEvals = await prisma.interviewEvaluation.findMany({
+      where: { interviewId },
+      select: { id: true, interviewerId: true, submittedAt: true },
+    });
+
+    const nextIds = new Set(nextInterviewers.map((i) => i.id));
+
+    const submittedBlocked = existingEvals.filter(
+      (e) => e.submittedAt != null && !nextIds.has(e.interviewerId)
+    );
+    if (submittedBlocked.length > 0) {
+      throw new AppError('已提交评估的面试官不可移除', 400);
+    }
+
+    const toDeleteIds = existingEvals
+      .filter((e) => e.submittedAt == null && !nextIds.has(e.interviewerId))
+      .map((e) => e.id);
+    if (toDeleteIds.length > 0) {
+      await prisma.interviewEvaluation.deleteMany({
+        where: { id: { in: toDeleteIds } },
+      });
+    }
+
+    const existingInterviewerIds = new Set(existingEvals.map((e) => e.interviewerId));
+    const toAdd = nextInterviewers.filter((i) => !existingInterviewerIds.has(i.id));
+    if (toAdd.length > 0) {
+      await interviewEvaluationService.createPendingEvaluations(interviewId, toAdd);
+    }
+  }
+
+  /**
+   * 写面试操作日志；失败仅记 console.error，不阻断主流程
+   */
+  private async writeInterviewOperationLog(
+    userId: string,
+    interviewId: string,
+    action: string,
+    detail: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      await prisma.operationLog.create({
+        data: {
+          userId,
+          targetType: 'Interview',
+          targetId: interviewId,
+          action,
+          detail: detail as Prisma.InputJsonValue,
+        },
+      });
+    } catch (e) {
+      console.error('[OperationLog] Interview 操作日志写入失败:', e);
+    }
   }
 }
 

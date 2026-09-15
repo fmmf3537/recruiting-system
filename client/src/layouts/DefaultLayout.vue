@@ -220,7 +220,7 @@ const uiNewNavLayout = ref(localStorage.getItem('ui:new-layout:UI-S1') !== 'fals
 const MENU_GROUPS: { title: string; icon: Component; paths: string[] }[] = [
   { title: '招聘作业', icon: Briefcase, paths: ['/dashboard', '/hiring', '/jobs', '/candidates', '/offers'] },
   { title: '面试', icon: Calendar, paths: ['/interview', '/interviews'] },
-  { title: '数据与考核', icon: TrendCharts, paths: ['/stats', '/hr-score/my', '/hr-score/team'] },
+  { title: '数据与考核', icon: TrendCharts, paths: ['/stats', '/stats/hr-workload', '/hr-score/my', '/hr-score/team'] },
   {
     title: '设置与管理',
     icon: Setting,
@@ -281,6 +281,7 @@ const menuItems = computed(() => {
   }
   if (role === 'admin') {
     items.push({ path: '/hr-score/team', title: '团队考核', icon: Trophy });
+    items.push({ path: '/stats/hr-workload', title: 'HR 工作监控', icon: TrendCharts });
   }
   
   // 消息通知对所有用户可见

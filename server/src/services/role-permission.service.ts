@@ -26,6 +26,8 @@ const HR_PERMISSIONS = [
   'hr-score:read',
 ] as const;
 
+// hr_workload:read 仅 admin 通过 '*' 拥有，不写入 hr / hiring_manager / interviewer 列表
+
 const HIRING_MANAGER_PERMISSIONS = [
   'candidate:read',
   'job:read',
@@ -66,6 +68,7 @@ export function normalizeUserRole(role: string): UserRoleType {
 export function getRolePermissions(role: UserRoleType): string[] {
   switch (role) {
     case 'admin':
+      // '*' 覆盖 hr_workload:read（admin-only，不授予其他角色）
       return ['*'];
     case 'hr':
       return [...HR_PERMISSIONS];

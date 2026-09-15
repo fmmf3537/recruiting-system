@@ -104,7 +104,7 @@
         </el-form>
       </el-card>
 
-      <el-card class="table-card" shadow="never" v-loading="loading">
+      <el-card v-loading="loading" class="table-card" shadow="never">
         <el-table :data="interviewList" stripe style="width: 100%">
           <el-table-column type="index" label="序号" width="70" align="center" />
           <el-table-column prop="candidateName" label="候选人" min-width="140">
@@ -163,15 +163,20 @@
               <el-tag v-else type="info" size="small">未评估</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="220" fixed="right">
+          <el-table-column label="操作" width="260" fixed="right">
             <template #default="{ row }">
+              <el-button
+                v-if="canManageInterview && row.status === 'scheduled'"
+                type="primary" link size="small"
+                @click="handleEdit(row)"
+              >编辑</el-button>
               <el-button
                 v-if="row.status === 'scheduled'"
                 type="success" link size="small"
                 @click="handleComplete(row)"
               >完成</el-button>
               <el-button
-                v-if="row.status === 'scheduled'"
+                v-if="canManageInterview && row.status === 'scheduled'"
                 type="warning" link size="small"
                 @click="handleCancel(row)"
               >取消</el-button>
@@ -252,9 +257,10 @@
       </el-card>
     </template>
 
-    <!-- 安排面试对话框（抽成组件，与候选人详情共用；编辑回填原未接通，仅覆盖新增） -->
+    <!-- 安排/修改面试对话框（编辑时传入当前行，锁定候选人） -->
     <ScheduleInterviewDialog
       v-model="scheduleDialogVisible"
+      :interview="editingInterview"
       @scheduled="fetchInterviews"
     />
   </div>
@@ -272,9 +278,18 @@ import {
   getInterviews, cancelInterview, completeInterview,
   type InterviewItem, type InterviewListParams,
 } from '@/api/interview';
+import { useAuthStore } from '@/stores/auth';
 import ScheduleInterviewDialog from '@/components/interviews/ScheduleInterviewDialog.vue';
 
 const router = useRouter();
+const authStore = useAuthStore();
+
+// 仅 admin / hr（member 归一为 hr）可编辑/取消；hiring_manager / interviewer 不可见按钮
+const canManageInterview = computed(() => {
+  const raw = authStore.userInfo?.role;
+  const role = raw === 'member' ? 'hr' : raw;
+  return role === 'admin' || role === 'hr';
+});
 
 // ============ 视图和数据 ============
 const viewMode = ref<'list' | 'calendar'>('list');
@@ -292,6 +307,7 @@ const filterForm = reactive({
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const interviewList = ref<InterviewItem[]>([]);
 const scheduleDialogVisible = ref(false);
+const editingInterview = ref<InterviewItem | null>(null);
 
 // ============ 日历相关 ============
 const selectedDate = computed(() => calendarDate.value);
@@ -331,8 +347,9 @@ async function fetchInterviews() {
     if (filterForm.round) params.round = filterForm.round;
     if (filterForm.status) params.status = filterForm.status;
     if (filterForm.dateRange && filterForm.dateRange.length === 2) {
-      params.startDate = filterForm.dateRange[0];
-      params.endDate = filterForm.dateRange[1];
+      const [startDate, endDate] = filterForm.dateRange;
+      params.startDate = startDate;
+      params.endDate = endDate;
     }
 
     const res = await getInterviews(params) as any;
@@ -386,6 +403,12 @@ function handleSizeChange(size: number) {
 }
 
 function handleSchedule() {
+  editingInterview.value = null;
+  scheduleDialogVisible.value = true;
+}
+
+function handleEdit(row: InterviewItem) {
+  editingInterview.value = row;
   scheduleDialogVisible.value = true;
 }
 

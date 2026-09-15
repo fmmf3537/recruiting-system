@@ -244,6 +244,16 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: '/stats/hr-workload',
+        name: 'HrWorkload',
+        component: () => import('@/views/stats/HrWorkload.vue'),
+        meta: {
+          title: 'HR 工作监控',
+          icon: TrendCharts,
+          requireAdmin: true,
+        },
+      },
+      {
         path: '/users',
         name: 'Users',
         component: () => import('@/views/users/index.vue'),

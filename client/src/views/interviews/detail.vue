@@ -1,5 +1,5 @@
 <template>
-  <div class="interview-detail-page" v-loading="loading">
+  <div v-loading="loading" class="interview-detail-page">
     <!-- 页面标题栏 -->
     <div class="page-header">
       <div class="title-section">
@@ -7,6 +7,10 @@
           <el-icon><Back /></el-icon>返回列表
         </el-button>
         <h2 class="page-title">面试详情</h2>
+      </div>
+      <div v-if="canManageInterview && interview?.status === 'scheduled'" class="header-actions">
+        <el-button type="primary" @click="handleEdit">编辑</el-button>
+        <el-button type="warning" @click="handleCancel">取消面试</el-button>
       </div>
     </div>
 
@@ -107,37 +111,53 @@
       </template>
       <v-chart class="radar-chart" :option="radarOption" autoresize />
     </el-card>
+
+    <ScheduleInterviewDialog
+      v-model="scheduleDialogVisible"
+      :interview="interview"
+      @scheduled="fetchDetail"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import { Back } from '@element-plus/icons-vue';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { RadarChart } from 'echarts/charts';
 import { RadarComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { getInterviewById, type InterviewItem } from '@/api/interview';
+import { getInterviewById, cancelInterview, type InterviewItem } from '@/api/interview';
 import {
   getInterviewEvaluations,
   type InterviewEvaluationItem,
   type EvaluationConclusion,
 } from '@/api/evaluation';
 import { getDictionaries, type DictionaryItem } from '@/api/dictionary';
+import { useAuthStore } from '@/stores/auth';
 import QuestionOutlineCard from '@/components/interviews/QuestionOutlineCard.vue';
+import ScheduleInterviewDialog from '@/components/interviews/ScheduleInterviewDialog.vue';
 
 // 注册 ECharts 组件（雷达图按需引入）
 use([CanvasRenderer, RadarChart, RadarComponent, TooltipComponent, LegendComponent]);
 
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 
 const loading = ref(false);
 const interview = ref<InterviewItem | null>(null);
 const evaluations = ref<InterviewEvaluationItem[]>([]);
+const scheduleDialogVisible = ref(false);
+
+const canManageInterview = computed(() => {
+  const raw = authStore.userInfo?.role;
+  const role = raw === 'member' ? 'hr' : raw;
+  return role === 'admin' || role === 'hr';
+});
 
 // F3-C 考察方向字典（code → name）
 const focusTypeDict = ref<DictionaryItem[]>([]);
@@ -209,7 +229,18 @@ async function fetchDetail() {
       }>,
     ]);
     if (detailRes.success) {
-      interview.value = detailRes.data;
+      // GET 详情为 Prisma include 形态，展平后供信息卡与编辑弹窗共用
+      const raw = detailRes.data as InterviewItem & {
+        candidate?: { id: string; name: string };
+        job?: { id: string; title: string } | null;
+      };
+      interview.value = {
+        ...raw,
+        candidateId: raw.candidateId || raw.candidate?.id || '',
+        candidateName: raw.candidateName || raw.candidate?.name || '',
+        jobId: raw.jobId ?? raw.job?.id ?? null,
+        jobTitle: raw.jobTitle ?? raw.job?.title ?? null,
+      };
     }
     if (evalRes.success) {
       evaluations.value = evalRes.data || [];
@@ -227,6 +258,27 @@ async function fetchDetail() {
 
 function handleBack() {
   router.push('/interviews');
+}
+
+function handleEdit() {
+  if (!interview.value) return;
+  scheduleDialogVisible.value = true;
+}
+
+async function handleCancel() {
+  if (!interview.value) return;
+  try {
+    const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消面试', {
+      type: 'warning',
+      inputPlaceholder: '取消原因（可选）',
+      inputType: 'text',
+    }) as { value: string };
+    await cancelInterview(interview.value.id, reason || undefined);
+    ElMessage.success('面试已取消');
+    fetchDetail();
+  } catch {
+    /* 用户关闭确认框 */
+  }
 }
 
 // ============ 格式化 ============
@@ -261,6 +313,9 @@ onMounted(() => {
   padding: 20px;
 
   .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 20px;
 
     .title-section {

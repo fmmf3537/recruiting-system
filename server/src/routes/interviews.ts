@@ -4,7 +4,7 @@ import { interviewController } from '../controllers/interview.controller';
 import { interviewEvaluationController } from '../controllers/interview-evaluation.controller';
 import { interviewOutlineController } from '../controllers/interview-outline.controller';
 import { authenticate } from '../middleware/auth';
-import { requireMatrixPermission, requireRole } from '../middleware/role';
+import { requireMatrixPermission } from '../middleware/role';
 import { validate, validateAll } from '../middleware/validate';
 import { INTERVIEW_TYPES, INTERVIEW_STATUS, INTERVIEW_ROUNDS } from '../constants';
 
@@ -202,11 +202,12 @@ router.get(
 
 /**
  * PATCH /api/interviews/:id
- * 更新面试安排
+ * 更新面试安排（admin 通配 / hr 持有 interview:update；hiring_manager / interviewer 403）
  */
 router.patch(
   '/:id',
   authenticate,
+  requireMatrixPermission('interview:update'),
   validateAll({
     params: interviewIdSchema,
     body: updateInterviewSchema,
@@ -216,12 +217,12 @@ router.patch(
 
 /**
  * POST /api/interviews/:id/cancel
- * 取消面试（仅 admin / hr；用人经理即使作为面试官也不能取消）
+ * 取消面试（与更新同权：interview:update；用人经理/面试官即使可见也不可取消）
  */
 router.post(
   '/:id/cancel',
   authenticate,
-  requireRole('admin', 'hr'),
+  requireMatrixPermission('interview:update'),
   validate(interviewIdSchema, 'params'),
   interviewController.cancelInterview
 );

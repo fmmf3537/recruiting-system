@@ -30,6 +30,8 @@ import agencyRoutes from './agencies';
 import referralRoutes from './referral';
 // F4-S2：HR 考核积分查询 / 报表 / 规则
 import hrScoreRoutes from './hr-score';
+// HRW-S：HR 工作负载监控（admin-only）
+import hrWorkloadRoutes from './hr-workload';
 import aiSettingsRoutes from './ai-settings';
 
 const router: RouterType = Router();
@@ -72,5 +74,6 @@ router.use('/agencies', agencyRoutes);
 router.use('/referral', referralRoutes);
 router.use('/hr-score', hrScoreRoutes);
 router.use('/settings', aiSettingsRoutes);
+router.use('/hr-workload', hrWorkloadRoutes);
 
 export default router;

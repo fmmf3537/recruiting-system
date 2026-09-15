@@ -71,3 +71,23 @@ export async function login(
  * 与 seed-test-users.ts 的 admin 邮箱对齐
  */
 export const TEST_EMAIL = 'admin@test.local';
+
+/** 从 .auth/<role>.json 读取 ats_token（API fetch 不会自动带 storageState） */
+export function loadAuthToken(
+  role: 'admin' | 'hr' | 'hiring_manager' | 'interviewer'
+): string {
+  const state = loadStorageState(role);
+  const entry = state.origins[0]?.localStorage.find((x) => x.name === 'ats_token');
+  if (!entry) throw new Error(`${role}.json 缺少 ats_token entry`);
+  return entry.value;
+}
+
+/** 从 .auth/<role>.json 的 ats_user 解析用户 id，禁止硬编码 cuid */
+export function loadAuthUserId(
+  role: 'admin' | 'hr' | 'hiring_manager' | 'interviewer'
+): string {
+  const state = loadStorageState(role);
+  const userEntry = state.origins[0]?.localStorage.find((x) => x.name === 'ats_user');
+  if (!userEntry) throw new Error(`${role}.json 缺少 ats_user entry`);
+  return (JSON.parse(userEntry.value) as { id: string }).id;
+}

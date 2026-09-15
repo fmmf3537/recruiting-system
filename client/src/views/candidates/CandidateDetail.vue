@@ -330,10 +330,20 @@
           <div v-if="candidateInterviews.length" class="interview-list">
             <div v-for="iv in candidateInterviews" :key="iv.id" class="interview-item">
               <div class="interview-header">
-                <el-tag size="small">{{ iv.round }}</el-tag>
-                <el-tag size="small" :type="getInterviewStatusType(iv.status)">
-                  {{ getInterviewStatusText(iv.status) }}
-                </el-tag>
+                <div class="interview-tags">
+                  <el-tag size="small">{{ iv.round }}</el-tag>
+                  <el-tag size="small" :type="getInterviewStatusType(iv.status)">
+                    {{ getInterviewStatusText(iv.status) }}
+                  </el-tag>
+                </div>
+                <div v-if="canManageInterview && iv.status === 'scheduled'" class="interview-actions">
+                  <el-button type="primary" link size="small" @click="handleEditInterview(iv)">
+                    编辑
+                  </el-button>
+                  <el-button type="warning" link size="small" @click="handleCancelInterview(iv)">
+                    取消
+                  </el-button>
+                </div>
               </div>
               <div class="interview-detail">
                 <div class="detail-row">
@@ -563,6 +573,7 @@
       v-model="scheduleDialogVisible"
       :initial-candidate-id="candidateId"
       :initial-candidate-name="candidate?.name"
+      :interview="editingInterview"
       @scheduled="fetchCandidateInterviews"
     />
   </div>
@@ -588,14 +599,14 @@ import { getPipelineStages } from '@/api/pipeline-template';
 import { getTags, setCandidateTags, type Tag } from '@/api/tag';
 import { getEmailTemplates, sendEmail, type EmailTemplate } from '@/api/email';
 import { getTasksByCandidate, updateTask, generateDefaultTasks, type OnboardingTask } from '@/api/onboarding-task';
-import { getCandidateInterviews, type InterviewItem } from '@/api/interview';
+import { getCandidateInterviews, cancelInterview, type InterviewItem } from '@/api/interview';
 import { getCandidateCommunications, createCommunication, type CommunicationItem } from '@/api/communication';
 import { useAuthStore } from '@/stores/auth';
 import { resolveFileUrl } from '@/utils/file';
 import { useResumeParserStore } from '@/stores/resumeParser';
 import MatchScoreCard from '@/components/candidates/MatchScoreCard.vue';
-import ResumeUpload from './ResumeUpload.vue';
 import ScheduleInterviewDialog from '@/components/interviews/ScheduleInterviewDialog.vue';
+import ResumeUpload from './ResumeUpload.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -617,6 +628,13 @@ const tagSelectValue = ref('');
 // 面试安排
 const candidateInterviews = ref<InterviewItem[]>([]);
 const scheduleDialogVisible = ref(false);
+const editingInterview = ref<InterviewItem | null>(null);
+
+const canManageInterview = computed(() => {
+  const raw = authStore.userInfo?.role;
+  const role = raw === 'member' ? 'hr' : raw;
+  return role === 'admin' || role === 'hr';
+});
 
 // 沟通记录
 const candidateCommunications = ref<CommunicationItem[]>([]);
@@ -1079,7 +1097,28 @@ async function handleCommSubmit() {
 
 // 安排面试：打开本页内嵌弹窗（预填当前候选人）
 function handleScheduleInterview() {
+  editingInterview.value = null;
   scheduleDialogVisible.value = true;
+}
+
+function handleEditInterview(iv: InterviewItem) {
+  editingInterview.value = iv;
+  scheduleDialogVisible.value = true;
+}
+
+async function handleCancelInterview(iv: InterviewItem) {
+  try {
+    const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消面试', {
+      type: 'warning',
+      inputPlaceholder: '取消原因（可选）',
+      inputType: 'text',
+    }) as { value: string };
+    await cancelInterview(iv.id, reason || undefined);
+    ElMessage.success('面试已取消');
+    fetchCandidateInterviews();
+  } catch {
+    /* 用户关闭确认框 */
+  }
 }
 
 function getInterviewStatusType(status: string): string {
@@ -1368,6 +1407,11 @@ onActivated(() => {
           justify-content: space-between;
           align-items: center;
           margin-bottom: 8px;
+          .interview-tags {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+          }
         }
         .interview-detail {
           display: flex;

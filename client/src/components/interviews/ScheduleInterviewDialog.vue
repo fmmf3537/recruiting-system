@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="visible"
-    title="安排面试"
+    :title="isEdit ? '修改面试安排' : '安排面试'"
     width="560px"
     destroy-on-close
   >
@@ -36,6 +36,7 @@
           v-model="scheduleForm.jobId"
           placeholder="选择职位（可选）"
           clearable
+          :disabled="isEdit"
           style="width: 100%"
         >
           <el-option v-for="j in jobOptions" :key="j.id" :label="j.title" :value="j.id" />
@@ -115,7 +116,7 @@
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
       <el-button type="primary" :loading="scheduleSubmitting" @click="handleSubmit">
-        确认
+        {{ isEdit ? '保存' : '确认' }}
       </el-button>
     </template>
   </el-dialog>
@@ -124,15 +125,22 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
-import { createInterview, type InterviewParams } from '@/api/interview';
+import { createInterview, updateInterview, type InterviewItem, type InterviewParams } from '@/api/interview';
 import { getCandidateList } from '@/api/candidate';
 import { getInterviewerOptions } from '@/api/user';
 import { getJobList } from '@/api/job';
 import { getDictionaries, type DictionaryItem } from '@/api/dictionary';
 
+/** 编辑回填允许列表项或候选人详情接口的嵌套 job/candidate 形态 */
+type EditableInterview = InterviewItem & {
+  candidate?: { id: string; name: string };
+  job?: { id: string; title: string } | null;
+};
+
 const props = defineProps<{
   initialCandidateId?: string;
   initialCandidateName?: string;
+  interview?: EditableInterview | null;
 }>();
 
 const emit = defineEmits<{
@@ -171,9 +179,36 @@ const userOptions = ref<Array<{ id: string; name: string }>>([]);
 const jobOptions = ref<Array<{ id: string; title: string }>>([]);
 const focusTypeOptions = ref<DictionaryItem[]>([]);
 
-const candidateLocked = computed(() => Boolean(props.initialCandidateId));
+const isEdit = computed(() => Boolean(props.interview?.id));
+const candidateLocked = computed(() => Boolean(props.initialCandidateId) || isEdit.value);
+
+function formatScheduledAt(value: string | Date): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 
 function resetForm() {
+  const iv = props.interview;
+  if (iv) {
+    const candidateId = iv.candidateId || iv.candidate?.id || props.initialCandidateId || '';
+    const candidateName = iv.candidateName || iv.candidate?.name || props.initialCandidateName || '当前候选人';
+    scheduleForm.candidateId = candidateId;
+    scheduleForm.jobId = iv.jobId || iv.job?.id || '';
+    scheduleForm.round = iv.round || '初试';
+    scheduleForm.type = iv.type || '现场';
+    scheduleForm.interviewerIds = (iv.interviewers || []).map((i) => i.id);
+    scheduleForm.scheduledAt = formatScheduledAt(iv.scheduledAt);
+    scheduleForm.duration = iv.duration || 60;
+    scheduleForm.location = iv.location || '';
+    scheduleForm.notes = iv.notes || '';
+    scheduleForm.focusType = iv.focusType || '';
+    candidateOptions.value = candidateId
+      ? [{ id: candidateId, name: candidateName, phone: '' }]
+      : [];
+    return;
+  }
   scheduleForm.candidateId = props.initialCandidateId || '';
   scheduleForm.jobId = '';
   scheduleForm.round = '初试';
@@ -248,12 +283,25 @@ async function loadFocusTypeDict() {
   }
 }
 
-watch(visible, (open) => {
+watch(visible, async (open) => {
   if (!open) return;
   resetForm();
-  loadInterviewers();
-  loadJobs();
-  loadFocusTypeDict();
+  await Promise.all([loadInterviewers(), loadJobs(), loadFocusTypeDict()]);
+  // 编辑回填的面试官/职位可能不在下拉当前页，补进 options 以免只显示 id
+  const iv = props.interview;
+  if (iv?.interviewers?.length) {
+    const missing = iv.interviewers.filter(
+      (i) => !userOptions.value.some((u) => u.id === i.id)
+    );
+    if (missing.length) {
+      userOptions.value = [...userOptions.value, ...missing];
+    }
+  }
+  const jobId = iv?.jobId || iv?.job?.id;
+  const jobTitle = iv?.jobTitle || iv?.job?.title;
+  if (jobId && !jobOptions.value.some((j) => j.id === jobId)) {
+    jobOptions.value = [...jobOptions.value, { id: jobId, title: jobTitle || '已选职位' }];
+  }
 });
 
 async function handleSubmit() {
@@ -262,23 +310,38 @@ async function handleSubmit() {
 
   scheduleSubmitting.value = true;
   try {
-    const data: InterviewParams = {
-      candidateId: scheduleForm.candidateId,
-      jobId: scheduleForm.jobId || undefined,
-      round: scheduleForm.round,
-      type: scheduleForm.type,
-      interviewers: scheduleForm.interviewerIds.map((id) => {
-        const user = userOptions.value.find((u) => u.id === id);
-        return { id, name: user?.name || '' };
-      }),
-      scheduledAt: scheduleForm.scheduledAt,
-      duration: scheduleForm.duration,
-      location: scheduleForm.location || undefined,
-      notes: scheduleForm.notes || undefined,
-      focusType: scheduleForm.focusType || undefined,
-    };
-    await createInterview(data);
-    ElMessage.success('面试安排创建成功');
+    const interviewers = scheduleForm.interviewerIds.map((id) => {
+      const user = userOptions.value.find((u) => u.id === id);
+      return { id, name: user?.name || '' };
+    });
+    if (isEdit.value && props.interview) {
+      await updateInterview(props.interview.id, {
+        round: scheduleForm.round,
+        type: scheduleForm.type,
+        interviewers,
+        scheduledAt: scheduleForm.scheduledAt,
+        duration: scheduleForm.duration,
+        location: scheduleForm.location || undefined,
+        notes: scheduleForm.notes || undefined,
+        focusType: scheduleForm.focusType || undefined,
+      });
+      ElMessage.success('面试安排已更新');
+    } else {
+      const data: InterviewParams = {
+        candidateId: scheduleForm.candidateId,
+        jobId: scheduleForm.jobId || undefined,
+        round: scheduleForm.round,
+        type: scheduleForm.type,
+        interviewers,
+        scheduledAt: scheduleForm.scheduledAt,
+        duration: scheduleForm.duration,
+        location: scheduleForm.location || undefined,
+        notes: scheduleForm.notes || undefined,
+        focusType: scheduleForm.focusType || undefined,
+      };
+      await createInterview(data);
+      ElMessage.success('面试安排创建成功');
+    }
     visible.value = false;
     emit('scheduled');
   } catch {
