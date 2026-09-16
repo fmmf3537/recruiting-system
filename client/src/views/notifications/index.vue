@@ -34,7 +34,12 @@
           :key="item.id"
           class="notification-item"
           :class="{ unread: !item.isRead }"
+          role="button"
+          tabindex="0"
+          :aria-label="`${item.title}${item.isRead ? '' : '，未读'}`"
           @click="handleItemClick(item)"
+          @keydown.enter="handleItemClick(item)"
+          @keydown.space.prevent="handleItemClick(item)"
         >
           <div class="item-dot" :class="{ active: !item.isRead }" />
           <div class="item-content">
