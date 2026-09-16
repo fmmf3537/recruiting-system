@@ -27,15 +27,15 @@
 
       <!-- UI-S4：lg 8→6，四张卡一行（原 4×8=32>24 导致第四张换行留白） -->
       <el-col :xs="24" :sm="12" :lg="newLayout ? 6 : 8">
-        <el-card shadow="hover" class="stat-card" @click="goTo('/jobs')">
+        <el-card shadow="hover" class="stat-card" @click="goTo('/interviews')">
           <div class="stat-content">
             <div class="stat-icon green">
               <el-icon :size="40"><Briefcase /></el-icon>
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ stats.openJobs }}</div>
-              <div class="stat-title">进行中职位数</div>
-              <div class="stat-desc">包含开放和暂停的职位</div>
+              <div class="stat-title">面试中候选人</div>
+              <div class="stat-desc">已进入面试流程</div>
             </div>
           </div>
         </el-card>
@@ -196,11 +196,8 @@ import type { EChartsOption } from 'echarts';
 import * as echarts from 'echarts/core';
 
 use([CanvasRenderer, FunnelChart, TooltipComponent]);
-import { getFunnelStats } from '@/api/stats';
-import { getCandidateList, getRecentActivities } from '@/api/candidate';
-import { getJobList } from '@/api/job';
-import { getOfferList } from '@/api/offer';
-import { getHCRequests } from '@/api/hc-request';
+import { getDashboardStats, getFunnelStats } from '@/api/stats';
+import { getRecentActivities } from '@/api/candidate';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -430,25 +427,13 @@ async function fetchFunnelStats() {
 // 获取统计数据
 async function fetchStats() {
   try {
-    const [candidatesRes, jobsRes, offersRes, hcRes] = await Promise.all([
-      getCandidateList({ page: 1, pageSize: 1 }),
-      getJobList({ page: 1, pageSize: 1, status: 'open' }),
-      getOfferList({ page: 1, pageSize: 100, result: 'accepted' }),
-      getHCRequests({ pageSize: 100 }),
-    ]);
-
-    if (candidatesRes.success) {
-      stats.newCandidates = candidatesRes.pagination.total;
-    }
-    if (jobsRes.success) {
-      stats.openJobs = jobsRes.pagination.total;
-    }
-    if (offersRes.success) {
-      stats.pendingJoin = offersRes.data.filter((o: any) => !o.joined).length;
-    }
-    if (hcRes.success) {
-      stats.hcApproved = hcRes.data.filter((h: any) => h.status === 'approved' || h.status === 'fulfilled').length;
-      stats.hcPending = hcRes.data.filter((h: any) => h.status === 'submitted').length;
+    const res = await getDashboardStats();
+    if (res.success) {
+      stats.newCandidates = res.data.kpi.newCandidatesThisMonth;
+      stats.openJobs = res.data.kpi.interviewingCount;
+      stats.pendingJoin = res.data.kpi.pendingOffers;
+      stats.hcApproved = res.data.hcStats.totalApproved;
+      stats.hcPending = res.data.hcStats.openRequests;
     }
   } catch (error) {
     console.error('获取统计数据失败:', error);
