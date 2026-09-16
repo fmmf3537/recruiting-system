@@ -18,6 +18,20 @@ body {
   height: 100%;
 }
 
+// 全局交互基础：所有可点击控件保持清晰焦点，方便键盘和辅助技术使用。
+:focus-visible {
+  outline: 2px solid $ui-color-primary;
+  outline-offset: 2px;
+}
+
+// 弹窗在窄屏下使用接近全宽，避免表单横向溢出。
+@media (max-width: 640px) {
+  .el-dialog {
+    width: calc(100vw - 32px) !important;
+    margin: 16px auto !important;
+  }
+}
+
 // 通用工具类
 .flex {
   display: flex;
