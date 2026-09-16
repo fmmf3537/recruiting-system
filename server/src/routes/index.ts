@@ -33,6 +33,7 @@ import hrScoreRoutes from './hr-score';
 // HRW-S：HR 工作负载监控（admin-only）
 import hrWorkloadRoutes from './hr-workload';
 import aiSettingsRoutes from './ai-settings';
+import auditLogRoutes from './audit-logs';
 
 const router: RouterType = Router();
 
@@ -74,6 +75,7 @@ router.use('/agencies', agencyRoutes);
 router.use('/referral', referralRoutes);
 router.use('/hr-score', hrScoreRoutes);
 router.use('/settings', aiSettingsRoutes);
+router.use('/audit-logs', auditLogRoutes);
 router.use('/hr-workload', hrWorkloadRoutes);
 
 export default router;

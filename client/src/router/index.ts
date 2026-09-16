@@ -264,6 +264,12 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: '/users/audit-logs',
+        name: 'AuditLogs',
+        component: () => import('@/views/users/AuditLogs.vue'),
+        meta: { title: '操作审计', requireAdmin: true, hidden: true },
+      },
+      {
         path: '/settings/dictionary',
         name: 'Dictionary',
         component: () => import('@/views/settings/DictionaryPage.vue'),
