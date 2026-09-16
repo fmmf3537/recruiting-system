@@ -291,6 +291,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onActivated, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { ArrowLeft, MagicStick } from '@element-plus/icons-vue';
 import { QuillEditor } from '@vueup/vue-quill';
@@ -354,6 +355,7 @@ const formData = reactive<CreateJobParams>({
   status: 'open' as JobStatus,
   tagIds: [],
 });
+const { markSaved } = useUnsavedChangesGuard(formData, submitting);
 
 const tagOptions = ref<Tag[]>([]);
 
@@ -619,6 +621,7 @@ async function handleSubmit() {
       const res = await updateJob(jobId.value, updateData);
       if (res.success) {
         ElMessage.success('职位修改成功');
+        markSaved();
         router.push('/jobs');
       }
     } else {
@@ -626,6 +629,7 @@ async function handleSubmit() {
       const res = await createJob(formData);
       if (res.success) {
         ElMessage.success('职位发布成功');
+        markSaved();
         router.push('/jobs');
       }
     }

@@ -222,6 +222,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { ArrowLeft } from '@element-plus/icons-vue';
 import { createOffer, type CreateOfferParams } from '@/api/offer';
@@ -266,6 +267,7 @@ const formData = reactive<CreateOfferParams & {
   jobId: '',
   note: '',
 });
+const { markSaved } = useUnsavedChangesGuard(formData, submitting);
 
 const formRules: FormRules = {
   candidateId: [{ required: true, message: '请选择候选人', trigger: 'change' }],
@@ -353,6 +355,7 @@ async function handleSubmit() {
     });
     if (res.success) {
       ElMessage.success('Offer创建成功（草稿），请在详情页提交审批');
+      markSaved();
       router.push('/offers');
     }
   } catch (error: any) {

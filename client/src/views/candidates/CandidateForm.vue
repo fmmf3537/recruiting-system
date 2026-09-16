@@ -376,6 +376,7 @@
 <script setup lang="ts">
 import { ref, reactive, onActivated, onMounted, nextTick, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { ArrowLeft, Upload, Document, Delete, Plus } from '@element-plus/icons-vue';
 import {
@@ -442,6 +443,7 @@ const formData = reactive<CreateCandidateParams>({
   skills: [] as string[],
   workHistory: [],
 });
+const { markSaved } = useUnsavedChangesGuard(formData, submitting);
 
 const tagOptions = ref<Tag[]>([]);
 
@@ -613,6 +615,7 @@ async function handleSubmit() {
       const res = await updateCandidate(candidateId.value, updateData);
       if (res.success) {
         ElMessage.success('修改成功');
+        markSaved();
         router.back();
       }
     } else {
@@ -638,6 +641,7 @@ async function handleSubmit() {
             );
             // 用户确认后继续创建
             ElMessage.success('创建成功');
+            markSaved();
             router.back();
           } catch {
             // 用户取消，不执行任何操作
@@ -648,6 +652,7 @@ async function handleSubmit() {
         // 清理简历解析临时数据
         resumeParserStore.clearParsedData();
         ElMessage.success('创建成功');
+        markSaved();
         router.back();
       }
     }

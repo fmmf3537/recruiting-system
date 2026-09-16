@@ -97,6 +97,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
 import { ArrowLeft } from '@element-plus/icons-vue';
 import { useDictionaryStore } from '@/stores/dictionary';
@@ -125,6 +126,7 @@ const formData = reactive<CreateHCRequestParams>({
   reason: 'new',
   reasonNote: '',
 });
+const { markSaved } = useUnsavedChangesGuard(formData, submitting);
 
 const formRules: FormRules = {
   title: [{ required: true, message: '请输入岗位名称', trigger: 'blur' }],
@@ -158,6 +160,7 @@ async function fetchDetail() {
     }
   } catch {
     ElMessage.error('加载失败');
+    markSaved();
     router.back();
   } finally {
     loading.value = false;
@@ -181,6 +184,7 @@ async function handleSubmit() {
       await createHCRequest(data);
       ElMessage.success('编制申请创建成功');
     }
+    markSaved();
     router.back();
   } catch (e: any) {
     ElMessage.error(e.message || '提交失败');
