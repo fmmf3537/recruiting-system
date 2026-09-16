@@ -11,6 +11,18 @@
       </el-button>
     </div>
 
+    <el-card class="filter-card" shadow="never">
+      <el-form :model="filterForm" inline @submit.prevent>
+        <el-form-item label="关键词">
+          <el-input v-model="filterForm.keyword" clearable placeholder="姓名或邮箱" @keyup.enter="handleSearch" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="handleSearch">搜索</el-button>
+          <el-button @click="handleReset">重置</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
     <!-- 数据表格 -->
     <el-card class="table-card" v-loading="loading">
       <el-table
@@ -250,6 +262,7 @@ const dialogVisible = ref(false);
 const isEdit = ref(false);
 const submitting = ref(false);
 const currentUserId = ref<string>('');
+const filterForm = reactive({ keyword: '' });
 
 // 表单
 const formRef = ref();
@@ -288,6 +301,7 @@ async function fetchUserList() {
     const res = await getUserList({
       page: pagination.page,
       pageSize: pagination.pageSize,
+      keyword: filterForm.keyword || undefined,
     });
     if (res.success) {
       userList.value = res.data;
@@ -298,6 +312,16 @@ async function fetchUserList() {
   } finally {
     loading.value = false;
   }
+}
+
+function handleSearch() {
+  pagination.page = 1;
+  fetchUserList();
+}
+
+function handleReset() {
+  filterForm.keyword = '';
+  handleSearch();
 }
 
 // 分页处理
