@@ -6,9 +6,11 @@
         <h2 class="page-title">成员管理</h2>
         <span class="page-subtitle">管理系统成员账号及权限</span>
       </div>
-      <el-button type="primary" @click="handleAdd" v-if="authStore.isAdmin">
-        <el-icon><Plus /></el-icon>新增成员
-      </el-button>
+      <div class="header-actions">
+        <el-button @click="router.push('/users/role-permissions')">角色权限</el-button>
+        <el-button @click="router.push('/users/audit-logs')">操作审计</el-button>
+        <el-button type="primary" @click="handleAdd" v-if="authStore.isAdmin"><el-icon><Plus /></el-icon>新增成员</el-button>
+      </div>
     </div>
 
     <el-card class="filter-card" shadow="never">

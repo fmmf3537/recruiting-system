@@ -270,6 +270,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '操作审计', requireAdmin: true, hidden: true },
       },
       {
+        path: '/users/role-permissions',
+        name: 'RolePermissions',
+        component: () => import('@/views/users/RolePermissions.vue'),
+        meta: { title: '角色权限', requireAdmin: true, hidden: true },
+      },
+      {
         path: '/settings/dictionary',
         name: 'Dictionary',
         component: () => import('@/views/settings/DictionaryPage.vue'),
