@@ -847,7 +847,12 @@ async function handleBatchAdvanceSubmit() {
       ...batchAdvanceForm,
     });
     if (res.success) {
-      ElMessage.success(res.message || '批量推进完成');
+      const failed = res.data?.failed || 0;
+      if (failed > 0) {
+        ElMessage.warning(res.message || `批量推进完成，${failed} 人未处理`);
+      } else {
+        ElMessage.success(res.message || '批量推进完成');
+      }
       batchAdvanceVisible.value = false;
       clearSelection();
       fetchCandidateList();
@@ -886,6 +891,7 @@ async function handleBatchTagSubmit() {
 
 onMounted(() => {
   dictionaryStore.fetchDictionaries('source');
+  fetchTags();
   fetchAgencySourceOptions();
   fetchCandidateList();
 });

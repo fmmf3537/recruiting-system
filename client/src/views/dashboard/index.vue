@@ -89,10 +89,10 @@
         </div>
       </template>
       <div class="actions-list">
-        <el-button type="primary" size="large" @click="goTo('/candidates')">
+        <el-button type="primary" size="large" @click="goTo('/candidates/create')">
           <el-icon><Plus /></el-icon>新增候选人
         </el-button>
-        <el-button type="success" size="large" @click="goTo('/jobs')">
+        <el-button type="success" size="large" @click="goTo('/jobs/create')">
           <el-icon><Briefcase /></el-icon>发布职位
         </el-button>
         <el-button type="warning" size="large" @click="goTo('/stats')">
