@@ -7,19 +7,22 @@ export interface UserListParams {
   keyword?: string;
 }
 
+// 成员管理可分配角色（member 为历史遗留，不再开放新增/编辑）
+export type ManageableUserRole = 'admin' | 'hr' | 'hiring_manager' | 'interviewer';
+
 // 创建用户参数
 export interface CreateUserParams {
   email: string;
   password: string;
   name: string;
-  role: 'admin' | 'member';
+  role: ManageableUserRole;
   department?: string | null;
 }
 
 // 更新用户参数
 export interface UpdateUserParams {
   name?: string;
-  role?: 'admin' | 'member';
+  role?: ManageableUserRole;
   department?: string | null;
 }
 

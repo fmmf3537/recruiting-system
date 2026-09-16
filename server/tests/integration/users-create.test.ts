@@ -122,7 +122,7 @@ describe('POST /api/users 创建成员（E2E-P2.5）', () => {
     email: 'newuser@test.local',
     password: 'NewUser123',
     name: '新成员',
-    role: 'member' as const,
+    role: 'hr' as const,
     department: '研发部',
   };
 
@@ -160,9 +160,34 @@ describe('POST /api/users 创建成员（E2E-P2.5）', () => {
     expect(res.body.data.id).toBeTruthy();
     expect(res.body.data.email).toBe(newUserData.email);
     expect(res.body.data.name).toBe(newUserData.name);
-    expect(res.body.data.role).toBe('member');
+    expect(res.body.data.role).toBe('hr');
     expect(res.body.data.department).toBe('研发部');
     expect(res.body.message).toBe('用户创建成功');
+  });
+
+  it('admin 可创建 hiring_manager / interviewer 角色；历史 member 不再接受', async () => {
+    mockAuthUser({ id: ADMIN_ID, email: 'admin@test.com', role: 'admin' });
+    vi.mocked(prisma.operationLog.create).mockResolvedValue({} as never);
+    vi.mocked(prisma.user.create).mockImplementation(async (args) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = (args as any)?.data;
+      return { ...createdUserRecord, role: data.role } as never;
+    });
+
+    for (const role of ['hiring_manager', 'interviewer'] as const) {
+      const res = await request(app)
+        .post('/api/users')
+        .set('Authorization', `Bearer ${signAdminToken()}`)
+        .send({ ...newUserData, email: `${role}@test.local`, role });
+      expect(res.status).toBe(201);
+      expect(res.body.data.role).toBe(role);
+    }
+
+    const legacyMember = await request(app)
+      .post('/api/users')
+      .set('Authorization', `Bearer ${signAdminToken()}`)
+      .send({ ...newUserData, email: 'legacy-member@test.local', role: 'member' });
+    expect(legacyMember.status).toBe(400);
   });
 
   it('重复邮箱 → 409', async () => {

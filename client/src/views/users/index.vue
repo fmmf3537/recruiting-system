@@ -38,15 +38,10 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="role" label="角色" width="120" align="center">
+        <el-table-column prop="role" label="角色" width="130" align="center">
           <template #default="{ row }">
-            <el-tag
-              :type="row.role === 'admin' ? 'danger' : 'info'"
-              class="role-tag"
-              @click="handleRoleChange(row)"
-              style="cursor: pointer"
-            >
-              {{ row.role === 'admin' ? '管理员' : '成员' }}
+            <el-tag :type="roleTagType(row.role)" class="role-tag">
+              {{ roleLabel(row.role) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -157,8 +152,14 @@
             <el-option label="管理员" value="admin">
               <span style="color: #f56c6c">●</span> 管理员
             </el-option>
-            <el-option label="成员" value="member">
-              <span style="color: #909399">●</span> 成员
+            <el-option label="HR" value="hr">
+              <span style="color: #409eff">●</span> HR
+            </el-option>
+            <el-option label="用人经理" value="hiring_manager">
+              <span style="color: #e6a23c">●</span> 用人经理
+            </el-option>
+            <el-option label="面试官" value="interviewer">
+              <span style="color: #909399">●</span> 面试官
             </el-option>
           </el-select>
         </el-form-item>
@@ -207,24 +208,6 @@
         <el-button type="primary" @click="resetDialogVisible = false">我已保存</el-button>
       </template>
     </el-dialog>
-
-    <!-- 角色切换确认弹窗 -->
-    <el-dialog
-      v-model="roleDialogVisible"
-      title="切换角色"
-      width="400px"
-    >
-      <p>
-        确定要将 <strong>{{ currentUser?.name }}</strong> 的角色切换为
-        <strong>{{ currentUser?.role === 'admin' ? '成员' : '管理员' }}</strong> 吗？
-      </p>
-      <template #footer>
-        <el-button @click="roleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="confirmRoleChange" :loading="roleSubmitting">
-          确定
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -243,6 +226,7 @@ import {
   type UserItem,
   type CreateUserParams,
   type UpdateUserParams,
+  type ManageableUserRole,
 } from '@/api/user';
 
 // Store
@@ -273,7 +257,7 @@ const formData = reactive<CreateUserParams & { id?: string }>({
   name: '',
   email: '',
   password: '',
-  role: 'member',
+  role: 'hr',
   department: null,
 });
 
@@ -296,11 +280,6 @@ const formRules = {
     { required: true, message: '请选择角色', trigger: 'change' },
   ],
 };
-
-// 角色切换
-const roleDialogVisible = ref(false);
-const roleSubmitting = ref(false);
-const currentUser = ref<UserItem | null>(null);
 
 // 获取用户列表
 async function fetchUserList() {
@@ -351,6 +330,29 @@ function formatDate(dateStr: string): string {
   });
 }
 
+// 历史 member 归一为 HR 展示；新增/编辑只允许 admin/hr/hiring_manager/interviewer
+function normalizeDisplayRole(role: string): ManageableUserRole {
+  return role === 'member' ? 'hr' : (role as ManageableUserRole);
+}
+
+function roleLabel(role: string): string {
+  const map: Record<ManageableUserRole, string> = {
+    admin: '管理员',
+    hr: 'HR',
+    hiring_manager: '用人经理',
+    interviewer: '面试官',
+  };
+  return map[normalizeDisplayRole(role)] || role;
+}
+
+function roleTagType(role: string): 'danger' | 'success' | 'warning' | 'info' {
+  const normalized = normalizeDisplayRole(role);
+  if (normalized === 'admin') return 'danger';
+  if (normalized === 'hr') return 'success';
+  if (normalized === 'hiring_manager') return 'warning';
+  return 'info';
+}
+
 // 新增
 function handleAdd() {
   isEdit.value = false;
@@ -358,7 +360,7 @@ function handleAdd() {
   formData.name = '';
   formData.email = '';
   formData.password = '';
-  formData.role = 'member';
+  formData.role = 'hr';
   formData.department = null;
   dialogVisible.value = true;
 }
@@ -370,7 +372,7 @@ function handleEdit(row: UserItem) {
   formData.name = row.name;
   formData.email = row.email;
   formData.password = '';
-  formData.role = row.role as 'admin' | 'member';
+  formData.role = normalizeDisplayRole(row.role);
   formData.department = row.department as string | null;
   dialogVisible.value = true;
 }
@@ -482,40 +484,6 @@ async function copyTempPassword() {
     ElMessage.success('已复制到剪贴板');
   } catch {
     ElMessage.warning('复制失败，请手动选中复制');
-  }
-}
-
-// 角色切换点击
-function handleRoleChange(row: UserItem) {
-  // 不能修改自己的角色
-  if (row.id === authStore.userInfo?.id) {
-    ElMessage.warning('不能修改当前登录账号的角色');
-    return;
-  }
-
-  currentUser.value = row;
-  roleDialogVisible.value = true;
-}
-
-// 确认角色切换
-async function confirmRoleChange() {
-  if (!currentUser.value) return;
-
-  roleSubmitting.value = true;
-  try {
-    const newRole = currentUser.value.role === 'admin' ? 'member' : 'admin';
-    const res = await updateUser(currentUser.value.id, {
-      role: newRole,
-    });
-    if (res.success) {
-      ElMessage.success('角色切换成功');
-      roleDialogVisible.value = false;
-      fetchUserList();
-    }
-  } catch (error: any) {
-    ElMessage.error(error.message || '角色切换失败');
-  } finally {
-    roleSubmitting.value = false;
   }
 }
 

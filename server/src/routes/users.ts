@@ -31,12 +31,15 @@ function generateTempPassword(): string {
   return chars.join('');
 }
 
+// 成员管理可分配角色：member 为历史遗留值，新建/编辑不再开放，统一用 hr
+const MANAGEABLE_USER_ROLES = ['admin', 'hr', 'hiring_manager', 'interviewer'] as const;
+
 // 创建用户验证 schema（E2E-P2.5）
 const createUserSchema = z.object({
   email: z.string().email('请输入有效的邮箱地址').max(254),
   password: passwordSchema,
   name: z.string().min(2, '姓名至少2位字符').max(50, '姓名最多50位字符'),
-  role: z.enum(['admin', 'member']),
+  role: z.enum(MANAGEABLE_USER_ROLES),
   department: z.string().max(50).optional().nullable(),
 });
 
@@ -45,7 +48,7 @@ const updateUserSchema = z.object({
   name: z.string().min(2).max(50).optional(),
   email: z.string().email().max(254).optional(),
   password: passwordSchema.optional(),
-  role: z.enum(['admin', 'member']).optional(),
+  role: z.enum(MANAGEABLE_USER_ROLES).optional(),
   department: z.string().max(50).optional().nullable(),
 });
 
