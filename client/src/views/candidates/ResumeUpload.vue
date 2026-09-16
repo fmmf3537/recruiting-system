@@ -143,6 +143,7 @@ async function handleParse() {
 
     const jobId = res.data.jobId;
     let completed = false;
+    let failed = false;
 
     // 轮询查询结果（最多 120 秒）
     for (let i = 0; i < 60; i++) {
@@ -161,11 +162,12 @@ async function handleParse() {
       }
       if (state === 'failed') {
         ElMessage.error(failedReason || '简历解析失败');
+        failed = true;
         break;
       }
     }
 
-    if (!completed && !parsedData.value) {
+    if (!completed && !failed && !parsedData.value) {
       ElMessage.error('简历解析超时，请稍后重试');
     }
   } catch (error: any) {
