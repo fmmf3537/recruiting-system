@@ -606,7 +606,20 @@ onActivated(() => {
 
       .action-buttons {
         display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
         gap: 10px;
+      }
+    }
+  }
+
+  @media (max-width: 760px) {
+    .offer-card .header-content {
+      flex-direction: column;
+      gap: 16px;
+
+      .action-buttons {
+        justify-content: flex-start;
       }
     }
   }
