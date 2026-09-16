@@ -1,4 +1,5 @@
 import request from '@/utils/request';
+import type { Tag } from '@/api/tag';
 
 // 候选人性别
 export type Gender = '男' | '女';
