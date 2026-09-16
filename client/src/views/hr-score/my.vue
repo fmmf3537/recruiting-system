@@ -191,6 +191,11 @@ onMounted(() => {
   padding: 20px;
 }
 
+@media (max-width: 760px) {
+  .page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .page-header .header-actions { width: 100%; display: flex; flex-wrap: wrap; }
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;

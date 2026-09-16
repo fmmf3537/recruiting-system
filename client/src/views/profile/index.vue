@@ -1,6 +1,11 @@
 <template>
   <div class="profile-page">
-    <h1 class="page-title">个人中心</h1>
+    <div class="page-header">
+      <div class="title-section">
+        <h1 class="page-title">个人中心</h1>
+        <span class="page-subtitle">管理个人资料、账号安全和快捷入口</span>
+      </div>
+    </div>
 
     <el-row :gutter="20">
       <!-- 左侧：个人信息卡片 -->
