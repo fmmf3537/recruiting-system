@@ -228,6 +228,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onActivated } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { useRouter } from 'vue-router';
 import { Plus, UserFilled } from '@element-plus/icons-vue';
 import { useAuthStore } from '@/stores/auth';
 import { useDictionaryStore } from '@/stores/dictionary';
@@ -245,6 +246,7 @@ import {
 
 // Store
 const authStore = useAuthStore();
+const router = useRouter();
 const dictionaryStore = useDictionaryStore();
 
 // 部门选项
