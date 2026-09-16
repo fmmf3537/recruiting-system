@@ -400,7 +400,7 @@ export function batchAdvanceStage(data: {
   status: StageStatus;
   rejectReason?: string;
   note?: string;
-}): Promise<OperationResult & { data?: { success: number; failed: number } }> {
+}): Promise<OperationResult & { data?: { success: number; failed: number; failedIds?: string[] } }> {
   return request.post('/candidates/batch/advance', data) as Promise<OperationResult & { data?: { success: number; failed: number } }>;
 }
 

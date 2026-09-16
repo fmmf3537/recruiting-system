@@ -1471,9 +1471,10 @@ export class CandidateService {
     candidateIds: string[],
     data: AdvanceStageInput,
     operatedById: string
-  ): Promise<{ success: number; failed: number }> {
+  ): Promise<{ success: number; failed: number; failedIds: string[] }> {
     let success = 0;
     let failed = 0;
+    const failedIds: string[] = [];
 
     // 操作人角色只查一次，避免每个候选人都重复查询用户表（N+1）
     const operator = await prisma.user.findUnique({ where: { id: operatedById } });
@@ -1487,6 +1488,7 @@ export class CandidateService {
       department: operator?.department ?? null,
     });
     failed += candidateIds.length - operableIds.length;
+    failedIds.push(...candidateIds.filter((id) => !operableIds.includes(id)));
 
     for (const id of operableIds) {
       try {
@@ -1495,10 +1497,11 @@ export class CandidateService {
       } catch (error) {
         logger.error({ err: error, candidateId: id }, '[BatchAdvance] 候选人推进失败');
         failed++;
+        failedIds.push(id);
       }
     }
 
-    return { success, failed };
+    return { success, failed, failedIds };
   }
 
   /**

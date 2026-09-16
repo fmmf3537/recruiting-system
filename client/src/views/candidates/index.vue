@@ -854,7 +854,11 @@ async function handleBatchAdvanceSubmit() {
         ElMessage.success(res.message || '批量推进完成');
       }
       batchAdvanceVisible.value = false;
-      clearSelection();
+      if (failed > 0 && res.data?.failedIds?.length) {
+        selectedCandidates.value = selectedCandidates.value.filter((candidate) => res.data?.failedIds?.includes(candidate.id));
+      } else {
+        clearSelection();
+      }
       fetchCandidateList();
     }
   } catch (error: any) {
