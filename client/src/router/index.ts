@@ -287,6 +287,12 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: '/settings',
+        name: 'SettingsHome',
+        component: () => import('@/views/settings/index.vue'),
+        meta: { title: '设置中心', requireAdmin: true },
+      },
+      {
         path: '/settings/email-templates',
         name: 'EmailTemplates',
         component: () => import('@/views/settings/EmailTemplates.vue'),

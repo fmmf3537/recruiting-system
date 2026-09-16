@@ -293,6 +293,7 @@ const menuItems = computed(() => {
 
   // 仅管理员可见成员管理和字典管理
   if (authStore.isAdmin) {
+    items.push({ path: '/settings', title: '设置中心', icon: Setting });
     items.push({ path: '/users', title: '成员管理', icon: User });
     items.push({ path: '/settings/dictionary', title: '字典管理', icon: Setting });
     items.push({ path: '/settings/tags', title: '标签管理', icon: Setting });
