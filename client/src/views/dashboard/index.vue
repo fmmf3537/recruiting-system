@@ -50,8 +50,8 @@
             </div>
             <div class="stat-info">
               <div class="stat-value">{{ stats.pendingJoin }}</div>
-              <div class="stat-title">待入职人数</div>
-              <div class="stat-desc">已接受 Offer 待入职</div>
+              <div class="stat-title">待处理 Offer</div>
+              <div class="stat-desc">等待候选人答复</div>
             </div>
           </div>
         </el-card>
