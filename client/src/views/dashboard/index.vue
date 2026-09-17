@@ -1,6 +1,11 @@
 <template>
   <div class="dashboard-container">
-    <h1 class="page-title">仪表盘</h1>
+    <PageHeader title="工作台" description="今天，优先处理需要你决策的事项">
+      <template #actions>
+        <el-button @click="goTo('/candidates/create')">上传简历</el-button>
+        <el-button type="primary" @click="goTo('/candidates/create')">新增候选人</el-button>
+      </template>
+    </PageHeader>
 
     <!-- 统计卡片 -->
     <el-row :gutter="20" class="stats-row">
@@ -81,26 +86,6 @@
       </el-col>
     </el-row>
 
-    <!-- 快捷操作 -->
-    <el-card class="quick-actions" shadow="never">
-      <template #header>
-        <div class="card-header">
-          <span>快捷操作</span>
-        </div>
-      </template>
-      <div class="actions-list">
-        <el-button type="primary" size="large" @click="goTo('/candidates/create')">
-          <el-icon><Plus /></el-icon>新增候选人
-        </el-button>
-        <el-button type="success" size="large" @click="goTo('/jobs/create')">
-          <el-icon><Briefcase /></el-icon>发布职位
-        </el-button>
-        <el-button type="warning" size="large" @click="goTo('/stats')">
-          <el-icon><TrendCharts /></el-icon>查看报表
-        </el-button>
-      </div>
-    </el-card>
-
     <!-- 图表和列表 -->
     <el-row :gutter="20" class="chart-row">
       <el-col :xs="24" :lg="14">
@@ -175,7 +160,7 @@
 import { ref, reactive, computed, onMounted, onActivated, onUnmounted, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { CardSkeleton } from '@/components/Skeleton';
-import { ElMessage } from 'element-plus';
+import PageHeader from '@/components/common/PageHeader.vue';
 import { useAuthStore } from '@/stores/auth';
 import PersonalScoreCard from '@/components/dashboard/PersonalScoreCard.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
@@ -183,8 +168,6 @@ import {
   User,
   Briefcase,
   CircleCheck,
-  Plus,
-  TrendCharts,
   UserFilled,
   Tickets,
 } from '@element-plus/icons-vue';
@@ -477,14 +460,9 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 .dashboard-container {
-  padding: 20px;
-}
-
-.page-title {
-  margin: 0 0 24px;
-  font-size: 24px;
-  font-weight: 500;
-  color: #303133;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 4px 0 20px;
 }
 
 // 统计卡片
@@ -494,11 +472,12 @@ onUnmounted(() => {
 
 .stat-card {
   cursor: pointer;
-  transition: all 0.3s;
+  border-radius: $ui-radius-lg;
+  transition: border-color 0.2s, box-shadow 0.2s;
 
   &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    border-color: rgba(47, 111, 237, 0.35);
+    box-shadow: 0 6px 16px rgba(28, 63, 112, 0.08);
   }
 
   .stat-content {
@@ -508,28 +487,32 @@ onUnmounted(() => {
   }
 
   .stat-icon {
-    width: 72px;
-    height: 72px;
-    border-radius: 12px;
+    width: 46px;
+    height: 46px;
+    border-radius: $ui-radius-md;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #fff;
 
     &.blue {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #e8f2ff;
+      color: $ui-color-primary;
     }
 
     &.green {
-      background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+      background: #e8f7ef;
+      color: #2d8a5d;
     }
 
     &.orange {
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      background: #fff4df;
+      color: #a86c14;
     }
 
     &.purple {
-      background: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+      background: #f1edff;
+      color: #6e56cf;
     }
   }
 
@@ -538,7 +521,7 @@ onUnmounted(() => {
   }
 
   .stat-value {
-    font-size: 32px;
+    font-size: $ui-font-metric;
     font-weight: 600;
     color: #303133;
     line-height: 1.2;

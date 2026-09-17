@@ -1,11 +1,11 @@
 <template>
   <div class="candidate-detail-page">
-    <!-- 返回按钮 -->
-    <div class="back-nav">
-      <el-button link @click="$router.back()">
-        <el-icon><ArrowLeft /></el-icon>返回列表
-      </el-button>
-    </div>
+    <PageHeader v-if="candidate" title="候选人详情" :description="`${candidate.name} · ${candidate.currentStage}`">
+      <template #actions>
+        <el-button @click="$router.back()"><el-icon><ArrowLeft /></el-icon>返回列表</el-button>
+        <el-button type="primary" :disabled="!canAdvance" @click="handleAdvance"><el-icon><Promotion /></el-icon>推进到下一阶段</el-button>
+      </template>
+    </PageHeader>
 
     <div v-if="candidate" class="detail-container">
       <!-- 左侧：基本信息 -->
@@ -605,6 +605,7 @@ import { useAuthStore } from '@/stores/auth';
 import { resolveFileUrl } from '@/utils/file';
 import { useResumeParserStore } from '@/stores/resumeParser';
 import MatchScoreCard from '@/components/candidates/MatchScoreCard.vue';
+import PageHeader from '@/components/common/PageHeader.vue';
 import ScheduleInterviewDialog from '@/components/interviews/ScheduleInterviewDialog.vue';
 import ResumeUpload from './ResumeUpload.vue';
 
@@ -1158,18 +1159,14 @@ onActivated(() => {
 }
 
 .candidate-detail-page {
-  padding: 20px;
-  max-width: 1400px;
+  padding: 4px 0 20px;
+  max-width: 1360px;
   margin: 0 auto;
-
-  .back-nav {
-    margin-bottom: 20px;
-  }
 
   .detail-container {
     display: grid;
-    grid-template-columns: 320px 1fr 380px;
-    gap: 20px;
+    grid-template-columns: 288px minmax(0, 1fr) 320px;
+    gap: 16px;
 
     @media (max-width: 1200px) {
       grid-template-columns: 1fr;
@@ -1199,12 +1196,12 @@ onActivated(() => {
   .info-card {
     .profile-section {
       text-align: center;
-      padding: 20px 0;
+      padding: 4px 0 18px;
 
       .candidate-name {
         margin: 12px 0;
-        font-size: 20px;
-        font-weight: 500;
+        font-size: 18px;
+        font-weight: 600;
       }
     }
 
@@ -1308,6 +1305,9 @@ onActivated(() => {
   }
 
   .action-card {
+    position: sticky;
+    top: 0;
+
     .action-buttons {
       display: flex;
       flex-direction: column;
