@@ -48,24 +48,14 @@ test.describe('成员管理模块', () => {
     await expect(page.locator('.el-form-item:has-text("部门")')).toBeVisible();
   });
 
-  test('编辑成员可打开对话框', async ({ page }) => {
+  test('编辑成员可打开对话框并显示角色字段', async ({ page }) => {
     const editBtns = page.locator('button:has-text("编辑")');
     if (await editBtns.first().isVisible({ timeout: 2000 })) {
       await editBtns.first().click();
       await page.waitForTimeout(300);
-      await expect(page.locator('.el-dialog')).toBeVisible();
-    }
-  });
-
-  test('角色标签可点击切换', async ({ page }) => {
-    const roleTag = page.locator('.role-tag').first();
-    if (await roleTag.isVisible({ timeout: 2000 })) {
-      await roleTag.click();
-      await page.waitForTimeout(300);
-      // 确认对话框应弹出
-      const roleDialog = page.locator('.el-dialog:has-text("切换角色")');
-      const visible = await roleDialog.isVisible({ timeout: 1000 });
-      expect(visible).toBeTruthy();
+      const dialog = page.locator('.el-dialog:has-text("编辑成员")');
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('.el-form-item:has-text("角色")')).toBeVisible();
     }
   });
 
