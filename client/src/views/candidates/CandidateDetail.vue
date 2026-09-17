@@ -180,7 +180,7 @@
 
           <el-timeline>
             <el-timeline-item
-              v-for="(record, index) in candidate.stageRecords"
+              v-for="record in candidate.stageRecords"
               :key="record.id"
               :type="getTimelineType(record.status)"
               :color="getTimelineColor(record.status)"

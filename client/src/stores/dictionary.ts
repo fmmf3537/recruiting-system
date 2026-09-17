@@ -25,29 +25,17 @@ export const useDictionaryStore = defineStore('dictionary', {
       };
     },
 
-    departmentOptions() {
-      return this.byCategory('department');
-    },
+    departmentOptions: (state): DictionaryItem[] => state.items.filter((item) => item.category === 'department' && item.enabled).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
 
-    locationOptions() {
-      return this.byCategory('location');
-    },
+    locationOptions: (state): DictionaryItem[] => state.items.filter((item) => item.category === 'location' && item.enabled).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
 
-    educationOptions() {
-      return this.byCategory('education');
-    },
+    educationOptions: (state): DictionaryItem[] => state.items.filter((item) => item.category === 'education' && item.enabled).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
 
-    sourceOptions() {
-      return this.byCategory('source');
-    },
+    sourceOptions: (state): DictionaryItem[] => state.items.filter((item) => item.category === 'source' && item.enabled).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
 
-    jobTypeOptions() {
-      return this.byCategory('job_type');
-    },
+    jobTypeOptions: (state): DictionaryItem[] => state.items.filter((item) => item.category === 'job_type' && item.enabled).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
 
-    skillOptions() {
-      return this.byCategory('skills');
-    },
+    skillOptions: (state): DictionaryItem[] => state.items.filter((item) => item.category === 'skills' && item.enabled).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
   },
 
   actions: {

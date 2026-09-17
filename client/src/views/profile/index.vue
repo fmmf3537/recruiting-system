@@ -246,7 +246,7 @@ const passwordRules: FormRules = {
   confirmPassword: [
     { required: true, message: '请确认新密码', trigger: 'blur' },
     {
-      validator: (rule: any, value: string, callback: Function) => {
+      validator: (_rule: any, value: string, callback: Function) => {
         if (value !== passwordForm.newPassword) {
           callback(new Error('两次输入的密码不一致'));
         } else {

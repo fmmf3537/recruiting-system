@@ -232,6 +232,7 @@ async function handleSubmit() {
     } else {
       const res = await createDictionary({
         category: formData.category,
+        code: formData.code,
         name: formData.name,
         sortOrder: formData.sortOrder,
         enabled: formData.enabled,

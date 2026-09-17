@@ -1,7 +1,3 @@
-// API 模块统一导出
-export * from './auth';
-export * from './user';
-export * from './job';
-export * from './candidate';
-export * from './offer';
-export * from './stats';
+// API 聚合入口仅导出无歧义的认证接口；业务模块请按路径导入。
+export { login, getCurrentUser } from './auth';
+export type { LoginData, LoginParams, UserInfoData } from './auth';
