@@ -15,7 +15,7 @@ test.describe('仪表盘模块', () => {
 
   test('统计数据卡片正确显示', async () => {
     await expect(page.locator('text=本月新增候选人')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=进行中职位数')).toBeVisible();
+    await expect(page.locator('text=面试中候选人')).toBeVisible();
     await expect(page.locator('text=待入职人数')).toBeVisible();
     await expect(page.locator('text=已批准编制')).toBeVisible({ timeout: 5000 });
   });
