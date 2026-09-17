@@ -11,20 +11,29 @@
       <el-card shadow="never" class="settings-overview">
         <div class="overview-head"><div><h3>配置概览</h3><p>从左侧进入具体配置页面，查看并维护当前规则。</p></div></div>
         <div class="setting-summary" v-for="item in items" :key="item.path" @click="goTo(item.path)">
-          <div><strong>{{ item.title }}</strong><p>{{ item.description }}</p></div><el-button link type="primary">进入设置</el-button>
+          <div><strong>{{ item.title }}</strong><p>{{ itemSummary(item) || item.description }}</p></div><el-button link type="primary">进入设置</el-button>
         </div>
       </el-card>
     </div>
   </div>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PageHeader from '@/components/common/PageHeader.vue';
+import { getPipelineTemplates, type PipelineTemplate } from '@/api/pipeline-template';
+import { getAutomationRules, type AutomationRule } from '@/api/automation-rule';
 const router = useRouter(); const route = useRoute();
 const activePath = computed(() => route.path);
+const templates = ref<PipelineTemplate[]>([]); const rules = ref<AutomationRule[]>([]);
 const items = [{ path: '/settings/dictionary', title: '字典管理', description: '维护来源、部门、地点和技能选项' }, { path: '/settings/pipeline-templates', title: '流程模板', description: '按职位类型配置招聘阶段与默认流程' }, { path: '/settings/automation-rules', title: '自动化邮件', description: '配置阶段流转时的邮件规则' }, { path: '/settings/ai', title: 'AI 设置', description: '管理简历解析与智能匹配能力' }, { path: '/settings/tags', title: '标签管理', description: '维护候选人与职位标签' }, { path: '/settings/agencies', title: '猎头机构', description: '管理外部招聘渠道与合作机构' }];
 function goTo(path: string) { router.push(path); }
+function itemSummary(item: { path: string }): string {
+  if (item.path === '/settings/pipeline-templates') { const active = templates.value.filter((template) => template.enabled); const defaultTemplate = active.find((template) => template.isDefault); return defaultTemplate ? `${active.length} 个启用模板 · 默认：${defaultTemplate.name}（${defaultTemplate.stages.length} 个阶段）` : `${active.length} 个启用模板`; }
+  if (item.path === '/settings/automation-rules') return `${rules.value.filter((rule) => rule.enabled).length} 条启用规则`;
+  return '';
+}
+onMounted(async () => { const [templateResult, ruleResult] = await Promise.allSettled([getPipelineTemplates(), getAutomationRules()]); if (templateResult.status === 'fulfilled' && templateResult.value.success) templates.value = templateResult.value.data; if (ruleResult.status === 'fulfilled' && ruleResult.value.success) rules.value = ruleResult.value.data; });
 </script>
 <style scoped lang="scss">
 .settings-home { max-width: 1180px; margin: 0 auto; padding: 4px 0 20px; }
