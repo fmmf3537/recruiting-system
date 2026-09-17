@@ -527,7 +527,9 @@ onActivated(() => {
 
 <style scoped lang="scss">
 .users-page {
-  padding: 20px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 4px 0 20px;
 
   .page-header {
     display: flex;
