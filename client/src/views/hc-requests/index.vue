@@ -10,6 +10,8 @@
       </el-button>
     </div>
 
+    <div class="hc-views"><el-button v-for="item in hcViews" :key="item.value" size="small" :type="filterForm.status === item.value ? 'primary' : 'default'" plain @click="setHcView(item.value)">{{ item.label }}</el-button></div>
+
     <el-card class="filter-card" shadow="never">
       <el-form :model="filterForm" inline class="filter-form">
         <el-form-item label="状态">
@@ -127,6 +129,8 @@ const authStore = useAuthStore();
 const loading = ref(false);
 const list = ref<HCRequestItem[]>([]);
 const pagination = reactive({ page: 1, pageSize: 10, total: 0, totalPages: 0 });
+const hcViews = [{ label: '全部', value: '' }, { label: '待审批', value: 'submitted' }, { label: '已通过', value: 'approved' }, { label: '已完成', value: 'fulfilled' }];
+function setHcView(value: string) { filterForm.status = value; handleSearch(); }
 const filterForm = reactive({ status: '', keyword: '' });
 
 const approveDialogVisible = ref(false);
@@ -263,6 +267,8 @@ onActivated(fetchList);
     .page-subtitle { margin-top: 8px; font-size: 14px; color: $ui-gray-500; }
   }
 }
+.hc-views { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 16px; }
+
 .filter-card { margin-bottom: 16px; }
 .table-card { .pagination-wrapper { display: flex; justify-content: center; margin-top: 20px; } }
 </style>

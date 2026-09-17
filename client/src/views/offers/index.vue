@@ -8,6 +8,8 @@
       </div>
     </div>
 
+    <div class="offer-views"><el-button v-for="item in offerViews" :key="item.value" size="small" :type="filterForm.result === item.value ? 'primary' : 'default'" plain @click="setOfferView(item.value)">{{ item.label }}</el-button></div>
+
     <!-- 筛选栏 -->
     <el-card class="filter-card" shadow="never">
       <el-form :model="filterForm" inline class="filter-form">
@@ -255,6 +257,8 @@ const router = useRouter();
 const loading = ref(false);
 const offerList = ref<OfferItem[]>([]);
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
+const offerViews = [{ label: '全部', value: '' }, { label: '待候选人答复', value: 'pending' }, { label: '已接受', value: 'accepted' }, { label: '已拒绝', value: 'rejected' }];
+function setOfferView(value: string) { filterForm.result = value; handleSearch(); }
 const filterForm = reactive({ keyword: '', result: '' as OfferResult | '' });
 
 // ============ 编辑对话框 ============
@@ -473,6 +477,8 @@ onActivated(() => {
     }
   }
 }
+
+.offer-views { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 16px; }
 
 .filter-card {
   margin-bottom: 16px;
