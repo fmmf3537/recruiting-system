@@ -16,6 +16,12 @@
       </div>
     </div>
 
+    <div class="candidate-views" role="tablist" aria-label="候选人视图">
+      <el-button v-for="item in candidateViews" :key="item.value" :type="activeView === item.value ? 'primary' : 'default'" plain size="small" @click="changeView(item.value)">
+        {{ item.label }}<span v-if="item.value === 'todo' && todoCount" class="view-count">{{ todoCount }}</span>
+      </el-button>
+    </div>
+
     <!-- 数据范围提示：member 仅可见与自己相关的候选人 -->
     <el-alert
       v-if="!authStore.isAdmin"
@@ -156,7 +162,7 @@
         v-else
         v-loading="loading"
         ref="tableRef"
-        :data="candidateList"
+        :data="visibleCandidateList"
         stripe
         style="width: 100%"
         @row-click="handleRowClick"
@@ -213,7 +219,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="stageStatus" label="状态" width="100" align="center">
+        <el-table-column v-if="!uiNewListLayout" prop="stageStatus" label="状态" width="100" align="center">
           <template #default="{ row }">
             <!-- UI-S2：in_progress 视为正常留空；passed/rejected 显示弱化小标 -->
             <span
@@ -247,7 +253,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="tags" label="标签" min-width="120">
+        <el-table-column v-if="!uiNewListLayout" prop="tags" label="标签" min-width="120">
           <template #default="{ row }">
             <!-- UI-S2：最多 1 个 chip，其余 +N；空则未填写 -->
             <div v-if="uiNewListLayout" class="ui-tag-list">
@@ -285,14 +291,14 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="source" label="来源" width="120" align="center">
+        <el-table-column v-if="!uiNewListLayout" prop="source" label="来源" width="120" align="center">
           <template v-if="uiNewListLayout" #default="{ row }">
             <span v-if="!row.source" class="ui-placeholder">未填写</span>
             <span v-else>{{ row.source }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column prop="education" label="学历" width="100" align="center">
+        <el-table-column v-if="!uiNewListLayout" prop="education" label="学历" width="100" align="center">
           <template #default="{ row }">
             <!-- UI-S0：空值展示语义化（数据未改动） -->
             <span v-if="!row.education" class="ui-placeholder">未填写</span>
@@ -301,9 +307,9 @@
         </el-table-column>
 
         <!-- UI-S2：入库时间加原生 sortable（当前页排序，不改请求参数） -->
-        <el-table-column prop="createdAt" label="入库时间" width="160" :sortable="uiNewListLayout ? true : false">
+        <el-table-column prop="updatedAt" :label="uiNewListLayout ? '更新时间' : '入库时间'" width="160" :sortable="uiNewListLayout ? true : false">
           <template #default="{ row }">
-            {{ formatDate(row.createdAt) }}
+            {{ formatDate(uiNewListLayout ? row.updatedAt : row.createdAt) }}
           </template>
         </el-table-column>
 
@@ -534,6 +540,14 @@ const error = ref(false);
 const candidateList = ref<CandidateItem[]>([]);
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 });
 const filterForm = reactive({ keyword: '', stage: '', status: '', source: '', tagIds: [] as string[], hasNoJob: false });
+const activeView = ref<'all' | 'todo' | 'week' | 'rejected'>('all');
+const candidateViews = [{ value: 'all', label: '全部' }, { value: 'todo', label: '待我处理' }, { value: 'week', label: '本周新增' }, { value: 'rejected', label: '已淘汰' }] as const;
+const todoCount = computed(() => candidateList.value.filter((item) => item.stageStatus === 'in_progress').length);
+const visibleCandidateList = computed(() => {
+  if (activeView.value === 'todo') return candidateList.value.filter((item) => item.stageStatus === 'in_progress');
+  if (activeView.value === 'week') { const start = Date.now() - 7 * 24 * 60 * 60 * 1000; return candidateList.value.filter((item) => new Date(item.createdAt).getTime() >= start); }
+  return candidateList.value;
+});
 const tagOptions = ref<Tag[]>([]);
 
 // 表格引用与多选
@@ -673,6 +687,7 @@ async function fetchAgencySourceOptions() {
   }
 }
 
+function changeView(view: 'all' | 'todo' | 'week' | 'rejected') { activeView.value = view; filterForm.status = view === 'rejected' ? 'rejected' : ''; pagination.page = 1; fetchCandidateList(); }
 function handleSearch() { pagination.page = 1; fetchCandidateList(); }
 function handleReset() {
   filterForm.keyword = '';
@@ -909,6 +924,7 @@ onActivated(() => { fetchCandidateList(); });
     .page-subtitle { margin-top: 8px; font-size: 14px; color: $ui-gray-500; }
   }
 }
+.candidate-views { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 16px; .view-count { display: inline-flex; margin-left: 5px; min-width: 16px; justify-content: center; font-size: 11px; } }
 .scope-tip { margin-bottom: 16px; }
 .filter-card { margin-bottom: 16px;
   .filter-form { display: flex; flex-wrap: wrap; gap: $ui-space-sm; :deep(.el-form-item) { margin-bottom: 0; } }
