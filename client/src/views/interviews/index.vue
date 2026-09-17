@@ -65,6 +65,8 @@
       </el-col>
     </el-row>
 
+    <div class="interview-views"><el-button v-for="item in interviewViews" :key="item.value" size="small" :type="filterForm.status === item.value ? 'primary' : 'default'" plain @click="setInterviewView(item.value)">{{ item.label }}</el-button></div>
+
     <!-- 列表视图 -->
     <template v-if="viewMode === 'list'">
       <el-card class="filter-card" shadow="never">
@@ -298,6 +300,8 @@ const calendarDate = ref(new Date());
 
 const stats = reactive({ scheduled: 0, today: 0, completed: 0, cancelled: 0 });
 
+const interviewViews = [{ label: '全部面试', value: '' }, { label: '待进行', value: 'scheduled' }, { label: '已完成', value: 'completed' }, { label: '已取消', value: 'cancelled' }];
+function setInterviewView(value: string) { filterForm.status = value; handleSearch(); }
 const filterForm = reactive({
   dateRange: [] as string[],
   round: '',
@@ -570,6 +574,8 @@ onActivated(() => {
       }
     }
   }
+
+  .interview-views { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 16px; }
 
   .filter-card {
     margin-bottom: 16px;
