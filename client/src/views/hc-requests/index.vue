@@ -257,12 +257,12 @@ onActivated(fetchList);
 </script>
 
 <style scoped lang="scss">
-.hc-requests-page { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+.hc-requests-page { padding: 4px 0 20px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
   .title-section { .page-title { margin: 0; font-size: 24px; font-weight: 500; }
-    .page-subtitle { margin-top: 8px; font-size: 14px; color: #909399; }
+    .page-subtitle { margin-top: 8px; font-size: 14px; color: $ui-gray-500; }
   }
 }
-.filter-card { margin-bottom: 20px; }
+.filter-card { margin-bottom: 16px; }
 .table-card { .pagination-wrapper { display: flex; justify-content: center; margin-top: 20px; } }
 </style>

@@ -499,25 +499,25 @@ onActivated(() => {
 
 <style scoped lang="scss">
 .interviews-page {
-  padding: 20px;
+  padding: 4px 0 20px;
 
   .page-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 
     .title-section {
       .page-title {
         margin: 0;
         font-size: 24px;
         font-weight: 500;
-        color: #303133;
+        color: $ui-gray-900;
       }
       .page-subtitle {
         margin-top: 8px;
         font-size: 14px;
-        color: #909399;
+        color: $ui-gray-500;
       }
     }
 
@@ -529,12 +529,13 @@ onActivated(() => {
   }
 
   .stats-row {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 
     .stat-card {
       cursor: pointer;
-      transition: all 0.3s;
-      &:hover { transform: translateY(-4px); }
+      border-radius: $ui-radius-lg;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      &:hover { border-color: rgba(47, 111, 237, 0.35); box-shadow: 0 6px 16px rgba(28, 63, 112, 0.08); }
 
       .stat-content {
         display: flex;
@@ -543,39 +544,39 @@ onActivated(() => {
       }
 
       .stat-icon {
-        width: 60px;
-        height: 60px;
-        border-radius: 12px;
+        width: 46px;
+        height: 46px;
+        border-radius: $ui-radius-md;
         display: flex;
         align-items: center;
         justify-content: center;
         color: #fff;
 
-        &.blue { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        &.orange { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-        &.green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-        &.purple { background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%); }
+        &.blue { background: #e8f2ff; color: $ui-color-primary; }
+        &.orange { background: #fff4df; color: #a86c14; }
+        &.green { background: #e8f7ef; color: #2d8a5d; }
+        &.purple { background: #f1edff; color: #6e56cf; }
       }
 
       .stat-value {
         font-size: 28px;
         font-weight: 600;
-        color: #303133;
+        color: $ui-gray-900;
       }
       .stat-title {
         font-size: 14px;
-        color: #909399;
+        color: $ui-gray-500;
         margin-top: 4px;
       }
     }
   }
 
   .filter-card {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     .filter-form {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: $ui-space-sm;
       :deep(.el-form-item) { margin-bottom: 0; }
     }
   }
@@ -586,8 +587,8 @@ onActivated(() => {
       align-items: center;
       gap: 12px;
       .candidate-detail {
-        .candidate-name { font-weight: 500; color: #303133; margin-bottom: 4px; }
-        .candidate-position { font-size: 12px; color: #909399; }
+        .candidate-name { font-weight: 500; color: $ui-gray-900; margin-bottom: 4px; }
+        .candidate-position { font-size: 12px; color: $ui-gray-500; }
       }
     }
     .time-cell {
@@ -605,7 +606,7 @@ onActivated(() => {
       justify-content: flex-end;
       margin-top: 20px;
       padding-top: 20px;
-      border-top: 1px solid #ebeef5;
+      border-top: 1px solid $ui-border-color-light;
     }
   }
 
@@ -634,10 +635,10 @@ onActivated(() => {
 
     .day-interviews {
       margin-top: 20px;
-      padding: 20px;
+      padding: 4px 0 20px;
       background-color: #f5f7fa;
       border-radius: 8px;
-      h4 { margin: 0 0 16px; font-size: 16px; color: #303133; }
+      h4 { margin: 0 0 16px; font-size: 16px; color: $ui-gray-900; }
       .timeline-content {
         .timeline-header {
           display: flex;
@@ -651,7 +652,7 @@ onActivated(() => {
           flex-direction: column;
           gap: 4px;
           font-size: 13px;
-          color: #909399;
+          color: $ui-gray-500;
         }
       }
     }

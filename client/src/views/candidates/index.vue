@@ -903,15 +903,15 @@ onActivated(() => { fetchCandidateList(); });
 </script>
 
 <style scoped lang="scss">
-.candidates-page { padding: 20px; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
-  .title-section { .page-title { margin: 0; font-size: 24px; font-weight: 500; color: #303133; }
-    .page-subtitle { margin-top: 8px; font-size: 14px; color: #909399; }
+.candidates-page { padding: 4px 0 20px; }
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+  .title-section { .page-title { margin: 0; font-size: 24px; font-weight: 500; color: $ui-gray-900; }
+    .page-subtitle { margin-top: 8px; font-size: 14px; color: $ui-gray-500; }
   }
 }
 .scope-tip { margin-bottom: 16px; }
-.filter-card { margin-bottom: 20px;
-  .filter-form { display: flex; flex-wrap: wrap; gap: 10px; :deep(.el-form-item) { margin-bottom: 0; } }
+.filter-card { margin-bottom: 16px;
+  .filter-form { display: flex; flex-wrap: wrap; gap: $ui-space-sm; :deep(.el-form-item) { margin-bottom: 0; } }
 }
 .batch-bar {
   display: flex;
@@ -925,21 +925,21 @@ onActivated(() => { fetchCandidateList(); });
 
   .batch-info {
     font-size: 14px;
-    color: #303133;
+    color: $ui-gray-900;
     font-weight: 500;
     margin-right: auto;
   }
 }
 .table-card {
   .candidate-info { display: flex; align-items: center; gap: 12px;
-    .candidate-detail { .candidate-name { font-weight: 500; color: #303133; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
-      .candidate-contact { font-size: 12px; color: #909399; }
+    .candidate-detail { .candidate-name { font-weight: 500; color: $ui-gray-900; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+      .candidate-contact { font-size: 12px; color: $ui-gray-500; }
     }
   }
   .stage-tag { min-width: 60px; text-align: center; }
-  .job-tags { display: flex; flex-wrap: wrap; gap: 6px; .job-tag { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .no-job { color: #909399; } }
-  .tag-list { display: flex; flex-wrap: wrap; gap: 4px; .candidate-tag { color: #fff; border: none; } .no-tag { color: #909399; } }
-  .pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 20px; padding-top: 20px; border-top: 1px solid #ebeef5; }
+  .job-tags { display: flex; flex-wrap: wrap; gap: 6px; .job-tag { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .no-job { color: $ui-gray-500; } }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 4px; .candidate-tag { color: #fff; border: none; } .no-tag { color: $ui-gray-500; } }
+  .pagination-wrapper { display: flex; justify-content: flex-end; margin-top: 20px; padding-top: 20px; border-top: 1px solid $ui-border-color-light; }
 }
 .error-state {
   display: flex;

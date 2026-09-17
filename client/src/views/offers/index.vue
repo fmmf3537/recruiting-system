@@ -449,38 +449,38 @@ onActivated(() => {
 
 <style scoped lang="scss">
 .offers-page {
-  padding: 20px;
+  padding: 4px 0 20px;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 
   .title-section {
     .page-title {
       margin: 0;
-      font-size: 24px;
-      font-weight: 500;
-      color: #303133;
+      font-size: 23px;
+      font-weight: 600;
+      color: $ui-gray-900;
     }
 
     .page-subtitle {
       margin-top: 8px;
       font-size: 14px;
-      color: #909399;
+      color: $ui-gray-500;
     }
   }
 }
 
 .filter-card {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 
   .filter-form {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: $ui-space-sm;
 
     :deep(.el-form-item) {
       margin-bottom: 0;
@@ -497,13 +497,13 @@ onActivated(() => {
     .candidate-detail {
       .candidate-name {
         font-weight: 500;
-        color: #303133;
+        color: $ui-gray-900;
         margin-bottom: 4px;
       }
 
       .candidate-contact {
         font-size: 12px;
-        color: #909399;
+        color: $ui-gray-500;
       }
     }
   }
@@ -529,7 +529,7 @@ onActivated(() => {
     justify-content: flex-end;
     margin-top: 20px;
     padding-top: 20px;
-    border-top: 1px solid #ebeef5;
+    border-top: 1px solid $ui-border-color-light;
   }
 }
 </style>
