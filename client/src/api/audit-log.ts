@@ -16,6 +16,8 @@ export function getAuditLogs(params: {
   keyword?: string;
   action?: string;
   targetType?: string;
+  startDate?: string;
+  endDate?: string;
 }) {
   return request.get('/audit-logs', { params }) as Promise<{ success: boolean; data: AuditLogItem[]; pagination: { page: number; pageSize: number; total: number; totalPages: number } }>;
 }

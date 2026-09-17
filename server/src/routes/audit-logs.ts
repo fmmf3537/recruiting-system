@@ -12,13 +12,16 @@ const querySchema = z.object({
   keyword: z.string().max(100).optional(),
   action: z.string().max(60).optional(),
   targetType: z.string().max(60).optional(),
+  startDate: z.string().date().optional(),
+  endDate: z.string().date().optional(),
 });
 
 router.get('/', authenticate, authorize('admin'), validate(querySchema, 'query'), asyncHandler(async (req, res) => {
-  const { page, pageSize, keyword, action, targetType } = req.query as unknown as z.infer<typeof querySchema>;
+  const { page, pageSize, keyword, action, targetType, startDate, endDate } = req.query as unknown as z.infer<typeof querySchema>;
   const where = {
     ...(action ? { action } : {}),
     ...(targetType ? { targetType } : {}),
+    ...((startDate || endDate) ? { createdAt: { ...(startDate ? { gte: new Date(`${startDate}T00:00:00.000Z`) } : {}), ...(endDate ? { lte: new Date(`${endDate}T23:59:59.999Z`) } : {}) } } : {}),
     ...(keyword ? { user: { OR: [{ name: { contains: keyword, mode: 'insensitive' as const } }, { email: { contains: keyword, mode: 'insensitive' as const } }] } } : {}),
   };
   const [data, total] = await Promise.all([
