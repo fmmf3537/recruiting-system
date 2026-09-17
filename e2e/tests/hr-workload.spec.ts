@@ -22,18 +22,18 @@ test.describe('HR 工作监控页面', () => {
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('h2.page-title:has-text("HR 工作监控")')).toBeVisible();
-    await expect(page.locator('.el-radio-button:has-text("日")')).toBeVisible();
-    await expect(page.locator('.el-radio-button:has-text("周")')).toBeVisible();
-    await expect(page.locator('.el-radio-button:has-text("月")')).toBeVisible();
+    await expect(page.getByRole('radio', { name: '日', exact: true })).toBeVisible();
+    await expect(page.getByRole('radio', { name: '周', exact: true })).toBeVisible();
+    await expect(page.getByRole('radio', { name: '月', exact: true })).toBeVisible();
     await expect(page.locator('.el-date-editor').first()).toBeVisible();
     await expect(page.locator('.stat-card').first()).toBeVisible();
     await expect(page.locator('button:has-text("导出 Excel")')).toBeVisible();
 
-    await page.click('.el-radio-button:has-text("日")');
+    await page.locator('.el-radio-button').filter({ hasText: /^日$/ }).click();
     await page.waitForLoadState('networkidle');
-    await page.click('.el-radio-button:has-text("月")');
+    await page.locator('.el-radio-button').filter({ hasText: /^月$/ }).click();
     await page.waitForLoadState('networkidle');
-    await page.click('.el-radio-button:has-text("周")');
+    await page.locator('.el-radio-button').filter({ hasText: /^周$/ }).click();
     await page.waitForLoadState('networkidle');
 
     await expect(page.locator('h2.page-title:has-text("HR 工作监控")')).toBeVisible();
