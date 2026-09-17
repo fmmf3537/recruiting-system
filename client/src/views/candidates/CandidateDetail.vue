@@ -1165,8 +1165,13 @@ onActivated(() => {
 
   .detail-container {
     display: grid;
-    grid-template-columns: 288px minmax(0, 1fr) 320px;
+    grid-template-columns: 288px minmax(0, 1fr);
     gap: 16px;
+
+    @media (min-width: 1201px) {
+      .left-column { grid-row: span 2; }
+      .right-column { grid-column: 2; }
+    }
 
     @media (max-width: 1200px) {
       grid-template-columns: 1fr;
@@ -1275,6 +1280,7 @@ onActivated(() => {
   }
 
   .timeline-card {
+    min-height: 520px;
     .timeline-content {
       .timeline-header {
         display: flex;
@@ -1305,6 +1311,7 @@ onActivated(() => {
   }
 
   .action-card {
+    border-left: 3px solid $ui-color-primary;
     position: sticky;
     top: 0;
 
