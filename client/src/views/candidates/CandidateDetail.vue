@@ -260,6 +260,7 @@
           </div>
         </el-card>
 
+        <el-collapse class="detail-more"><el-collapse-item title="更多招聘信息" name="more">
         <!-- Offer 信息 -->
         <el-card v-if="candidate.offer" shadow="never" class="offer-card">
           <template #header>
@@ -423,6 +424,7 @@
           </div>
           <el-empty v-else description="暂无沟通记录" :image-size="50" />
         </el-card>
+        </el-collapse-item></el-collapse>
       </div>
     </div>
 
@@ -1325,6 +1327,8 @@ onActivated(() => {
       }
     }
   }
+
+  .detail-more { :deep(.el-collapse-item__header) { color: $ui-gray-700; font-weight: 600; } :deep(.el-collapse-item__content) { padding-bottom: 0; } }
 
   .offer-card {
     :deep(.el-descriptions__label) {
