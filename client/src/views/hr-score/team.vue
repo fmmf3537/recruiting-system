@@ -138,22 +138,24 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .hr-score-page {
-  padding: 20px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 4px 0 20px;
 }
 
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   flex-wrap: wrap;
   gap: 12px;
 }
 
 .page-title {
   margin: 0;
-  font-size: 24px;
-  font-weight: 500;
+  font-size: 23px;
+  font-weight: 600;
   color: #303133;
 }
 

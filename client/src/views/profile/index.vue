@@ -1,11 +1,6 @@
 <template>
   <div class="profile-page">
-    <div class="page-header">
-      <div class="title-section">
-        <h1 class="page-title">个人中心</h1>
-        <span class="page-subtitle">管理个人资料、账号安全和快捷入口</span>
-      </div>
-    </div>
+    <PageHeader title="个人中心" description="管理个人资料、账号安全和快捷入口" />
 
     <el-row :gutter="20">
       <!-- 左侧：个人信息卡片 -->
@@ -187,6 +182,7 @@ import {
   Briefcase,
   DocumentChecked,
 } from '@element-plus/icons-vue';
+import PageHeader from '@/components/common/PageHeader.vue';
 import { useAuthStore } from '@/stores/auth';
 import { getWorkloadStats } from '@/api/stats';
 import { updateUser, changePassword } from '@/api/user';
@@ -383,7 +379,9 @@ onActivated(() => {
 
 <style scoped lang="scss">
 .profile-page {
-  padding: 20px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 4px 0 20px;
 
   .page-title {
     margin: 0 0 24px;
