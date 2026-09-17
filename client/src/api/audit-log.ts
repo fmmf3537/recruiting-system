@@ -6,6 +6,8 @@ export interface AuditLogItem {
   targetType: string;
   targetId: string;
   detail: unknown;
+  source: string | null;
+  result: string | null;
   createdAt: string;
   user?: { id: string; name: string; email: string };
 }

@@ -151,6 +151,8 @@ async function writeOperationLog(entry: {
   targetId: string;
   action: string;
   detail: Prisma.InputJsonValue;
+  source?: string;
+  result?: 'success' | 'failed' | 'denied';
 }): Promise<void> {
   await prisma.operationLog.create({
     data: {
@@ -159,6 +161,8 @@ async function writeOperationLog(entry: {
       targetId: entry.targetId,
       action: entry.action,
       detail: entry.detail,
+      source: entry.source ?? 'candidate_service',
+      result: entry.result ?? 'success',
     },
   });
 }

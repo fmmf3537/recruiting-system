@@ -487,6 +487,8 @@ model OperationLog {
   targetId   String
   action     String   // created, updated, deleted, status_changed 等
   detail     Json     // 操作详情
+  source     String?  // 操作来源：页面、接口或后台任务
+  result     String?  // 执行结果：success / failed / denied
   
   createdAt DateTime @default(now())
 
@@ -494,6 +496,8 @@ model OperationLog {
   @@index([targetType])
   @@index([targetId])
   @@index([action])
+  @@index([source])
+  @@index([result])
   @@index([createdAt])
   @@map("operation_log")
 }
