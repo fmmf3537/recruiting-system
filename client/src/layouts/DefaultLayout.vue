@@ -330,7 +330,10 @@ const groupedMenuItems = computed(() => {
   return groups;
 });
 
-const groupedMenuOpenedIndexes = computed(() => groupedMenuItems.value.map((g) => g.title));
+const groupedMenuOpenedIndexes = computed(() => {
+  const activeGroup = groupedMenuItems.value.find((group) => group.items.some((item) => item.path === route.path));
+  return activeGroup ? [activeGroup.title] : [];
+});
 
 // UI-S1：面包屑分组名；未在 MENU_GROUPS 中（含「其他」）则只显示页面名
 const breadcrumbGroupTitle = computed(() => {
