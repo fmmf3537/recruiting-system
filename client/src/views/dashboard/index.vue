@@ -115,7 +115,7 @@
         <el-card shadow="never" class="activity-card">
           <template #header>
             <div class="card-header">
-              <span>近期候选人动态</span>
+              <span>需要关注的动态</span>
               <el-button link type="primary" @click="goTo('/candidates')">
                 查看全部
               </el-button>
@@ -568,6 +568,11 @@ onUnmounted(() => {
   .chart-card,
   .activity-card {
     height: 420px;
+    border-radius: $ui-radius-lg;
+  }
+
+  .activity-card :deep(.el-card__header) {
+    background: #fbfcfe;
   }
 }
 
