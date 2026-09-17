@@ -226,6 +226,7 @@ const MENU_GROUPS: { title: string; icon: Component; paths: string[] }[] = [
     icon: Setting,
     paths: [
       '/hc-requests',
+      '/settings',
       '/users',
       '/settings/agencies',
       '/settings/dictionary',
