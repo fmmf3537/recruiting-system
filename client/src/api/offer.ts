@@ -20,6 +20,7 @@ export interface CreateOfferParams {
   offerDate: string;
   expectedJoinDate?: string;
   note?: string;
+  workYears?: number;
 }
 
 // 更新 Offer 参数
@@ -47,6 +48,8 @@ export interface CandidateBrief {
   name: string;
   email: string;
   phone: string;
+  education?: string;
+  workYears?: number | null;
 }
 
 // Offer 列表项

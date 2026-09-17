@@ -555,10 +555,6 @@ async function fetchCandidateDetail() {
   }
 }
 
-function handleUploadSuccess(response: any) {
-  formData.resumeUrl = response.url;
-  ElMessage.success('简历上传成功');
-}
 
 async function handleCustomUpload(options: any) {
   const { file, onSuccess, onError } = options;

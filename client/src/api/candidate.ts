@@ -127,6 +127,7 @@ export interface InterviewFeedback {
   conclusion: InterviewConclusion;
   feedbackContent: string;
   rejectReason: string | null;
+  workHistories?: WorkHistory[];
   createdBy: {
     id: string;
     name: string;
@@ -204,6 +205,7 @@ export interface CandidateDetail extends CandidateItem {
     id: string;
     title: string;
   }[];
+  workHistories?: WorkHistory[];
   createdBy: {
     id: string;
     name: string;

@@ -69,7 +69,7 @@
         </el-form-item>
         <el-form-item label="阶段流程" prop="stages">
           <div class="stages-editor">
-            <div v-for="(stage, index) in formData.stages" :key="index" class="stage-row">
+            <div v-for="(_stage, index) in formData.stages" :key="index" class="stage-row">
               <span class="stage-index">{{ index + 1 }}</span>
               <el-input v-model="formData.stages[index]" placeholder="阶段名称" maxlength="20" />
               <el-button link type="primary" :disabled="index === 0" @click="moveStage(index, -1)">

@@ -159,7 +159,7 @@ import {
   ToolboxComponent,
   DataZoomComponent,
 } from 'echarts/components';
-import { LinearGradient } from 'echarts/lib/util/graphic';
+import { graphic } from 'echarts/core';
 import VChart from 'vue-echarts';
 
 import { getWorkloadStats, getChannelStats, getFunnelStats, getCycleStats } from '@/api/stats';
@@ -342,7 +342,7 @@ const cycleOption = computed(() => ({
       type: 'bar',
       data: cycleData.value.map(item => item.avgDays),
       itemStyle: {
-        color: new LinearGradient(0, 0, 0, 1, [
+        color: new graphic.LinearGradient(0, 0, 0, 1, [
           { offset: 0, color: '#83bff6' },
           { offset: 0.5, color: '#188df0' },
           { offset: 1, color: '#188df0' },

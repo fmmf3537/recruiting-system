@@ -483,7 +483,7 @@ async function handleDelete(row: JobItem & { deleteLoading?: boolean }) {
       {
         confirmButtonText: '确定',
         cancelButtonText: '取消',
-        type: 'danger',
+        type: 'warning',
       }
     );
 

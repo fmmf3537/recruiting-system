@@ -272,7 +272,7 @@
               </el-tag>
               <el-tooltip
                 v-if="row.tags?.length > 1"
-                :content="row.tags.slice(1).map((t) => t.name).join('、')"
+                :content="row.tags.slice(1).map((t: Tag) => t.name).join('、')"
                 placement="top"
               >
                 <span class="ui-tag-more">+{{ row.tags.length - 1 }}</span>
@@ -325,7 +325,7 @@
               <el-dropdown
                 v-if="canAdvance(row) || row.stageStatus !== 'rejected' || canDelete(row)"
                 trigger="click"
-                @command="(cmd) => handleRowCommand(cmd, row)"
+                @command="(cmd: string) => handleRowCommand(cmd, row)"
               >
                 <el-button link size="small" @click.stop>⋯</el-button>
                 <template #dropdown>
@@ -644,7 +644,7 @@ async function fetchCandidateList() {
       pageSize: pagination.pageSize,
       keyword: filterForm.keyword || undefined,
       stage: filterForm.stage || undefined,
-      status: filterForm.status || undefined,
+      status: (filterForm.status || undefined) as import('@/api/candidate').StageStatus | undefined,
       source: filterForm.source || undefined,
       tagIds: filterForm.tagIds.length > 0 ? filterForm.tagIds : undefined,
       hasNoJob: filterForm.hasNoJob || undefined,

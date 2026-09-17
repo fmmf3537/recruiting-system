@@ -287,7 +287,6 @@ import {
   type JobType,
 } from '@/api/job';
 import { getCandidateList, type CandidateItem } from '@/api/candidate';
-import type { Tag } from '@/api/tag';
 import { getRecommendations, type MatchResult } from '@/api/ai-matcher';
 import { getJobMatchScores, type JobMatchScore } from '@/api/match-score';
 import { sanitizeHtml } from '@/utils/sanitize';
@@ -390,11 +389,11 @@ async function fetchAiRecommendations() {
   }
 }
 
-function goToCandidate(candidateId: string) {
-  router.push(`/candidates/${candidateId}`);
+function goToCandidate(_candidateId: string) {
+  router.push(`/candidates/${_candidateId}`);
 }
 
-function getCandidateName(candidateId: string): string {
+function getCandidateName(_candidateId: string): string {
   // AI 推荐仅返回 candidateId，需要在人才库中查找名称
   // 由于推荐接口未返回名称，此处简化处理
   return '候选人';
