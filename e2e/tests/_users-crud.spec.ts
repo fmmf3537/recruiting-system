@@ -34,6 +34,10 @@ function loadAdminToken(): string {
 }
 
 test.describe('用户管理 CRUD @admin', () => {
+  test.beforeEach(async ({ }, testInfo) => {
+    test.skip(testInfo.project.name !== 'admin', '仅 admin project 执行管理员用户管理用例');
+  });
+
   test('admin 创建 → 列表出现 → 删除 闭环', async ({ baseURL }) => {
     const token = loadAdminToken();
     const apiBase = baseURL ?? 'http://localhost:5174';
@@ -48,7 +52,7 @@ test.describe('用户管理 CRUD @admin', () => {
       email,
       password: 'E2ePass123',
       name: `E2E用户-${suffix}`,
-      role: 'member',
+      role: 'hr',
       department: '研发部',
     };
 
