@@ -190,6 +190,7 @@ export interface CandidateItem {
   candidateJobs: CandidateJob[];
   currentStage: string;
   stageStatus: string;
+  currentAssignee?: { id: string; name: string } | null;
   tags?: Tag[];
   skills?: string[];
 }

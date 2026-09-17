@@ -234,6 +234,10 @@
           </template>
         </el-table-column>
 
+        <el-table-column v-if="uiNewListLayout" label="负责人" width="110" align="center">
+          <template #default="{ row }"><span class="ui-placeholder">{{ row.currentAssignee?.name || '未指派' }}</span></template>
+        </el-table-column>
+
         <el-table-column prop="candidateJobs" label="应聘职位" min-width="150">
           <template #default="{ row }">
             <div class="job-tags">

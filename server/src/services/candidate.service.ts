@@ -519,7 +519,7 @@ export class CandidateService {
       prisma.stageRecord.findMany({
         where: { candidateId: { in: candidateIds } },
         orderBy: { enteredAt: 'desc' },
-        select: { candidateId: true, stage: true, status: true },
+        select: { candidateId: true, stage: true, status: true, assignee: { select: { id: true, name: true } } },
       }),
       prisma.candidateJob.findMany({
         where: { candidateId: { in: candidateIds } },
@@ -535,7 +535,7 @@ export class CandidateService {
       }),
     ]);
 
-    const stageMap = new Map<string, { stage: string; status: string }>();
+    const stageMap = new Map<string, { stage: string; status: string; assignee: { id: string; name: string } | null }>();
     for (const sr of stageRecords) {
       if (!stageMap.has(sr.candidateId)) {
         stageMap.set(sr.candidateId, sr);
@@ -563,6 +563,7 @@ export class CandidateService {
       ...candidate,
       currentStage: stageMap.get(candidate.id)?.stage || '入库',
       stageStatus: stageMap.get(candidate.id)?.status || StageStatus.in_progress,
+      currentAssignee: stageMap.get(candidate.id)?.assignee || null,
       candidateJobs: jobsMap.get(candidate.id) || [],
       tags: tagsMap.get(candidate.id)?.map((ct) => ct.tag) || [],
     }));
