@@ -18,9 +18,9 @@
         :default-openeds="uiNewNavLayout ? groupedMenuOpenedIndexes : []"
         router
         class="sidebar-menu"
-        background-color="#304156"
-        text-color="#bfcbd9"
-        active-text-color="#409EFF"
+        background-color="#17253a"
+        text-color="#c5d1e0"
+        active-text-color="#73a7ff"
       >
         <!-- UI-S1：开关打开时按职能分组；关闭时保持原扁平列表 -->
         <template v-if="uiNewNavLayout">
@@ -418,7 +418,7 @@ onUnmounted(() => {
 }
 
 .sidebar {
-  background-color: #304156;
+  background-color: $sidebar-bg;
   transition: width 0.3s;
   
   .logo {
@@ -426,7 +426,7 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-bottom: 1px solid #1f2d3d;
+    border-bottom: 1px solid rgba(220, 228, 238, 0.14);
     
     .logo-text {
       color: #fff;
@@ -437,7 +437,7 @@ onUnmounted(() => {
     .logo-mini {
       font-size: 24px;
       font-weight: bold;
-      color: #409EFF;
+      color: $ui-color-primary;
     }
   }
   
@@ -447,7 +447,7 @@ onUnmounted(() => {
 }
 
 .main-container {
-  background-color: #f0f2f5;
+  background-color: $bg-base;
 }
 
 .header {
@@ -467,7 +467,7 @@ onUnmounted(() => {
       margin-right: 15px;
       
       &:hover {
-        color: #409EFF;
+        color: $ui-color-primary;
       }
     }
     
@@ -512,7 +512,7 @@ onUnmounted(() => {
       color: #606266;
 
       &:hover {
-        color: #409EFF;
+        color: $ui-color-primary;
       }
     }
 
@@ -585,7 +585,7 @@ onUnmounted(() => {
       gap: 8px;
       
       &:hover {
-        color: #409EFF;
+        color: $ui-color-primary;
       }
     }
   }

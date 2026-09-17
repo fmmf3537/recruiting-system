@@ -11,7 +11,8 @@ body {
     'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: #333;
+  color: $ui-gray-900;
+  background: $bg-base;
 }
 
 #app {
@@ -80,6 +81,46 @@ body {
 
 .el-card {
   --el-card-padding: 16px;
+  border-color: #dce4ee;
+  border-radius: $ui-radius-lg;
+}
+
+.el-button {
+  border-radius: $ui-radius-sm;
+}
+
+.el-table {
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-border-color: #e6edf5;
+  --el-table-row-hover-bg-color: #f5f8fd;
+}
+
+.ui-page-header,
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $ui-space-lg;
+  margin-bottom: $ui-space-lg;
+}
+
+.page-title,
+.ui-page-header__title {
+  color: $ui-gray-900;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.page-subtitle,
+.ui-page-header__description {
+  color: $ui-gray-500;
+}
+
+@media (max-width: 640px) {
+  .ui-page-header,
+  .page-header {
+    flex-direction: column;
+  }
 }
 
 // 滚动条样式
