@@ -115,39 +115,21 @@
         <el-card shadow="never" class="activity-card">
           <template #header>
             <div class="card-header">
-              <span>需要关注的动态</span>
-              <el-button link type="primary" @click="goTo('/candidates')">
+              <span>待处理事项</span>
+              <el-button link type="primary" @click="goTo('/notifications')">
                 查看全部
               </el-button>
             </div>
           </template>
           
           <div class="activity-list" v-loading="activityLoading">
-            <CardSkeleton v-if="activityLoading && recentActivities.length === 0" />
+            <CardSkeleton v-if="activityLoading && todoItems.length === 0" />
             <template v-else>
-              <div
-                v-for="item in recentActivities"
-                :key="item.id"
-                class="activity-item"
-              >
-                <div class="activity-avatar">
-                  <el-avatar :size="40" :icon="UserFilled" />
-                </div>
-                <div class="activity-content">
-                  <div class="activity-title">
-                    <span class="candidate-name">{{ item.candidateName }}</span>
-                    <span class="activity-action">{{ item.action }}</span>
-                  </div>
-                  <div class="activity-meta">
-                    <span class="stage-tag" :class="item.stage">
-                      {{ item.stageText }}
-                    </span>
-                    <span class="activity-time">{{ formatTime(item.time) }}</span>
-                  </div>
-                </div>
+              <div v-for="item in todoItems" :key="item.id" class="activity-item todo-item" @click="goTo(item.path)">
+                <div class="activity-avatar"><el-avatar :size="40" :icon="UserFilled" /></div>
+                <div class="activity-content"><div class="activity-title"><span class="candidate-name">{{ item.title }}</span></div><div class="activity-meta"><span class="stage-tag interview">{{ item.label }}</span><span class="activity-time">{{ formatTime(item.createdAt) }}</span></div></div>
               </div>
-
-              <el-empty v-if="recentActivities.length === 0" description="暂无动态" />
+              <el-empty v-if="todoItems.length === 0" description="暂无待处理事项" />
             </template>
           </div>
         </el-card>
@@ -181,6 +163,7 @@ import * as echarts from 'echarts/core';
 use([CanvasRenderer, FunnelChart, TooltipComponent]);
 import { getDashboardStats, getFunnelStats } from '@/api/stats';
 import { getRecentActivities } from '@/api/candidate';
+import { getNotifications, type NotificationItem } from '@/api/notification';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -256,6 +239,7 @@ interface ActivityItem {
 }
 
 const recentActivities = ref<ActivityItem[]>([]);
+const todoItems = ref<Array<NotificationItem & { label: string; path: string }>>([]);
 
 // 获取近期候选人动态
 async function fetchRecentActivities() {
@@ -263,9 +247,9 @@ async function fetchRecentActivities() {
   try {
     const res = await getRecentActivities(20);
     console.log('[Dashboard] 近期动态 API 返回:', res.data?.length, res.data);
-    if (res.success) {
-      recentActivities.value = res.data;
-    }
+    if (res.success) { recentActivities.value = res.data; }
+    const notifications = await getNotifications({ page: 1, pageSize: 20 });
+    if (notifications.success) { todoItems.value = notifications.data.filter((item) => !item.isRead).map((item) => ({ ...item, label: item.type.includes('evaluation') ? '待填评估' : item.type.includes('offer') ? 'Offer 审批' : '待处理提醒', path: item.businessType === 'offer' ? '/offers' : item.businessType === 'interview' ? '/interviews' : '/candidates' })); }
   } catch (error: any) {
     console.error('[Dashboard] 近期动态 API 错误:', error?.response?.data || error);
   } finally {
@@ -608,9 +592,8 @@ onUnmounted(() => {
     padding: 16px 0;
     border-bottom: 1px solid #ebeef5;
 
-    &:last-child {
-      border-bottom: none;
-    }
+    &:last-child { border-bottom: none; }
+    &.todo-item { cursor: pointer; &:hover { background: #f7faff; } }
   }
 
   .activity-content {
