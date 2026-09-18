@@ -3,6 +3,7 @@
     <PageHeader v-if="candidate" title="候选人详情" :description="`${candidate.name} · ${candidate.currentStage}`">
       <template #actions>
         <el-button @click="$router.back()"><el-icon><ArrowLeft /></el-icon>返回列表</el-button>
+        <el-button @click="handleEdit"><el-icon><Edit /></el-icon>编辑资料</el-button>
         <el-button type="primary" :disabled="!canAdvance" @click="handleAdvance"><el-icon><Promotion /></el-icon>推进到下一阶段</el-button>
       </template>
     </PageHeader>
@@ -13,16 +14,13 @@
         <el-card shadow="never" class="info-card">
           <template #header>
             <div class="card-header">
-              <span>基本信息</span>
+              <span>招聘摘要</span>
               <div class="header-actions">
                 <el-button type="warning" link @click="showResumeUpload = true">
                   <el-icon><Upload /></el-icon>重新解析
                 </el-button>
                 <el-button v-if="canDelete" type="danger" link @click="handleDelete">
                   <el-icon><Delete /></el-icon>删除
-                </el-button>
-                <el-button type="primary" link @click="handleEdit">
-                  <el-icon><Edit /></el-icon>编辑
                 </el-button>
               </div>
             </div>
@@ -32,8 +30,15 @@
             <el-avatar :size="80" :icon="UserFilled" />
             <h3 class="candidate-name">{{ candidate.name }}</h3>
             <el-tag :type="getStatusType(candidate.stageStatus)">
-              {{ getStatusText(candidate.stageStatus) }}
+              {{ candidate.currentStage }} · {{ getStatusText(candidate.stageStatus) }}
             </el-tag>
+          </div>
+
+          <div class="profile-summary">
+            <div><span>应聘职位</span><b>{{ candidate.jobs.map((job) => job.title).join('、') || '人才库候选人' }}</b></div>
+            <div><span>负责人</span><b>{{ candidate.currentAssignee?.name || '未指派' }}</b></div>
+            <div><span>手机号</span><b>{{ candidate.phone || '未填写' }}</b></div>
+            <div><span>授权状态</span><b :class="candidate.consentAt ? 'is-authorized' : 'is-unauthorized'">{{ candidate.consentAt ? '已授权' : '未授权' }}</b></div>
           </div>
 
           <!-- 个保法合规：未记录授权同意的候选人给出醒目标识 -->
@@ -173,35 +178,42 @@
         <el-card shadow="never" class="timeline-card">
           <template #header>
             <div class="card-header">
-              <span>流程记录</span>
-              <el-tag type="primary">{{ candidate.currentStage }}</el-tag>
+              <span>招聘进展</span>
+              <span class="stage-count">共 {{ pipelineProgress.length }} 个阶段</span>
             </div>
           </template>
 
           <el-timeline>
             <el-timeline-item
-              v-for="record in candidate.stageRecords"
-              :key="record.id"
-              :type="getTimelineType(record.status)"
-              :color="getTimelineColor(record.status)"
-              :timestamp="formatDate(record.enteredAt)"
+              v-for="item in pipelineProgress"
+              :key="item.stage"
+              :type="item.record ? getTimelineType(item.record.status) : 'info'"
+              :color="item.record ? getTimelineColor(item.record.status) : '#cbd7e6'"
+              :timestamp="item.record ? formatDate(item.record.enteredAt) : '完成上一阶段后开放'"
               placement="top"
             >
               <div class="timeline-content">
                 <div class="timeline-header">
-                  <span class="stage-name">{{ record.stage }}</span>
-                  <el-tag :type="getStatusType(record.status)" size="small">
-                    {{ getStatusText(record.status) }}
+                  <span class="stage-name" :class="{ 'future-stage': !item.record }">{{ item.stage }}</span>
+                  <el-tag v-if="item.record" :type="getStatusType(item.record.status)" size="small">
+                    {{ getStatusText(item.record.status) }}
                   </el-tag>
+                  <el-tag v-else size="small" type="info">未开放</el-tag>
                 </div>
-                <div v-if="record.assignee" class="assignee">
-                  负责人：{{ record.assignee.name }}
+                <div v-if="item.record?.assignee" class="assignee">
+                  负责人：{{ item.record.assignee.name }}
                 </div>
-                <div v-if="record.rejectReason" class="reject-reason">
-                  淘汰原因：{{ record.rejectReason }}
+                <div v-if="item.record?.rejectReason" class="reject-reason">
+                  淘汰原因：{{ item.record.rejectReason }}
                 </div>
-                <div v-if="record.note" class="note">
-                  {{ record.note }}
+                <div v-if="item.record?.note" class="note">
+                  {{ item.record.note }}
+                </div>
+                <div v-if="item.isCurrent" class="current-stage-actions">
+                  <el-button v-if="item.stage.includes('面') && canManageInterview" type="primary" @click="handleScheduleInterview">安排面试</el-button>
+                  <el-button v-if="candidate.resumeUrl" @click="openResume">查看简历</el-button>
+                  <el-button v-if="item.stage.includes('Offer') && !candidate.offer" type="primary" @click="handleCreateOffer">创建 Offer</el-button>
+                  <el-button v-else-if="item.stage.includes('Offer') && candidate.offer" @click="handleViewOffer">查看 Offer</el-button>
                 </div>
               </div>
             </el-timeline-item>
@@ -671,6 +683,12 @@ function handleResumeView() {
   logResumeView(candidateId).catch((e) => console.error('简历查看日志记录失败:', e));
 }
 
+function openResume() {
+  if (!resumeDownloadUrl.value) return;
+  handleResumeView();
+  window.open(resumeDownloadUrl.value, '_blank', 'noopener');
+}
+
 // 计算是否可推进
 const canAdvance = computed(() => {
   if (!candidate.value) return false;
@@ -711,6 +729,18 @@ const advanceSubmitting = ref(false);
 const advanceFormRef = ref<FormInstance>();
 // 阶段选项不再硬编码：按候选人适用职位的 Pipeline 模板动态获取
 const candidateStages = ref<string[]>([]);
+
+const pipelineProgress = computed(() => {
+  if (!candidate.value) return [];
+  const records = candidate.value.stageRecords || [];
+  const fallbackStages = [...records].reverse().map((record) => record.stage);
+  const stages = candidateStages.value.length ? candidateStages.value : fallbackStages;
+  return [...new Set(stages)].map((stage) => ({
+    stage,
+    record: records.find((record) => record.stage === stage),
+    isCurrent: candidate.value?.currentStage === stage,
+  }));
+});
 
 const availableStages = computed(() => {
   if (!candidate.value) return [];
@@ -771,6 +801,9 @@ async function fetchCandidateDetail() {
     const res = await getCandidateById(candidateId);
     if (res.success) {
       candidate.value = res.data;
+      getPipelineStages(res.data.id)
+        .then((stages) => { candidateStages.value = stages.data; })
+        .catch(() => { candidateStages.value = []; });
     }
   } catch (error: any) {
     const errorMsg = error.response?.data?.error || error.message;
