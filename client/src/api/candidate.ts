@@ -78,10 +78,12 @@ export interface UpdateCandidateParams {
   sourceNote?: string;
   referrer?: string;
   intro?: string;
+  jobIds?: string[];
   consentAt?: string | null;
   consentNote?: string | null;
   tagIds?: string[];
   skills?: string[];
+  workHistory?: WorkHistory[];
 }
 
 // 推进阶段参数

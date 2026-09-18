@@ -66,8 +66,17 @@ const updateCandidateSchema = z.object({
   sourceNote: z.string().max(500).optional(),
   referrer: z.string().max(50).optional(),
   intro: z.string().max(5000).optional(),
+  jobIds: z.array(z.string().max(50)).max(20, '最多关联20个职位').optional()
+    .refine((ids) => !ids || new Set(ids).size === ids.length, '关联职位不能重复'),
   tagIds: z.array(z.string().max(50)).max(20, '最多设置20个标签').optional(),
   skills: z.array(z.string().max(50)).max(50, '最多设置50个技能').optional(),
+  workHistory: z.array(z.object({
+    company: z.string().max(100),
+    position: z.string().max(100),
+    startDate: z.string().max(50).optional(),
+    endDate: z.string().max(50).optional(),
+    description: z.string().max(5000).optional(),
+  })).max(50, '最多维护50条工作经历').optional(),
   // 授权同意（个保法合规）：null 表示撤销授权记录
   consentAt: z.string().max(50).datetime('无效的授权时间格式').optional().nullable(),
   consentNote: z.string().max(200, '授权备注不能超过200字').optional().nullable(),

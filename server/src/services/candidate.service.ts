@@ -91,11 +91,19 @@ export interface UpdateCandidateInput {
   sourceNote?: string;
   referrer?: string;
   intro?: string;
+  jobIds?: string[];
   tagIds?: string[];
   skills?: string[];
   // 授权同意（个保法合规）：null 表示撤销授权记录
   consentAt?: string | null;
   consentNote?: string | null;
+  workHistory?: Array<{
+    company: string;
+    position: string;
+    startDate?: string;
+    endDate?: string;
+    description?: string;
+  }>;
 }
 
 // 推进阶段参数类型
@@ -774,6 +782,7 @@ export class CandidateService {
     // 检查候选人是否存在
     const existingCandidate = await prisma.candidate.findUnique({
       where: { id },
+      include: { candidateJobs: { select: { jobId: true } } },
     });
 
     if (!existingCandidate) {
@@ -797,6 +806,24 @@ export class CandidateService {
       const emailUsed = await isEmailUsed(data.email, id);
       if (emailUsed) {
         throw new AppError('该邮箱已被其他候选人使用', 400);
+      }
+    }
+
+    const jobIds = data.jobIds === undefined ? undefined : [...new Set(data.jobIds)];
+    if (jobIds !== undefined) {
+      const jobs = await prisma.job.findMany({
+        where: { id: { in: jobIds } },
+        select: { id: true, status: true },
+      });
+      if (jobs.length !== jobIds.length) {
+        throw new AppError('关联职位不存在或已被删除', 400);
+      }
+
+      // 已关联的关闭职位作为历史记录允许保留；只禁止新增关联关闭职位。
+      const existingJobIds = new Set(existingCandidate.candidateJobs.map((item) => item.jobId));
+      const closedNewJob = jobs.find((job) => job.status === 'closed' && !existingJobIds.has(job.id));
+      if (closedNewJob) {
+        throw new AppError('已关闭的职位不能新增关联，请选择开放职位', 400);
       }
     }
 
@@ -826,6 +853,32 @@ export class CandidateService {
       updateData.consentAt = data.consentAt ? new Date(data.consentAt) : null;
     if (data.consentNote !== undefined) updateData.consentNote = data.consentNote;
 
+    if (jobIds !== undefined) {
+      updateData.candidateJobs = {
+        deleteMany: {},
+        create: jobIds.map((jobId) => ({ jobId })),
+      };
+    }
+
+    if (data.workHistory !== undefined) {
+      const validWorkHistory = data.workHistory.filter((work) => {
+        if (!work.company || !work.position) return false;
+        if (work.startDate && Number.isNaN(Date.parse(work.startDate))) return false;
+        if (work.endDate && Number.isNaN(Date.parse(work.endDate))) return false;
+        return true;
+      });
+      updateData.workHistories = {
+        deleteMany: {},
+        create: validWorkHistory.map((work) => ({
+          company: work.company,
+          position: work.position,
+          startDate: work.startDate ? new Date(work.startDate) : null,
+          endDate: work.endDate ? new Date(work.endDate) : null,
+          description: work.description || null,
+        })),
+      };
+    }
+
     const candidate = await prisma.candidate.update({
       where: { id },
       data: updateData,
@@ -839,6 +892,23 @@ export class CandidateService {
           data: data.tagIds.map((tagId) => ({ candidateId: id, tagId })),
           skipDuplicates: true,
         });
+      }
+    }
+
+    if (jobIds !== undefined) {
+      const existingJobIds = new Set(existingCandidate.candidateJobs.map((item) => item.jobId));
+      const addedJobIds = jobIds.filter((jobId) => !existingJobIds.has(jobId));
+      if (addedJobIds.length) {
+        try {
+          const { aiMatchScoreQueue } = await import('../lib/queue');
+          await Promise.all(addedJobIds.map((jobId) => aiMatchScoreQueue.add('score', {
+            candidateId: id,
+            jobId,
+            userId,
+          })));
+        } catch (e) {
+          logger.error({ err: e, candidateId: id }, '[F2-S] 更新关联职位后投递 AI 打分任务失败');
+        }
       }
     }
 

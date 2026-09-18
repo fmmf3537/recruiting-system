@@ -289,7 +289,7 @@
                   <el-option
                     v-for="job in jobList"
                     :key="job.id"
-                    :label="job.title"
+                    :label="job.status === 'closed' ? `${job.title}（已关闭）` : job.title"
                     :value="job.id"
                   />
                 </el-select>

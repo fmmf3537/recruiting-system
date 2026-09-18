@@ -517,6 +517,31 @@ describe('候选人模块 API 测试', () => {
 
       expect(res.body.success).toBe(true);
     });
+
+    it('应将职位关联和工作经历传给更新服务', async () => {
+      vi.mocked(candidateService.updateCandidate).mockResolvedValue({
+        id: 'clh12345678901234567890123',
+        name: '张三',
+      } as any);
+
+      await request(app)
+        .patch('/api/candidates/clh12345678901234567890123')
+        .send({
+          jobIds: ['clhjob1234567890123456789'],
+          workHistory: [{ company: '示例公司', position: '产品经理', startDate: '2025-01' }],
+        })
+        .expect(200);
+
+      expect(candidateService.updateCandidate).toHaveBeenCalledWith(
+        'clh12345678901234567890123',
+        expect.objectContaining({
+          jobIds: ['clhjob1234567890123456789'],
+          workHistory: [expect.objectContaining({ company: '示例公司', position: '产品经理' })],
+        }),
+        'user-1',
+        true
+      );
+    });
   });
 
   describe('DELETE /api/candidates/:id - 删除候选人', () => {
