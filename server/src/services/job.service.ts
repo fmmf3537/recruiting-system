@@ -29,6 +29,8 @@ export interface CreateJobInput {
   status?: string;
   tagIds?: string[];
   pipelineTemplateId?: string | null; // 关联招聘流程模板（空则使用该 type 的默认模板）
+  hiringManagerId?: string | null;
+  collaboratorIds?: string[];
 }
 
 // 更新职位参数类型
@@ -44,6 +46,8 @@ export interface UpdateJobInput {
   status?: string;
   tagIds?: string[];
   pipelineTemplateId?: string | null;
+  hiringManagerId?: string | null;
+  collaboratorIds?: string[];
 }
 
 // 职位列表返回类型
@@ -77,6 +81,8 @@ export class JobService {
         requirements: sanitizeHtml(data.requirements),
         pipelineTemplateId: data.pipelineTemplateId || null,
         createdById,
+        hiringManagerId: data.hiringManagerId || null,
+        collaboratorIds: data.collaboratorIds || [],
       },
       select: {
         id: true,
@@ -90,6 +96,8 @@ export class JobService {
         description: true,
         requirements: true,
         createdById: true,
+        hiringManagerId: true,
+        collaboratorIds: true,
         createdAt: true,
         updatedAt: true,
         hcRequestId: true,
@@ -194,6 +202,8 @@ export class JobService {
           type: true,
           status: true,
           createdById: true,
+          hiringManagerId: true,
+          collaboratorIds: true,
           createdAt: true,
           updatedAt: true,
         hcRequestId: true,
@@ -257,6 +267,8 @@ export class JobService {
         description: true,
         requirements: true,
         createdById: true,
+        hiringManagerId: true,
+        collaboratorIds: true,
         createdAt: true,
         updatedAt: true,
         hcRequestId: true,
@@ -358,6 +370,8 @@ export class JobService {
     if (data.description !== undefined) updateData.description = sanitizeHtml(data.description);
     if (data.requirements !== undefined) updateData.requirements = sanitizeHtml(data.requirements);
     if (data.status !== undefined) updateData.status = data.status;
+    if (data.hiringManagerId !== undefined) updateData.hiringManagerId = data.hiringManagerId;
+    if (data.collaboratorIds !== undefined) updateData.collaboratorIds = data.collaboratorIds;
     // 允许显式传 null 解除模板关联（回退到该 type 默认模板）
     if (data.pipelineTemplateId !== undefined) {
       updateData.pipelineTemplate = data.pipelineTemplateId
@@ -380,6 +394,8 @@ export class JobService {
         description: true,
         requirements: true,
         createdById: true,
+        hiringManagerId: true,
+        collaboratorIds: true,
         createdAt: true,
         updatedAt: true,
         hcRequestId: true,
@@ -456,6 +472,8 @@ export class JobService {
         description: true,
         requirements: true,
         createdById: true,
+        hiringManagerId: true,
+        collaboratorIds: true,
         createdAt: true,
         updatedAt: true,
         hcRequestId: true,
@@ -505,6 +523,8 @@ export class JobService {
         description: true,
         requirements: true,
         createdById: true,
+        hiringManagerId: true,
+        collaboratorIds: true,
         createdAt: true,
         updatedAt: true,
         hcRequestId: true,

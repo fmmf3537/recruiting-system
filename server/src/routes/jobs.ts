@@ -41,6 +41,8 @@ const createJobSchema = z.object({
   tagIds: z.array(z.string().max(50)).max(20, '最多设置20个标签').optional(),
   // 关联招聘流程模板（可空，空则使用该 type 的默认模板）
   pipelineTemplateId: z.string().max(50).nullable().optional(),
+  hiringManagerId: z.string().max(50).nullable().optional(),
+  collaboratorIds: z.array(z.string().max(50)).max(10, '最多设置10位协同负责人').optional(),
 });
 
 // 更新职位验证 Schema（所有字段可选）
@@ -56,6 +58,8 @@ const updateJobSchema = z.object({
   status: z.enum([...JOB_STATUS] as [string, ...string[]]).optional(),
   tagIds: z.array(z.string().max(50)).max(20, '最多设置20个标签').optional(),
   pipelineTemplateId: z.string().max(50).nullable().optional(),
+  hiringManagerId: z.string().max(50).nullable().optional(),
+  collaboratorIds: z.array(z.string().max(50)).max(10, '最多设置10位协同负责人').optional(),
 });
 
 // 职位 ID 参数验证

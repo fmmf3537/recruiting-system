@@ -28,6 +28,8 @@ export interface CreateJobParams {
   requirements: string;
   status?: JobStatus;
   tagIds?: string[];
+  hiringManagerId?: string | null;
+  collaboratorIds?: string[];
 }
 
 // 更新职位参数
@@ -42,6 +44,8 @@ export interface UpdateJobParams {
   requirements?: string;
   status?: JobStatus;
   tagIds?: string[];
+  hiringManagerId?: string | null;
+  collaboratorIds?: string[];
 }
 
 // 职位列表项
@@ -57,6 +61,8 @@ export interface JobItem {
   description: string;
   requirements: string;
   createdById: string;
+  hiringManagerId?: string | null;
+  collaboratorIds?: string[];
   createdAt: string;
   updatedAt: string;
   _count?: {

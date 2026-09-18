@@ -133,6 +133,9 @@ model Job {
   // 关联的招聘流程模板（空则使用该 type 的默认模板）
   pipelineTemplateId String?
   pipelineTemplate   PipelineTemplate? @relation(fields: [pipelineTemplateId], references: [id], onDelete: SetNull)
+  // 招聘业务负责人：用于用人经理的“我的岗位”招聘看板；协同负责人以用户 ID 数组保存。
+  hiringManagerId   String?
+  collaboratorIds   Json     @default("[]")
 
   createdById  String
   createdBy    User     @relation("CreatedJobs", fields: [createdById], references: [id])
@@ -165,6 +168,7 @@ model Job {
   @@index([type, createdAt])
   @@index([location, createdAt])
   @@index([pipelineTemplateId])
+  @@index([hiringManagerId])
   @@map("job")
 }
 
