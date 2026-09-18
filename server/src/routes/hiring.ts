@@ -16,11 +16,15 @@ export function isAdmin(role: string): boolean {
  */
 export function buildHiringJobFilter(
   role: string,
-  department: string | null
+  userId: string
 ): Prisma.JobWhereInput {
   if (isAdmin(role)) return {};
-  if (!department) return { id: { in: [] } };
-  return { departments: { array_contains: [department] } };
+  return {
+    OR: [
+      { hiringManagerId: userId },
+      { collaboratorIds: { array_contains: [userId] } },
+    ],
+  };
 }
 
 function buildHiringCandidateWhere(
@@ -35,19 +39,17 @@ function buildHiringCandidateWhere(
 }
 
 function assertOfferInDepartmentScope(
-  candidateJobs: Array<{ job: { departments: Prisma.JsonValue } }>,
+  candidateJobs: Array<{ job: { hiringManagerId: string | null; collaboratorIds: Prisma.JsonValue } }>,
   role: string,
-  department: string | null
+  userId: string
 ): void {
   if (isAdmin(role)) return;
-  if (!department) {
-    throw new AppError('无权审批该 Offer', 403);
-  }
-  const inDept = candidateJobs.some((cj) => {
-    const depts = cj.job.departments;
-    return Array.isArray(depts) && depts.includes(department);
+  const ownsJob = candidateJobs.some((cj) => {
+    const collaborators = cj.job.collaboratorIds;
+    return cj.job.hiringManagerId === userId
+      || (Array.isArray(collaborators) && collaborators.includes(userId));
   });
-  if (!inDept) {
+  if (!ownsJob) {
     throw new AppError('无权审批该 Offer', 403);
   }
 }
@@ -58,8 +60,7 @@ const hiringGuard = [authenticate, requireRole('admin', 'hiring_manager')] as co
 router.get('/overview', ...hiringGuard, async (req, res, next) => {
   try {
     const role = req.user!.role;
-    const department = req.user!.department;
-    const jobFilter = buildHiringJobFilter(role, department);
+    const jobFilter = buildHiringJobFilter(role, req.user!.userId);
     const candidateWhere = buildHiringCandidateWhere(role, jobFilter);
     const interviewWhere: Prisma.InterviewWhereInput = {
       status: 'scheduled',
@@ -89,8 +90,7 @@ router.get('/overview', ...hiringGuard, async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        scope: isAdmin(role) ? 'company' : 'department',
-        department,
+        scope: isAdmin(role) ? 'company' : 'owned_jobs',
         openJobs,
         activeCandidates,
         pendingOffers,
@@ -102,12 +102,54 @@ router.get('/overview', ...hiringGuard, async (req, res, next) => {
   }
 });
 
+// 我的岗位：按主负责人或协同负责人聚合候选人当前阶段，供用人经理快速判断招聘进度。
+router.get('/jobs', ...hiringGuard, async (req, res, next) => {
+  try {
+    const jobFilter = buildHiringJobFilter(req.user!.role, req.user!.userId);
+    const jobs = await prisma.job.findMany({
+      where: jobFilter,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        candidateJobs: {
+          where: { candidate: { deletedAt: null } },
+          select: {
+            candidate: {
+              select: {
+                stageRecords: {
+                  orderBy: { enteredAt: 'desc' },
+                  take: 1,
+                  select: { stage: true },
+                },
+              },
+            },
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    res.json({
+      success: true,
+      data: jobs.map((job) => {
+        const stageCounts: Record<string, number> = {};
+        job.candidateJobs.forEach(({ candidate }) => {
+          const stage = candidate.stageRecords[0]?.stage || '入库';
+          stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+        });
+        return { id: job.id, title: job.title, status: job.status, candidateCount: job.candidateJobs.length, stageCounts };
+      }),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 待审批 Offer 列表（Offer 无 job 外键，经 candidateJobs 过滤并回填职位）
 router.get('/approvals', ...hiringGuard, async (req, res, next) => {
   try {
     const role = req.user!.role;
-    const department = req.user!.department;
-    const jobFilter = buildHiringJobFilter(role, department);
+    const jobFilter = buildHiringJobFilter(role, req.user!.userId);
     const candidateWhere = buildHiringCandidateWhere(role, jobFilter);
 
     const offers = await prisma.offer.findMany({
@@ -147,7 +189,6 @@ router.post('/approvals/:id/approve', ...hiringGuard, async (req, res, next) => 
     const offerId = req.params.id;
     const userId = req.user!.userId;
     const role = req.user!.role;
-    const department = req.user!.department;
 
     const offer = await prisma.offer.findUnique({
       where: { id: offerId },
@@ -155,7 +196,7 @@ router.post('/approvals/:id/approve', ...hiringGuard, async (req, res, next) => 
         candidate: {
           select: {
             candidateJobs: {
-              include: { job: { select: { departments: true } } },
+              include: { job: { select: { hiringManagerId: true, collaboratorIds: true } } },
             },
           },
         },
@@ -165,7 +206,7 @@ router.post('/approvals/:id/approve', ...hiringGuard, async (req, res, next) => 
     if (offer.status !== 'pending_approval') {
       throw new AppError('Offer 状态不允许审批', 400);
     }
-    assertOfferInDepartmentScope(offer.candidate.candidateJobs, role, department);
+    assertOfferInDepartmentScope(offer.candidate.candidateJobs, role, userId);
 
     const updated = await prisma.offer.update({
       where: { id: offerId },
@@ -185,8 +226,7 @@ router.post('/approvals/:id/approve', ...hiringGuard, async (req, res, next) => 
 router.get('/candidates', ...hiringGuard, async (req, res, next) => {
   try {
     const role = req.user!.role;
-    const department = req.user!.department;
-    const jobFilter = buildHiringJobFilter(role, department);
+    const jobFilter = buildHiringJobFilter(role, req.user!.userId);
 
     const candidates = await prisma.candidateJob.findMany({
       where: {
@@ -225,8 +265,7 @@ router.get('/candidates', ...hiringGuard, async (req, res, next) => {
 router.get('/interviews', ...hiringGuard, async (req, res, next) => {
   try {
     const role = req.user!.role;
-    const department = req.user!.department;
-    const jobFilter = buildHiringJobFilter(role, department);
+    const jobFilter = buildHiringJobFilter(role, req.user!.userId);
     const interviewWhere: Prisma.InterviewWhereInput = {
       status: 'scheduled',
       scheduledAt: { gte: new Date() },

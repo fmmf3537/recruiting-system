@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="title-section">
         <h2 class="page-title">招聘工作台</h2>
-        <span class="page-subtitle">用人经理视角：看本部门招聘、审批 Offer</span>
+        <span class="page-subtitle">用人经理视角：聚焦我负责岗位的招聘进展与审批事项</span>
       </div>
     </div>
 
@@ -27,10 +27,26 @@
               </el-col>
             </el-row>
             <p class="scope-tip">
-              数据范围：{{ overview.scope === 'company' ? '全公司' : `部门 ${overview.department || '(未设置)'}` }}
+              数据范围：{{ overview.scope === 'company' ? '全公司' : '我负责的岗位' }}
             </p>
           </template>
         </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="我的岗位" name="jobs">
+        <TableSkeleton v-if="jobsLoading" :row-count="5" />
+        <el-table v-else :data="jobs">
+          <el-table-column prop="title" label="岗位" min-width="180" />
+          <el-table-column prop="candidateCount" label="关联候选人" width="120" />
+          <el-table-column label="阶段分布" min-width="240">
+            <template #default="{ row }">
+              <el-tag v-for="(count, stage) in row.stageCounts" :key="stage" size="small" class="stage-tag">{{ stage }} {{ count }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="90">
+            <template #default="{ row }"><el-button type="primary" link @click="router.push(`/jobs/${row.id}`)">查看</el-button></template>
+          </el-table-column>
+        </el-table>
       </el-tab-pane>
 
       <el-tab-pane label="待审批" name="approvals">
@@ -122,13 +138,15 @@ import { TableSkeleton, CardSkeleton } from '@/components/Skeleton';
 import request from '@/utils/request';
 
 interface HiringOverview {
-  scope?: 'company' | 'department';
+  scope?: 'company' | 'owned_jobs';
   department?: string | null;
   openJobs?: number;
   activeCandidates?: number;
   pendingOffers?: number;
   scheduledInterviews?: number;
 }
+
+interface HiringJobRow { id: string; title: string; candidateCount: number; stageCounts: Record<string, number>; }
 
 interface HiringOfferRow {
   id: string;
@@ -179,6 +197,8 @@ const candidatesLoading = ref(false);
 const candidates = ref<HiringCandidateRow[]>([]);
 const interviewsLoading = ref(false);
 const interviews = ref<HiringInterviewRow[]>([]);
+const jobsLoading = ref(false);
+const jobs = ref<HiringJobRow[]>([]);
 
 const router = useRouter();
 
@@ -239,6 +259,18 @@ async function loadCandidates() {
   }
 }
 
+async function loadJobs() {
+  jobsLoading.value = true;
+  try {
+    const res = await request.get('/hiring/jobs') as ApiSuccess<HiringJobRow[]>;
+    if (res.success) jobs.value = res.data;
+  } catch {
+    ElMessage.error('加载我的岗位失败');
+  } finally {
+    jobsLoading.value = false;
+  }
+}
+
 async function loadInterviews() {
   interviewsLoading.value = true;
   try {
@@ -268,6 +300,7 @@ onMounted(async () => {
   await loadOverview();
   await loadApprovals();
   await loadCandidates();
+  await loadJobs();
   await loadInterviews();
 });
 </script>
@@ -301,4 +334,5 @@ onMounted(async () => {
   color: #909399;
   font-size: 13px;
 }
+.stage-tag { margin-right: 6px; }
 </style>
