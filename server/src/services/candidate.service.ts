@@ -628,6 +628,9 @@ export class CandidateService {
         offerDate: Date;
         expectedJoinDate: Date | null;
         result: string;
+        status: string;
+        approverId: string | null;
+        approveNote: string | null;
         joined: boolean;
         actualJoinDate: Date | null;
         note: string | null;
@@ -722,6 +725,9 @@ export class CandidateService {
         offerDate: Date;
         expectedJoinDate: Date | null;
         result: string;
+        status: string;
+        approverId: string | null;
+        approveNote: string | null;
         joined: boolean;
         actualJoinDate: Date | null;
         note: string | null;

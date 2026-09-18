@@ -210,10 +210,34 @@
                   {{ item.record.note }}
                 </div>
                 <div v-if="item.isCurrent" class="current-stage-actions">
-                  <el-button v-if="item.stage.includes('面') && canManageInterview" type="primary" @click="handleScheduleInterview">安排面试</el-button>
+                  <el-button
+                    v-if="item.stage.includes('面') && currentInterview"
+                    type="primary"
+                    @click="handleViewInterview(currentInterview)"
+                  >
+                    查看面试与评估
+                  </el-button>
+                  <el-button
+                    v-else-if="item.stage.includes('面') && canManageInterview"
+                    type="primary"
+                    @click="handleScheduleInterview"
+                  >
+                    安排面试
+                  </el-button>
                   <el-button v-if="candidate.resumeUrl" @click="openResume">查看简历</el-button>
-                  <el-button v-if="item.stage.includes('Offer') && !candidate.offer" type="primary" @click="handleCreateOffer">创建 Offer</el-button>
-                  <el-button v-else-if="item.stage.includes('Offer') && candidate.offer" @click="handleViewOffer">查看 Offer</el-button>
+                  <el-button
+                    v-if="item.stage.includes('Offer') && !candidate.offer"
+                    type="primary"
+                    @click="handleCreateOffer"
+                  >
+                    创建 Offer
+                  </el-button>
+                  <el-button
+                    v-else-if="item.stage.includes('Offer') && candidate.offer"
+                    @click="handleViewOffer"
+                  >
+                    查看 Offer（{{ getOfferStatusText(candidate.offer.status) }}）
+                  </el-button>
                 </div>
               </div>
             </el-timeline-item>
@@ -235,31 +259,8 @@
             >
               <el-icon><Promotion /></el-icon>推进流程
             </el-button>
-            <el-button
-              type="success"
-              size="large"
-              @click="handleAddFeedback"
-              style="width: 100%"
-            >
-              <el-icon><ChatDotRound /></el-icon>添加面试反馈
-            </el-button>
-            <el-button
-              v-if="!candidate.offer"
-              type="warning"
-              size="large"
-              @click="handleCreateOffer"
-              style="width: 100%"
-            >
-              <el-icon><Document /></el-icon>创建 Offer
-            </el-button>
-            <el-button
-              v-else
-              type="info"
-              size="large"
-              @click="handleViewOffer"
-              style="width: 100%"
-            >
-              <el-icon><View /></el-icon>查看 Offer
+            <el-button type="default" size="large" @click="handleAddFeedback" style="width: 100%">
+              <el-icon><ChatDotRound /></el-icon>补录历史反馈
             </el-button>
             <el-button
               type="default"
@@ -278,12 +279,20 @@
           <template #header>
             <div class="card-header">
               <span>Offer 信息</span>
-              <el-tag :type="getOfferResultType(candidate.offer.result)">
-                {{ getOfferResultText(candidate.offer.result) }}
-              </el-tag>
+              <div class="offer-status">
+                <el-tag :type="getOfferStatusType(candidate.offer.status)">
+                  {{ getOfferStatusText(candidate.offer.status) }}
+                </el-tag>
+                <el-tag :type="getOfferResultType(candidate.offer.result)">
+                  {{ getOfferResultText(candidate.offer.result) }}
+                </el-tag>
+              </div>
             </div>
           </template>
           <el-descriptions :column="1">
+            <el-descriptions-item v-if="candidate.offer.approveNote" label="审批意见">
+              {{ candidate.offer.approveNote }}
+            </el-descriptions-item>
             <!-- UI-S0：空值展示语义化（数据未改动） -->
             <el-descriptions-item label="薪资">
               <span v-if="!candidate.offer.salary" class="ui-placeholder">未填写</span>
@@ -349,8 +358,11 @@
                     {{ getInterviewStatusText(iv.status) }}
                   </el-tag>
                 </div>
-                <div v-if="canManageInterview && iv.status === 'scheduled'" class="interview-actions">
-                  <el-button type="primary" link size="small" @click="handleEditInterview(iv)">
+                <div class="interview-actions">
+                  <el-button type="primary" link size="small" @click="handleViewInterview(iv)">
+                    面试与评估
+                  </el-button>
+                  <el-button v-if="canManageInterview && iv.status === 'scheduled'" type="primary" link size="small" @click="handleEditInterview(iv)">
                     编辑
                   </el-button>
                   <el-button type="warning" link size="small" @click="handleCancelInterview(iv)">
@@ -601,7 +613,7 @@
 import { ref, reactive, computed, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { ArrowLeft, Edit, Delete, UserFilled, Promotion, ChatDotRound, Document, View, Upload, Message, Clock, User, Location } from '@element-plus/icons-vue';
+import { ArrowLeft, Edit, Delete, UserFilled, Promotion, ChatDotRound, Upload, Message, Clock, User, Location } from '@element-plus/icons-vue';
 import {
   getCandidateById,
   advanceStage,
@@ -646,6 +658,10 @@ const tagSelectValue = ref('');
 
 // 面试安排
 const candidateInterviews = ref<InterviewItem[]>([]);
+const currentInterview = computed(() =>
+  candidateInterviews.value.find((interview) => interview.status === 'scheduled')
+  || candidateInterviews.value[0]
+);
 const scheduleDialogVisible = ref(false);
 const editingInterview = ref<InterviewItem | null>(null);
 
@@ -895,6 +911,26 @@ function getTimelineType(status: string): any {
 
 function getTimelineColor(status: string): string {
   return { 'passed': '#67c23a', 'rejected': '#f56c6c', 'in_progress': '#409eff' }[status] || '';
+}
+
+function getOfferStatusType(status: string): string {
+  return {
+    draft: 'info',
+    pending_approval: 'warning',
+    approved: 'success',
+    rejected: 'danger',
+    sent: 'primary',
+  }[status] || 'info';
+}
+
+function getOfferStatusText(status: string): string {
+  return {
+    draft: '草稿待提交',
+    pending_approval: '待审批',
+    approved: '已审批',
+    rejected: '已驳回',
+    sent: '已发送',
+  }[status] || status;
 }
 
 function getOfferResultType(result: string): string {
@@ -1150,6 +1186,10 @@ function handleScheduleInterview() {
   scheduleDialogVisible.value = true;
 }
 
+function handleViewInterview(iv: InterviewItem) {
+  router.push(`/interviews/${iv.id}`);
+}
+
 function handleEditInterview(iv: InterviewItem) {
   editingInterview.value = iv;
   scheduleDialogVisible.value = true;
@@ -1268,6 +1308,7 @@ onActivated(() => {
   .stage-count { color: $ui-gray-500; font-size: 13px; font-weight: 400; }
   .future-stage { color: $ui-gray-500; }
   .current-stage-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .offer-status { display: flex; gap: 8px; }
   .form-tip { margin-top: 6px; color: $ui-gray-500; font-size: 12px; line-height: 1.5; }
 
   .info-card {

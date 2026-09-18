@@ -144,6 +144,9 @@ export interface OfferInfo {
   offerDate: string;
   expectedJoinDate: string | null;
   result: string;
+  status: string;
+  approverId: string | null;
+  approveNote: string | null;
   joined: boolean;
   actualJoinDate: string | null;
   note: string | null;
