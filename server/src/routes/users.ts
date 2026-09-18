@@ -228,7 +228,7 @@ router.get(
   asyncHandler(async (_req, res) => {
     const users = await prisma.user.findMany({
       where: { role: { in: ['interviewer', 'hr', 'hiring_manager', 'admin'] } },
-      select: { id: true, name: true, department: true },
+      select: { id: true, name: true, department: true, role: true },
       orderBy: { createdAt: 'asc' },
     });
     res.json({ success: true, data: users });

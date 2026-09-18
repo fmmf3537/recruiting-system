@@ -94,6 +94,7 @@ export interface InterviewerOption {
   id: string;
   name: string;
   department?: string | null;
+  role: ManageableUserRole;
 }
 
 export interface InterviewerOptionsData {

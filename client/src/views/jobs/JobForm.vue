@@ -67,6 +67,23 @@
 
               <el-row :gutter="20">
                 <el-col :span="12">
+                  <el-form-item label="主用人经理">
+                    <el-select v-model="formData.hiringManagerId" clearable placeholder="请选择负责人" style="width: 100%">
+                      <el-option v-for="user in managerOptions" :key="user.id" :label="user.name" :value="user.id" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                  <el-form-item label="协同用人经理">
+                    <el-select v-model="formData.collaboratorIds" multiple clearable placeholder="可选" style="width: 100%">
+                      <el-option v-for="user in managerOptions" :key="user.id" :label="user.name" :value="user.id" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+              </el-row>
+
+              <el-row :gutter="20">
+                <el-col :span="12">
                   <el-form-item label="地域" prop="location">
                     <el-select
                       v-model="formData.location"
@@ -308,6 +325,7 @@ import {
 import { getTags, type Tag } from '@/api/tag';
 import { useDictionaryStore } from '@/stores/dictionary';
 import { useAuthStore } from '@/stores/auth';
+import { getInterviewerOptions } from '@/api/user';
 import JdPolishDialog from '@/components/jobs/JdPolishDialog.vue';
 import JdDraftDialog from '@/components/jobs/JdDraftDialog.vue';
 import JobPublishChecklist from '@/components/jobs/JobPublishChecklist.vue';
@@ -354,10 +372,13 @@ const formData = reactive<CreateJobParams>({
   requirements: '',
   status: 'open' as JobStatus,
   tagIds: [],
+  hiringManagerId: null,
+  collaboratorIds: [],
 });
 const { markSaved } = useUnsavedChangesGuard(formData, submitting);
 
 const tagOptions = ref<Tag[]>([]);
+const managerOptions = ref<Array<{ id: string; name: string }>>([]);
 
 // JD 描述是否为空（HTML 形态需剥标签判断；依赖 formData，须置于其后）
 const jdIsEmpty = computed(() => {
@@ -479,6 +500,8 @@ function resetForm() {
     requirements: '',
     status: 'open' as JobStatus,
     tagIds: [],
+    hiringManagerId: null,
+    collaboratorIds: [],
   });
 }
 
@@ -501,6 +524,8 @@ async function fetchJobDetail() {
       formData.requirements = data.requirements;
       formData.status = data.status;
       formData.tagIds = data.tags?.map((t: Tag) => t.id) || [];
+      formData.hiringManagerId = data.hiringManagerId || null;
+      formData.collaboratorIds = data.collaboratorIds || [];
     }
   } catch (error) {
     console.error('获取职位详情失败:', error);
@@ -519,12 +544,22 @@ async function fetchTagOptions() {
   }
 }
 
+async function fetchManagerOptions() {
+  try {
+    const res = await getInterviewerOptions();
+    if (res.success) managerOptions.value = res.data.filter((user) => user.role === 'hiring_manager');
+  } catch {
+    managerOptions.value = [];
+  }
+}
+
 function init() {
   dictionaryStore.fetchDictionaries('department');
   dictionaryStore.fetchDictionaries('location');
   dictionaryStore.fetchDictionaries('job_type');
   dictionaryStore.fetchDictionaries('skills');
   fetchTagOptions();
+  fetchManagerOptions();
   if (isEdit.value) {
     fetchJobDetail();
   } else {
