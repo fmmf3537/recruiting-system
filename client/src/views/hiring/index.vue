@@ -40,11 +40,21 @@
           <el-table-column prop="candidateCount" label="关联候选人" width="120" />
           <el-table-column label="阶段分布" min-width="240">
             <template #default="{ row }">
-              <el-tag v-for="(count, stage) in row.stageCounts" :key="stage" size="small" class="stage-tag">{{ stage }} {{ count }}</el-tag>
+              <el-tag
+                v-for="(count, stage) in row.stageCounts"
+                :key="stage"
+                size="small"
+                class="stage-tag"
+                >{{ stage }} {{ count }}</el-tag
+              >
             </template>
           </el-table-column>
           <el-table-column label="操作" width="90">
-            <template #default="{ row }"><el-button type="primary" link @click="router.push(`/jobs/${row.id}`)">查看</el-button></template>
+            <template #default="{ row }"
+              ><el-button type="primary" link @click="router.push(`/jobs/${row.id}`)"
+                >查看</el-button
+              ></template
+            >
           </el-table-column>
         </el-table>
       </el-tab-pane>
@@ -67,7 +77,7 @@
         </el-table>
       </el-tab-pane>
 
-      <el-tab-pane label="本部门候选人" name="candidates">
+      <el-tab-pane label="岗位候选人" name="candidates">
         <TableSkeleton v-if="candidatesLoading" :row-count="5" />
         <el-table v-else v-loading="candidatesLoading" :data="candidates">
           <el-table-column label="候选人">
@@ -83,7 +93,26 @@
             <template #default="{ row }">{{ row.candidate?.currentCompany }}</template>
           </el-table-column>
           <el-table-column label="当前阶段">
-            <template #default="{ row }">{{ row.candidate?.stageRecords?.[0]?.stage }}</template>
+            <template #default="{ row }">
+              <el-tag
+                size="small"
+                :type="stageStatusType(row.candidate?.stageRecords?.[0]?.status)"
+              >
+                {{ row.candidate?.stageRecords?.[0]?.stage || '入库' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="90">
+            <template #default="{ row }">
+              {{ stageStatusText(row.candidate?.stageRecords?.[0]?.status) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="110">
+            <template #default="{ row }">
+              <el-button type="primary" link @click="goToCandidateDetail(row)"
+                >查看候选人</el-button
+              >
+            </template>
           </el-table-column>
         </el-table>
       </el-tab-pane>
@@ -146,7 +175,12 @@ interface HiringOverview {
   scheduledInterviews?: number;
 }
 
-interface HiringJobRow { id: string; title: string; candidateCount: number; stageCounts: Record<string, number>; }
+interface HiringJobRow {
+  id: string;
+  title: string;
+  candidateCount: number;
+  stageCounts: Record<string, number>;
+}
 
 interface HiringOfferRow {
   id: string;
@@ -157,10 +191,11 @@ interface HiringOfferRow {
 
 interface HiringCandidateRow {
   candidate?: {
+    id?: string;
     name?: string;
     currentPosition?: string | null;
     currentCompany?: string | null;
-    stageRecords?: Array<{ stage: string }>;
+    stageRecords?: Array<{ stage: string; status?: string }>;
   };
   job?: { title?: string };
 }
@@ -185,7 +220,12 @@ interface ApiSuccess<T> {
 // 面试官数组 → 逗号分隔的姓名（empty/undefined → '—'）
 function formatInterviewers(list?: Array<{ name?: string }>): string {
   if (!Array.isArray(list) || !list.length) return '—';
-  return list.map((i) => i.name || '').filter(Boolean).join('、') || '—';
+  return (
+    list
+      .map((i) => i.name || '')
+      .filter(Boolean)
+      .join('、') || '—'
+  );
 }
 
 const activeTab = ref('overview');
@@ -218,6 +258,18 @@ function goToInterviewDetail(row: HiringInterviewRow) {
   router.push(`/interviews/${row.id}`);
 }
 
+function goToCandidateDetail(row: HiringCandidateRow) {
+  if (row.candidate?.id) router.push(`/candidates/${row.candidate.id}`);
+}
+
+function stageStatusType(status?: string): string {
+  return { in_progress: 'warning', passed: 'success', rejected: 'danger' }[status || ''] || 'info';
+}
+
+function stageStatusText(status?: string): string {
+  return { in_progress: '进行中', passed: '已通过', rejected: '已淘汰' }[status || ''] || '未开始';
+}
+
 function formatDateTime(value: string): string {
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString();
@@ -226,7 +278,7 @@ function formatDateTime(value: string): string {
 async function loadOverview() {
   overviewLoading.value = true;
   try {
-    const res = await request.get('/hiring/overview') as ApiSuccess<HiringOverview>;
+    const res = (await request.get('/hiring/overview')) as ApiSuccess<HiringOverview>;
     if (res.success) Object.assign(overview, res.data);
   } catch {
     ElMessage.error('加载总览失败');
@@ -238,7 +290,7 @@ async function loadOverview() {
 async function loadApprovals() {
   approvalsLoading.value = true;
   try {
-    const res = await request.get('/hiring/approvals') as ApiSuccess<HiringOfferRow[]>;
+    const res = (await request.get('/hiring/approvals')) as ApiSuccess<HiringOfferRow[]>;
     if (res.success) approvals.value = res.data;
   } catch {
     ElMessage.error('加载待审批失败');
@@ -250,7 +302,7 @@ async function loadApprovals() {
 async function loadCandidates() {
   candidatesLoading.value = true;
   try {
-    const res = await request.get('/hiring/candidates') as ApiSuccess<HiringCandidateRow[]>;
+    const res = (await request.get('/hiring/candidates')) as ApiSuccess<HiringCandidateRow[]>;
     if (res.success) candidates.value = res.data;
   } catch {
     ElMessage.error('加载候选人失败');
@@ -262,7 +314,7 @@ async function loadCandidates() {
 async function loadJobs() {
   jobsLoading.value = true;
   try {
-    const res = await request.get('/hiring/jobs') as ApiSuccess<HiringJobRow[]>;
+    const res = (await request.get('/hiring/jobs')) as ApiSuccess<HiringJobRow[]>;
     if (res.success) jobs.value = res.data;
   } catch {
     ElMessage.error('加载我的岗位失败');
@@ -274,7 +326,7 @@ async function loadJobs() {
 async function loadInterviews() {
   interviewsLoading.value = true;
   try {
-    const res = await request.get('/hiring/interviews') as ApiSuccess<HiringInterviewRow[]>;
+    const res = (await request.get('/hiring/interviews')) as ApiSuccess<HiringInterviewRow[]>;
     if (res.success) interviews.value = res.data;
   } catch {
     ElMessage.error('加载面试失败');
@@ -285,7 +337,7 @@ async function loadInterviews() {
 
 async function approveOffer(id: string) {
   try {
-    const res = await request.post(`/hiring/approvals/${id}/approve`) as ApiSuccess<unknown>;
+    const res = (await request.post(`/hiring/approvals/${id}/approve`)) as ApiSuccess<unknown>;
     if (res.success) {
       ElMessage.success('已批准');
       await loadApprovals();
@@ -334,5 +386,7 @@ onMounted(async () => {
   color: #909399;
   font-size: 13px;
 }
-.stage-tag { margin-right: 6px; }
+.stage-tag {
+  margin-right: 6px;
+}
 </style>
