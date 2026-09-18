@@ -91,6 +91,75 @@ test.describe('候选人信息编辑 @admin', () => {
     }
   });
 
+  test('编辑候选人可改为关联新职位并保存工作经历', async ({ baseURL }) => {
+    const token = loadAdminToken();
+    const apiBase = baseURL ?? 'http://localhost:5174';
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+    const suffix = Date.now().toString().slice(-8);
+
+    const jobRes = await fetch(`${apiBase}/api/jobs`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        title: `候选人关联-${suffix}`,
+        departments: ['研发部'],
+        level: 'P6',
+        location: '上海',
+        type: '全职',
+        description: '用于候选人关联回归测试的职位描述',
+        requirements: '用于候选人关联回归测试的职位要求',
+      }),
+    });
+    expect(jobRes.status).toBe(201);
+    const job = (await jobRes.json()).data;
+
+    const candidateRes = await fetch(`${apiBase}/api/candidates`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: `关联源-${suffix}`,
+        phone: `138${suffix.slice(0, 8)}`,
+        email: `relation-${suffix}@test.local`,
+      }),
+    });
+    expect(candidateRes.status).toBe(201);
+    const candidate = (await candidateRes.json()).data;
+
+    try {
+      const updateRes = await fetch(`${apiBase}/api/candidates/${candidate.id}`, {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          jobIds: [job.id],
+          workHistory: [{
+            company: '回归测试公司',
+            position: '产品经理',
+            startDate: '2024-01-01',
+            endDate: '2025-01-01',
+            description: '负责招聘系统需求规划',
+          }],
+        }),
+      });
+      expect(updateRes.status).toBe(200);
+
+      const detailRes = await fetch(`${apiBase}/api/candidates/${candidate.id}`, { headers });
+      expect(detailRes.status).toBe(200);
+      const detail = (await detailRes.json()).data;
+      expect(detail.jobs).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: job.id, title: job.title }),
+      ]));
+      expect(detail.workHistories).toEqual(expect.arrayContaining([
+        expect.objectContaining({ company: '回归测试公司', position: '产品经理' }),
+      ]));
+    } finally {
+      await fetch(`${apiBase}/api/candidates/${candidate.id}`, { method: 'DELETE', headers });
+      await fetch(`${apiBase}/api/jobs/${job.id}`, { method: 'DELETE', headers });
+    }
+  });
+
   test('修改不存在的候选人 → 404', async ({ baseURL }) => {
     const token = loadAdminToken();
     const apiBase = baseURL ?? 'http://localhost:5174';
