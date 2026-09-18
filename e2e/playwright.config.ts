@@ -10,6 +10,8 @@ const E2E_DATABASE_URL =
   process.env.DATABASE_URL ||
   'postgresql://postgres:e2e_only_pw@localhost:5433/e2e_test?schema=public';
 const E2E_REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6381';
+const E2E_API_PORT = process.env.E2E_API_PORT || '3101';
+const E2E_CLIENT_PORT = process.env.E2E_CLIENT_PORT || '5175';
 
 export default defineConfig({
   testDir: './tests',
@@ -20,7 +22,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:5174',
+    baseURL: `http://localhost:${E2E_CLIENT_PORT}`,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -70,16 +72,16 @@ export default defineConfig({
   webServer: [
     {
       command: 'cd ../server && pnpm dev:e2e',
-      url: 'http://localhost:3001/api/health',
-      reuseExistingServer: !process.env.CI,
+      url: `http://localhost:${E2E_API_PORT}/api/health`,
+      reuseExistingServer: false,
       timeout: 120 * 1000,
       env: {
         NODE_ENV: 'test',
-        PORT: '3001',
+        PORT: E2E_API_PORT,
         DATABASE_URL: E2E_DATABASE_URL,
         REDIS_URL: E2E_REDIS_URL,
         JWT_SECRET: 'e2e-only-secret-must-be-at-least-32-chars',
-        CORS_ORIGIN: 'http://localhost:5174',
+        CORS_ORIGIN: `http://localhost:${E2E_CLIENT_PORT}`,
         // 邮件：留空 → mail.service 自动跳过发信
         SMTP_HOST: '',
         SMTP_USER: '',
@@ -96,10 +98,11 @@ export default defineConfig({
       },
     },
     {
-      command: 'cd ../client && pnpm dev --port 5174',
-      url: 'http://localhost:5174',
-      reuseExistingServer: !process.env.CI,
+      command: `cd ../client && pnpm dev --port ${E2E_CLIENT_PORT}`,
+      url: `http://localhost:${E2E_CLIENT_PORT}`,
+      reuseExistingServer: false,
       timeout: 120 * 1000,
+      env: { VITE_API_PROXY_TARGET: `http://localhost:${E2E_API_PORT}` },
     },
   ],
 });

@@ -18,7 +18,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const AUTH_DIR = path.join(__dirname, '..', '.auth');
 const ADMIN_AUTH_FILE = path.join(AUTH_DIR, 'admin.json');
-const API_BASE = 'http://localhost:3001'; // 后端地址（webServer 启动）
+const API_BASE = process.env.E2E_API_BASE || 'http://localhost:3101'; // 独立 E2E 后端
 
 interface StorageState {
   origins: Array<{

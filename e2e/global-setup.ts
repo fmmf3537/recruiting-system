@@ -19,8 +19,8 @@ const E2E_DATABASE_URL =
   'postgresql://postgres:e2e_only_pw@localhost:5433/e2e_test?schema=public';
 const E2E_REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6381';
 const IS_CI = !!process.env.CI;
-const API_PORT = 3001;
-const CLIENT_PORT = 5174;
+const API_PORT = Number(process.env.E2E_API_PORT || '3101');
+const CLIENT_PORT = Number(process.env.E2E_CLIENT_PORT || '5175');
 const BASE_URL = `http://localhost:${CLIENT_PORT}`;
 
 /** TCP 健康探测（不引入 pg 包） */
@@ -138,11 +138,11 @@ async function startTempServer(): Promise<ChildProcess | null> {
   );
 
   if (!needServer) {
-    console.log('[global-setup] 复用已有 server :3001');
+    console.log(`[global-setup] 复用已有 E2E server :${API_PORT}`);
     return null;
   }
 
-  console.log('[global-setup] 临时启动 server :3001 ...');
+  console.log(`[global-setup] 临时启动 E2E server :${API_PORT} ...`);
   const server = spawn(
     'pnpm',
     ['exec', 'tsx', '--import', './src/lib/tracing.ts', 'src/index.ts'],
