@@ -87,13 +87,35 @@ export interface InterviewListItem {
 }
 
 /** 比较面试官 id 集合（忽略顺序与姓名） */
-function sameInterviewerIds(
-  a: Array<{ id: string }>,
-  b: Array<{ id: string }>
-): boolean {
+function sameInterviewerIds(a: Array<{ id: string }>, b: Array<{ id: string }>): boolean {
   if (a.length !== b.length) return false;
   const ids = new Set(a.map((i) => i.id));
   return b.every((i) => ids.has(i.id));
+}
+
+const CHINA_TIME_ZONE = 'Asia/Shanghai';
+const ISO_WITH_TIME_ZONE = /(Z|[+-]\d{2}:\d{2})$/;
+
+/** 只接受带时区的 ISO 时间，防止 Docker/宿主机时区改变面试的实际时刻。 */
+function parseScheduledAt(value: string): Date {
+  if (!ISO_WITH_TIME_ZONE.test(value)) {
+    throw new AppError('面试时间必须使用带时区的 ISO 格式', 400);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new AppError('无效的面试时间格式', 400);
+  }
+  return date;
+}
+
+function formatInterviewTime(date: Date): string {
+  return date.toLocaleString('zh-CN', {
+    timeZone: CHINA_TIME_ZONE,
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 /** 收集实际变更字段名，供 OperationLog.changedFields 使用 */
@@ -121,7 +143,10 @@ function collectChangedFields(
   if (data.focusType !== undefined && data.focusType !== existing.focusType) {
     changed.push('focusType');
   }
-  if (data.scheduledAt !== undefined && nextScheduledAt.getTime() !== existing.scheduledAt.getTime()) {
+  if (
+    data.scheduledAt !== undefined &&
+    nextScheduledAt.getTime() !== existing.scheduledAt.getTime()
+  ) {
     changed.push('scheduledAt');
   }
   if (data.interviewers !== undefined && !sameInterviewerIds(prevInterviewers, nextInterviewers)) {
@@ -166,7 +191,7 @@ export class InterviewSchedulerService {
     }
 
     // 面试官冲突检测（创建时不排除任何 id）
-    const scheduledAt = new Date(data.scheduledAt);
+    const scheduledAt = parseScheduledAt(data.scheduledAt);
     const duration = data.duration || 60;
     await this.assertNoInterviewerConflicts(
       data.interviewers.map((i) => i.id),
@@ -199,32 +224,31 @@ export class InterviewSchedulerService {
     await interviewEvaluationService.createPendingEvaluations(interview.id, data.interviewers);
 
     // 异步发送面试安排通知
-    const interviewTime = scheduledAt.toLocaleString('zh-CN', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const interviewTime = formatInterviewTime(scheduledAt);
     // 通知候选人负责人
-    void notificationService.createNotification({
-      recipientId: candidate.createdById,
-      title: `面试安排：${candidate.name}`,
-      content: `${candidate.name} 的${data.round}已安排在 ${interviewTime}，时长${duration}分钟`,
-      type: 'interview_scheduled',
-      businessId: interview.id,
-      businessType: 'interview',
-    }).catch((e) => console.error('[Notification] 面试通知发送失败:', e));
-
-    // 通知每位面试官
-    data.interviewers.forEach((interviewer) => {
-      void notificationService.createNotification({
-        recipientId: interviewer.id,
-        title: `面试邀请：${candidate.name}`,
-        content: `您被指定为「${candidate.name}」的${data.round}面试官，时间：${interviewTime}，时长${duration}分钟`,
+    void notificationService
+      .createNotification({
+        recipientId: candidate.createdById,
+        title: `面试安排：${candidate.name}`,
+        content: `${candidate.name} 的${data.round}已安排在 ${interviewTime}，时长${duration}分钟`,
         type: 'interview_scheduled',
         businessId: interview.id,
         businessType: 'interview',
-      }).catch(() => {}); // 单个面试官通知失败不影响其他
+      })
+      .catch((e) => console.error('[Notification] 面试通知发送失败:', e));
+
+    // 通知每位面试官
+    data.interviewers.forEach((interviewer) => {
+      void notificationService
+        .createNotification({
+          recipientId: interviewer.id,
+          title: `面试邀请：${candidate.name}`,
+          content: `您被指定为「${candidate.name}」的${data.round}面试官，时间：${interviewTime}，时长${duration}分钟`,
+          type: 'interview_scheduled',
+          businessId: interview.id,
+          businessType: 'interview',
+        })
+        .catch(() => {}); // 单个面试官通知失败不影响其他
     });
 
     return interview;
@@ -382,7 +406,7 @@ export class InterviewSchedulerService {
     const prevInterviewers = (existing.interviewers as Array<{ id: string; name: string }>) || [];
     const nextInterviewers = data.interviewers !== undefined ? data.interviewers : prevInterviewers;
     const nextScheduledAt =
-      data.scheduledAt !== undefined ? new Date(data.scheduledAt) : existing.scheduledAt;
+      data.scheduledAt !== undefined ? parseScheduledAt(data.scheduledAt) : existing.scheduledAt;
     const nextDuration = data.duration !== undefined ? data.duration : existing.duration;
 
     // 时间 / 时长 / 面试官任一变化才做冲突检测，且必须排除当前面试 id
@@ -409,7 +433,7 @@ export class InterviewSchedulerService {
     if (data.round !== undefined) updateData.round = data.round;
     if (data.type !== undefined) updateData.type = data.type;
     if (data.interviewers !== undefined) updateData.interviewers = data.interviewers;
-    if (data.scheduledAt !== undefined) updateData.scheduledAt = new Date(data.scheduledAt);
+    if (data.scheduledAt !== undefined) updateData.scheduledAt = nextScheduledAt;
     if (data.duration !== undefined) updateData.duration = data.duration;
     if (data.location !== undefined) updateData.location = data.location;
     if (data.notes !== undefined) updateData.notes = data.notes;
@@ -452,12 +476,7 @@ export class InterviewSchedulerService {
 
     // 通知候选人负责人 + 新增面试官（失败不阻断）
     const candidateName = existing.candidate?.name || '候选人';
-    const interviewTime = nextScheduledAt.toLocaleString('zh-CN', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const interviewTime = formatInterviewTime(nextScheduledAt);
     const nextRound = data.round !== undefined ? data.round : existing.round;
     if (existing.candidate?.createdById) {
       void notificationService
@@ -521,9 +540,7 @@ export class InterviewSchedulerService {
       where: { id },
       data: {
         status: InterviewStatus.cancelled,
-        notes: reason
-          ? `${existing.notes || ''}\n取消原因：${reason}`.trim()
-          : existing.notes,
+        notes: reason ? `${existing.notes || ''}\n取消原因：${reason}`.trim() : existing.notes,
       },
     });
 
@@ -649,11 +666,7 @@ export class InterviewSchedulerService {
   /**
    * 获取面试官在指定时间段的冲突（用于前端日历）
    */
-  async getInterviewerConflicts(
-    _interviewerId: string,
-    startDate: string,
-    endDate: string
-  ) {
+  async getInterviewerConflicts(_interviewerId: string, startDate: string, endDate: string) {
     return prisma.interview.findMany({
       where: {
         status: InterviewStatus.scheduled,
@@ -703,9 +716,7 @@ export class InterviewSchedulerService {
     });
 
     for (const conflict of conflicts) {
-      const conflictEnd = new Date(
-        conflict.scheduledAt.getTime() + conflict.duration * 60000
-      );
+      const conflictEnd = new Date(conflict.scheduledAt.getTime() + conflict.duration * 60000);
       if (conflictEnd <= scheduledAt || conflict.scheduledAt >= scheduledEnd) {
         continue; // 无时间重叠
       }
@@ -718,7 +729,7 @@ export class InterviewSchedulerService {
       if (overlappingInterviewers.length > 0) {
         const names = overlappingInterviewers.map((i) => i.name).join('、');
         throw new AppError(
-          `面试官 ${names} 在 ${conflict.scheduledAt.toLocaleString('zh-CN')} 已有面试安排（候选人：${conflict.candidate.name}）`,
+          `面试官 ${names} 在 ${formatInterviewTime(conflict.scheduledAt)} 已有面试安排（候选人：${conflict.candidate.name}）`,
           409
         );
       }

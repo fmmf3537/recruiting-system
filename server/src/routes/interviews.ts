@@ -28,8 +28,9 @@ const createInterviewSchema = z.object({
       })
     )
     .min(1, '至少需要一位面试官'),
-  scheduledAt: z.string().max(50).refine((val) => !isNaN(Date.parse(val)), {
-    message: '无效的面试时间格式',
+  scheduledAt: z.string().max(50).datetime({
+    offset: true,
+    message: '面试时间必须使用带时区的 ISO 格式',
   }),
   duration: z.number().int().min(15).max(480).optional().default(60),
   location: z.string().max(200).optional(),
@@ -54,7 +55,7 @@ const updateInterviewSchema = z.object({
   scheduledAt: z
     .string()
     .max(50)
-    .refine((val) => !isNaN(Date.parse(val)), { message: '无效的时间格式' })
+    .datetime({ offset: true, message: '面试时间必须使用带时区的 ISO 格式' })
     .optional(),
   duration: z.number().int().min(15).max(480).optional(),
   location: z.string().max(200).optional(),
@@ -86,7 +87,11 @@ const finalizeOutlineBodySchema = z.object({
 
 // 列表查询验证
 const listInterviewQuerySchema = z.object({
-  page: z.string().max(10).optional().transform((val) => (val ? parseInt(val, 10) : 1)),
+  page: z
+    .string()
+    .max(10)
+    .optional()
+    .transform((val) => (val ? parseInt(val, 10) : 1)),
   pageSize: z
     .string()
     .max(10)
@@ -129,11 +134,7 @@ router.get(
  * GET /api/interviews/conflicts
  * 查询面试官冲突（必须在 :id 之前）
  */
-router.get(
-  '/conflicts',
-  authenticate,
-  interviewController.getInterviewerConflicts
-);
+router.get('/conflicts', authenticate, interviewController.getInterviewerConflicts);
 
 /**
  * POST /api/interviews/:id/question-outline

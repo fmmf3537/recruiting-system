@@ -123,9 +123,7 @@ describe('INTV-EDIT 面试修改/取消接口权限', () => {
   describe('PATCH /api/interviews/:id', () => {
     function mockUpdatable() {
       mockPrisma.interview.findUnique.mockResolvedValue(scheduledRow());
-      mockPrisma.interview.update.mockResolvedValue(
-        scheduledRow({ location: '会议室B' })
-      );
+      mockPrisma.interview.update.mockResolvedValue(scheduledRow({ location: '会议室B' }));
     }
 
     it('admin 可修改 scheduled 面试', async () => {
@@ -168,6 +166,16 @@ describe('INTV-EDIT 面试修改/取消接口权限', () => {
         .expect(403);
       expect(mockPrisma.interview.update).not.toHaveBeenCalled();
     });
+  });
+
+  it('拒绝不含时区的面试时间，避免受服务端时区影响', async () => {
+    const res = await request(app)
+      .patch(`/api/interviews/${INTERVIEW_ID}`)
+      .send({ scheduledAt: '2026-09-20 10:00:00' })
+      .expect(400);
+
+    expect(res.body.error).toContain('带时区');
+    expect(mockPrisma.interview.update).not.toHaveBeenCalled();
   });
 
   describe('POST /api/interviews/:id/cancel', () => {
@@ -224,9 +232,7 @@ describe('INTV-EDIT 面试修改/取消接口权限', () => {
         .send({ reason: '改期' })
         .expect(200);
 
-      mockPrisma.interview.findMany.mockResolvedValue([
-        scheduledRow({ status: 'cancelled' }),
-      ]);
+      mockPrisma.interview.findMany.mockResolvedValue([scheduledRow({ status: 'cancelled' })]);
       mockPrisma.interview.count.mockResolvedValue(1);
 
       const listRes = await request(app)

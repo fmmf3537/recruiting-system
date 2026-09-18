@@ -5,12 +5,7 @@
     width="560px"
     destroy-on-close
   >
-    <el-form
-      ref="scheduleFormRef"
-      :model="scheduleForm"
-      :rules="scheduleRules"
-      label-width="100px"
-    >
+    <el-form ref="scheduleFormRef" :model="scheduleForm" :rules="scheduleRules" label-width="100px">
       <el-form-item label="候选人" prop="candidateId">
         <el-select
           v-model="scheduleForm.candidateId"
@@ -125,7 +120,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue';
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus';
-import { createInterview, updateInterview, type InterviewItem, type InterviewParams } from '@/api/interview';
+import {
+  createInterview,
+  updateInterview,
+  type InterviewItem,
+  type InterviewParams,
+} from '@/api/interview';
 import { getCandidateList } from '@/api/candidate';
 import { getInterviewerOptions } from '@/api/user';
 import { getJobList } from '@/api/job';
@@ -170,7 +170,9 @@ const scheduleRules: FormRules = {
   candidateId: [{ required: true, message: '请选择候选人', trigger: 'change' }],
   round: [{ required: true, message: '请选择面试轮次', trigger: 'change' }],
   type: [{ required: true, message: '请选择面试方式', trigger: 'change' }],
-  interviewerIds: [{ required: true, type: 'array', min: 1, message: '请至少选择一位面试官', trigger: 'change' }],
+  interviewerIds: [
+    { required: true, type: 'array', min: 1, message: '请至少选择一位面试官', trigger: 'change' },
+  ],
   scheduledAt: [{ required: true, message: '请选择面试时间', trigger: 'change' }],
 };
 
@@ -189,11 +191,29 @@ function formatScheduledAt(value: string | Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+/** Element Plus 返回本地墙上时间字符串；提交前必须转成含时区的 ISO，避免服务端按自身时区解释。 */
+function localScheduledAtToIso(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return '';
+  const [, year, month, day, hour, minute, second] = match;
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second)
+  );
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString();
+}
+
 function resetForm() {
   const iv = props.interview;
   if (iv) {
     const candidateId = iv.candidateId || iv.candidate?.id || props.initialCandidateId || '';
-    const candidateName = iv.candidateName || iv.candidate?.name || props.initialCandidateName || '当前候选人';
+    const candidateName =
+      iv.candidateName || iv.candidate?.name || props.initialCandidateName || '当前候选人';
     scheduleForm.candidateId = candidateId;
     scheduleForm.jobId = iv.jobId || iv.job?.id || '';
     scheduleForm.round = iv.round || '初试';
@@ -220,11 +240,13 @@ function resetForm() {
   scheduleForm.notes = '';
   scheduleForm.focusType = '';
   candidateOptions.value = props.initialCandidateId
-    ? [{
-        id: props.initialCandidateId,
-        name: props.initialCandidateName || '当前候选人',
-        phone: '',
-      }]
+    ? [
+        {
+          id: props.initialCandidateId,
+          name: props.initialCandidateName || '当前候选人',
+          phone: '',
+        },
+      ]
     : [];
 }
 
@@ -232,7 +254,7 @@ async function searchCandidates(query: string) {
   if (!query || candidateLocked.value) return;
   candidateSearching.value = true;
   try {
-    const res = await getCandidateList({ keyword: query, pageSize: 20 }) as {
+    const res = (await getCandidateList({ keyword: query, pageSize: 20 })) as {
       success: boolean;
       data?: Array<{ id: string; name: string; phone: string }>;
     };
@@ -259,7 +281,7 @@ async function loadInterviewers() {
 
 async function loadJobs() {
   try {
-    const res = await getJobList({ pageSize: 100 }) as {
+    const res = (await getJobList({ pageSize: 100 })) as {
       success: boolean;
       data?: Array<{ id: string; title: string }>;
     };
@@ -290,9 +312,7 @@ watch(visible, async (open) => {
   // 编辑回填的面试官/职位可能不在下拉当前页，补进 options 以免只显示 id
   const iv = props.interview;
   if (iv?.interviewers?.length) {
-    const missing = iv.interviewers.filter(
-      (i) => !userOptions.value.some((u) => u.id === i.id)
-    );
+    const missing = iv.interviewers.filter((i) => !userOptions.value.some((u) => u.id === i.id));
     if (missing.length) {
       userOptions.value = [...userOptions.value, ...missing];
     }
@@ -308,6 +328,12 @@ async function handleSubmit() {
   const valid = await scheduleFormRef.value?.validate().catch(() => false);
   if (!valid) return;
 
+  const scheduledAt = localScheduledAtToIso(scheduleForm.scheduledAt);
+  if (!scheduledAt) {
+    ElMessage.error('面试时间格式无效，请重新选择');
+    return;
+  }
+
   scheduleSubmitting.value = true;
   try {
     const interviewers = scheduleForm.interviewerIds.map((id) => {
@@ -319,7 +345,7 @@ async function handleSubmit() {
         round: scheduleForm.round,
         type: scheduleForm.type,
         interviewers,
-        scheduledAt: scheduleForm.scheduledAt,
+        scheduledAt,
         duration: scheduleForm.duration,
         location: scheduleForm.location || undefined,
         notes: scheduleForm.notes || undefined,
@@ -333,7 +359,7 @@ async function handleSubmit() {
         round: scheduleForm.round,
         type: scheduleForm.type,
         interviewers,
-        scheduledAt: scheduleForm.scheduledAt,
+        scheduledAt,
         duration: scheduleForm.duration,
         location: scheduleForm.location || undefined,
         notes: scheduleForm.notes || undefined,
