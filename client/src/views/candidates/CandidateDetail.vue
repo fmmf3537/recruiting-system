@@ -499,6 +499,10 @@
             <el-radio-button label="rejected">淘汰</el-radio-button>
           </el-radio-group>
         </el-form-item>
+        <el-form-item v-if="isInterviewStage(advanceForm.stage) && advanceForm.status !== 'rejected'" label="下一步">
+          <el-checkbox v-model="scheduleAfterAdvance">推进后立即安排面试</el-checkbox>
+          <div class="form-tip">阶段保存成功后会打开已预填候选人的面试安排表单。</div>
+        </el-form-item>
         <el-form-item label="淘汰原因" prop="rejectReason" v-if="advanceForm.status === 'rejected'">
           <el-input v-model="advanceForm.rejectReason" type="textarea" :rows="3" placeholder="请填写淘汰原因" />
         </el-form-item>
@@ -512,8 +516,8 @@
       </template>
     </el-dialog>
 
-    <!-- 添加面试反馈对话框 -->
-    <el-dialog v-model="feedbackDialogVisible" title="添加面试反馈" width="500px">
+    <!-- 补录历史面试反馈对话框 -->
+    <el-dialog v-model="feedbackDialogVisible" title="补录历史面试反馈" width="500px">
       <el-form ref="feedbackFormRef" :model="feedbackForm" :rules="feedbackRules" label-width="100px">
         <el-form-item label="面试轮次" prop="round">
           <el-radio-group v-model="feedbackForm.round">
@@ -727,6 +731,7 @@ async function handleDelete() {
 const advanceDialogVisible = ref(false);
 const advanceSubmitting = ref(false);
 const advanceFormRef = ref<FormInstance>();
+const scheduleAfterAdvance = ref(false);
 // 阶段选项不再硬编码：按候选人适用职位的 Pipeline 模板动态获取
 const candidateStages = ref<string[]>([]);
 
@@ -769,6 +774,10 @@ const advanceRules: FormRules = {
   status: [{ required: true, message: '请选择阶段结果', trigger: 'change' }],
   rejectReason: [{ required: true, message: '请填写淘汰原因', trigger: 'blur' }],
 };
+
+function isInterviewStage(stage: string): boolean {
+  return stage.includes('面');
+}
 
 // 面试反馈
 const feedbackDialogVisible = ref(false);
@@ -918,6 +927,7 @@ function handleAdvance() {
   advanceForm.status = 'passed';
   advanceForm.rejectReason = '';
   advanceForm.note = '';
+  scheduleAfterAdvance.value = false;
   advanceDialogVisible.value = true;
   // 拉取该候选人适用的 Pipeline 模板阶段（按关联职位的模板/默认模板）
   getPipelineStages(candidate.value.id)
@@ -935,6 +945,9 @@ async function handleAdvanceSubmit() {
       ElMessage.success('阶段推进成功');
       advanceDialogVisible.value = false;
       fetchCandidateDetail();
+      if (scheduleAfterAdvance.value && isInterviewStage(advanceForm.stage)) {
+        handleScheduleInterview();
+      }
     }
   } catch (error: any) {
     ElMessage.error(error.message || '推进失败');
@@ -1232,6 +1245,30 @@ onActivated(() => {
       gap: 8px;
     }
   }
+
+  .profile-summary {
+    margin: 18px 0 0;
+    padding-top: 10px;
+    border-top: 1px solid #ebeef5;
+
+    > div {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 0;
+      font-size: 13px;
+    }
+
+    span { color: $ui-gray-500; }
+    b { text-align: right; word-break: break-word; }
+    .is-authorized { color: $ui-color-success; }
+    .is-unauthorized { color: $ui-color-danger; }
+  }
+
+  .stage-count { color: $ui-gray-500; font-size: 13px; font-weight: 400; }
+  .future-stage { color: $ui-gray-500; }
+  .current-stage-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .form-tip { margin-top: 6px; color: $ui-gray-500; font-size: 12px; line-height: 1.5; }
 
   .info-card {
     .profile-section {
