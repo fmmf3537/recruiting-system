@@ -91,6 +91,49 @@ test.describe('用户管理 CRUD @admin', () => {
     }
   });
 
+  test('admin 在编辑成员时密码留空可保存且原密码仍有效', async ({ page, baseURL }, testInfo) => {
+    test.skip(testInfo.project.name !== 'admin', '仅 admin project 执行管理员成员编辑用例');
+    const token = loadAdminToken();
+    const apiBase = baseURL ?? 'http://localhost:5174';
+    const suffix = Date.now().toString().slice(-8);
+    const email = `e2e-keep-password-${suffix}@test.local`;
+    const password = 'KeepPass123';
+    const name = `保留密码-${suffix}`;
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+
+    const createRes = await fetch(`${apiBase}/api/users`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ email, password, name, role: 'hr', department: '研发部' }),
+    });
+    expect(createRes.status).toBe(201);
+    const created = (await createRes.json()).data as { id: string };
+
+    try {
+      await page.goto('/users');
+      const row = page.locator('.el-table__body-wrapper tr', { hasText: email });
+      await expect(row).toBeVisible();
+      await row.getByRole('button', { name: '编辑' }).click();
+
+      const dialog = page.locator('.el-dialog:visible');
+      await expect(dialog.getByText('编辑成员')).toBeVisible();
+      const inputs = dialog.locator('input');
+      await inputs.nth(0).fill(`${name}-已更新`);
+      await inputs.nth(2).fill('');
+      await dialog.getByRole('button', { name: '保存' }).click();
+      await expect(page.locator('.el-message')).toContainText('修改成功');
+
+      const loginRes = await fetch(`${apiBase}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      expect(loginRes.status).toBe(200);
+    } finally {
+      await fetch(`${apiBase}/api/users/${created.id}`, { method: 'DELETE', headers });
+    }
+  });
+
   test('密码不满足策略 → 400', async ({ baseURL }) => {
     const token = loadAdminToken();
     const apiBase = baseURL ?? 'http://localhost:5174';
