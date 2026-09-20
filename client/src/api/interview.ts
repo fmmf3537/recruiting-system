@@ -74,6 +74,21 @@ export interface QuestionOutlineVersion {
   createdAt: string;
 }
 
+/** AI 大纲异步生成任务；页面据 status 轮询，不等待 LLM 请求完成。 */
+export interface QuestionOutlineGeneration {
+  id: string;
+  interviewId: string;
+  focusType: string;
+  adjustNote: string | null;
+  status: 'pending' | 'processing' | 'succeeded' | 'failed';
+  outlineVersionId: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  reused: boolean;
+}
+
 export interface InterviewListParams {
   page?: number;
   pageSize?: number;
@@ -140,24 +155,34 @@ export function getInterviewerConflicts(interviewerId: string, startDate: string
 
 // ============ F3-C 面试问题大纲接口 ============
 
-/** 生成/再生成面试大纲（同步调用，LLM 耗时可能较长，调用方需 loading 锁） */
+/** 创建面试大纲异步生成任务，接口快速返回；调用方轮询任务状态。 */
 export function generateQuestionOutline(
   interviewId: string,
   data: { focusType: string; adjustNote?: string }
-): Promise<{ success: boolean; data: QuestionOutlineVersion }> {
-  return request.post(
-    `/interviews/${interviewId}/question-outline`,
-    data
-  ) as Promise<{ success: boolean; data: QuestionOutlineVersion }>;
+): Promise<{ success: boolean; data: QuestionOutlineGeneration }> {
+  return request.post(`/interviews/${interviewId}/question-outline`, data, {
+    timeout: 15000,
+  }) as Promise<{ success: boolean; data: QuestionOutlineGeneration }>;
+}
+
+/** 获取最近一次大纲生成任务，刷新页面后可恢复生成状态。 */
+export function getQuestionOutlineGeneration(
+  interviewId: string
+): Promise<{ success: boolean; data: QuestionOutlineGeneration | null }> {
+  return request.get(`/interviews/${interviewId}/question-outline-generation`) as Promise<{
+    success: boolean;
+    data: QuestionOutlineGeneration | null;
+  }>;
 }
 
 /** 获取某场面试的大纲版本列表（返回 version 降序） */
 export function getQuestionOutlines(
   interviewId: string
 ): Promise<{ success: boolean; data: QuestionOutlineVersion[] }> {
-  return request.get(
-    `/interviews/${interviewId}/question-outlines`
-  ) as Promise<{ success: boolean; data: QuestionOutlineVersion[] }>;
+  return request.get(`/interviews/${interviewId}/question-outlines`) as Promise<{
+    success: boolean;
+    data: QuestionOutlineVersion[];
+  }>;
 }
 
 /** 手动微调定稿（不调 LLM，仅保存当前 outline） */
@@ -166,8 +191,7 @@ export function finalizeQuestionOutline(
   version: number,
   outline: QuestionOutline
 ): Promise<{ success: boolean; data: QuestionOutlineVersion }> {
-  return request.patch(
-    `/interviews/${interviewId}/question-outline/${version}`,
-    { outline }
-  ) as Promise<{ success: boolean; data: QuestionOutlineVersion }>;
+  return request.patch(`/interviews/${interviewId}/question-outline/${version}`, {
+    outline,
+  }) as Promise<{ success: boolean; data: QuestionOutlineVersion }>;
 }

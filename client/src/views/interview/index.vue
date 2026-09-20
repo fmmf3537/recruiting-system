@@ -110,6 +110,7 @@
             >
               {{ latestOutline ? '再生成' : '生成大纲' }}
             </el-button>
+            <span v-if="generating" class="generation-hint">后台生成中，可继续填写评估</span>
           </div>
         </el-form-item>
         <!-- F3-C 大纲对照：按需拉取最新版，失败/403 静默隐藏 -->
@@ -174,7 +175,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { TableSkeleton } from '@/components/Skeleton';
@@ -182,7 +183,9 @@ import request from '@/utils/request';
 import {
   completeInterview,
   generateQuestionOutline,
+  getQuestionOutlineGeneration,
   getQuestionOutlines,
+  type QuestionOutlineGeneration,
   type QuestionOutlineVersion,
 } from '@/api/interview';
 import { getDictionaries, type DictionaryItem } from '@/api/dictionary';
@@ -244,6 +247,8 @@ const evalForm = reactive({
 const latestOutline = ref<QuestionOutlineVersion | null>(null);
 const outlineLoaded = ref(false);
 const generating = ref(false);
+const outlineGeneration = ref<QuestionOutlineGeneration | null>(null);
+let outlinePollTimer: ReturnType<typeof setInterval> | null = null;
 const generateFocusType = ref('');
 const focusTypeOptions = ref<DictionaryItem[]>([]);
 
@@ -260,7 +265,7 @@ function formatDate(value: string): string {
 async function loadToday() {
   todayLoading.value = true;
   try {
-    const res = await request.get('/interview/today') as ApiSuccess<InterviewerInterview[]>;
+    const res = (await request.get('/interview/today')) as ApiSuccess<InterviewerInterview[]>;
     if (res.success) todayInterviews.value = res.data;
   } catch {
     ElMessage.error('加载今日面试失败');
@@ -272,7 +277,9 @@ async function loadToday() {
 async function loadPending() {
   pendingLoading.value = true;
   try {
-    const res = await request.get('/interview/pending-evaluations') as ApiSuccess<InterviewerInterview[]>;
+    const res = (await request.get('/interview/pending-evaluations')) as ApiSuccess<
+      InterviewerInterview[]
+    >;
     if (res.success) pendingEvaluations.value = res.data;
   } catch {
     ElMessage.error('加载待填评估失败');
@@ -284,7 +291,7 @@ async function loadPending() {
 async function loadHistory() {
   historyLoading.value = true;
   try {
-    const res = await request.get('/interview/history') as ApiSuccess<InterviewerInterview[]>;
+    const res = (await request.get('/interview/history')) as ApiSuccess<InterviewerInterview[]>;
     if (res.success) historyInterviews.value = res.data;
   } catch {
     ElMessage.error('加载历史失败');
@@ -331,11 +338,9 @@ async function openEvaluationDialog(interview: InterviewerInterview, isReadonly 
   // 一键二连：未完成时先确认再 complete，取消则不开评估弹窗
   if (!isReadonly && interview.status !== 'completed') {
     try {
-      await ElMessageBox.confirm(
-        '面试还未标记完成，是否先标记完成再填写评估？',
-        '提示',
-        { type: 'warning' }
-      );
+      await ElMessageBox.confirm('面试还未标记完成，是否先标记完成再填写评估？', '提示', {
+        type: 'warning',
+      });
       await completeInterview(interview.id);
       ElMessage.success('面试已标记完成');
       interview.status = 'completed';
@@ -368,42 +373,75 @@ async function openEvaluationDialog(interview: InterviewerInterview, isReadonly 
   }
   evalDialogVisible.value = true;
   loadFocusTypeDict();
-  // F3-C 按需拉取大纲最新版，失败/403 静默隐藏面板
+  // F3-C 按需拉取大纲最新版，并恢复可能仍在运行的生成任务。
   loadLatestOutline(interview.id);
+  void pollOutlineGeneration(false);
+  if (generating.value) startOutlinePolling();
+}
+
+function stopOutlinePolling() {
+  if (outlinePollTimer) clearInterval(outlinePollTimer);
+  outlinePollTimer = null;
+}
+
+async function pollOutlineGeneration(showResult = true) {
+  if (!currentInterview.value) return;
+  try {
+    const res = await getQuestionOutlineGeneration(currentInterview.value.id);
+    if (!res.success || !res.data) return;
+    outlineGeneration.value = res.data;
+    generating.value = res.data.status === 'pending' || res.data.status === 'processing';
+    if (generating.value) return;
+
+    stopOutlinePolling();
+    if (res.data.status === 'succeeded') {
+      await loadLatestOutline(currentInterview.value.id);
+      if (showResult) ElMessage.success('AI 面试大纲已生成');
+    } else if (showResult) {
+      ElMessage.error(res.data.errorMessage || 'AI 大纲生成失败，请重试');
+    }
+  } catch {
+    // 轮询短暂失败时保持状态，下一周期继续尝试。
+  }
+}
+
+function startOutlinePolling() {
+  stopOutlinePolling();
+  void pollOutlineGeneration();
+  outlinePollTimer = setInterval(() => void pollOutlineGeneration(), 2000);
 }
 
 async function handleGenerateOutline() {
   if (!currentInterview.value) return;
   const focusType =
-    currentInterview.value.focusType
-    || generateFocusType.value
-    || latestOutline.value?.focusType
-    || '';
+    currentInterview.value.focusType ||
+    generateFocusType.value ||
+    latestOutline.value?.focusType ||
+    '';
   if (!focusType) {
     ElMessage.error('请选择考察方向');
     return;
   }
-  generating.value = true;
   try {
     const res = await generateQuestionOutline(currentInterview.value.id, { focusType });
     if (res.success) {
-      ElMessage.success('大纲生成成功');
-      await loadLatestOutline(currentInterview.value.id);
+      outlineGeneration.value = res.data;
+      generating.value = true;
+      ElMessage.info(res.data.reused ? '已有生成任务正在处理中' : '已开始后台生成大纲');
+      startOutlinePolling();
     }
   } catch {
     // 拦截器已直出 400/403 message
-  } finally {
-    generating.value = false;
   }
 }
 
 async function submitEvaluation() {
   if (!currentInterview.value) return;
   try {
-    const res = await request.put(
+    const res = (await request.put(
       `/interview/${currentInterview.value.id}/evaluation`,
       evalForm
-    ) as ApiSuccess<unknown>;
+    )) as ApiSuccess<unknown>;
     if (res.success) {
       ElMessage.success('评估已提交');
       evalDialogVisible.value = false;
@@ -415,6 +453,8 @@ async function submitEvaluation() {
     ElMessage.error('提交失败');
   }
 }
+
+onUnmounted(stopOutlinePolling);
 
 onMounted(async () => {
   await loadToday();
@@ -454,6 +494,11 @@ onMounted(async () => {
 
 .dimension-comment {
   margin-top: 4px;
+}
+
+.generation-hint {
+  color: #909399;
+  font-size: 12px;
 }
 
 .outline-gen-bar {

@@ -33,6 +33,15 @@
       </div>
     </template>
 
+    <el-alert
+      v-if="generating"
+      title="AI 正在后台生成大纲，可继续处理其他工作；完成后会自动显示。"
+      type="info"
+      :closable="false"
+      show-icon
+      class="generation-alert"
+    />
+
     <!-- 空态 -->
     <el-empty
       v-if="!loadingList && versions.length === 0"
@@ -90,11 +99,7 @@
         </div>
 
         <div class="outline-actions">
-          <el-button
-            type="primary"
-            size="small"
-            @click="enterEditMode"
-          >
+          <el-button type="primary" size="small" @click="enterEditMode">
             <el-icon><Edit /></el-icon>手动微调
           </el-button>
         </div>
@@ -103,11 +108,7 @@
       <!-- 编辑模式：可改文本，不允许增删题 -->
       <template v-else>
         <el-form label-position="top" class="edit-form">
-          <div
-            v-for="(sec, sIdx) in editSections"
-            :key="`es-${sIdx}`"
-            class="edit-section"
-          >
+          <div v-for="(sec, sIdx) in editSections" :key="`es-${sIdx}`" class="edit-section">
             <el-form-item :label="`模块 ${sIdx + 1} 主题`">
               <el-input v-model="sec.theme" placeholder="主题" />
             </el-form-item>
@@ -134,9 +135,7 @@
         </el-form>
         <div class="outline-actions">
           <el-button @click="cancelEdit">取消</el-button>
-          <el-button type="primary" :loading="saving" @click="saveEdit">
-            保存定稿
-          </el-button>
+          <el-button type="primary" :loading="saving" @click="saveEdit"> 保存定稿 </el-button>
         </div>
       </template>
     </div>
@@ -177,11 +176,7 @@
       </el-form>
       <template #footer>
         <el-button :disabled="generating" @click="generateDialogVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="generating"
-          @click="handleGenerate"
-        >
+        <el-button type="primary" :loading="generating" @click="handleGenerate">
           {{ generating ? 'AI 生成中…' : '开始生成' }}
         </el-button>
       </template>
@@ -190,7 +185,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { MagicStick, Edit } from '@element-plus/icons-vue';
 import {
@@ -200,6 +195,8 @@ import {
   type QuestionOutlineVersion,
   type QuestionOutline,
   type OutlineSection,
+  type QuestionOutlineGeneration,
+  getQuestionOutlineGeneration,
 } from '@/api/interview';
 import { getDictionaries, type DictionaryItem } from '@/api/dictionary';
 
@@ -216,7 +213,11 @@ const props = withDefaults(defineProps<Props>(), {
 const versions = ref<QuestionOutlineVersion[]>([]);
 const selectedVersion = ref<number | null>(null);
 const loadingList = ref(false);
-const generating = ref(false);
+const generation = ref<QuestionOutlineGeneration | null>(null);
+const generating = computed(
+  () => generation.value?.status === 'pending' || generation.value?.status === 'processing'
+);
+let generationPollTimer: ReturnType<typeof setInterval> | null = null;
 const saving = ref(false);
 const editing = ref(false);
 const editSections = ref<OutlineSection[]>([]);
@@ -257,9 +258,10 @@ function formatDateTime(dateStr?: string): string {
   const d = new Date(dateStr);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
     d.getDate()
-  ).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(
-    d.getMinutes()
-  ).padStart(2, '0')}`;
+  ).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(
+    2,
+    '0'
+  )}`;
 }
 
 // 版本下拉项：v3（最新）/ v2 / v1
@@ -318,12 +320,43 @@ function openGenerateDialog() {
   generateDialogVisible.value = true;
 }
 
+function stopGenerationPolling() {
+  if (generationPollTimer) clearInterval(generationPollTimer);
+  generationPollTimer = null;
+}
+
+async function pollGeneration(showResult = true) {
+  try {
+    const res = await getQuestionOutlineGeneration(props.interviewId);
+    if (!res.success || !res.data) return;
+    generation.value = res.data;
+    if (res.data.status === 'pending' || res.data.status === 'processing') return;
+
+    stopGenerationPolling();
+    if (res.data.status === 'succeeded') {
+      generation.value = null;
+      await loadVersions();
+      if (showResult) ElMessage.success('AI 面试大纲已生成');
+    } else {
+      generation.value = null;
+      if (showResult) ElMessage.error(res.data.errorMessage || 'AI 大纲生成失败，请重试');
+    }
+  } catch {
+    // 轮询短暂失败时保持当前状态，下个周期继续尝试。
+  }
+}
+
+function startGenerationPolling() {
+  stopGenerationPolling();
+  void pollGeneration();
+  generationPollTimer = setInterval(() => void pollGeneration(), 2000);
+}
+
 async function handleGenerate() {
   if (!generateForm.focusType) {
     ElMessage.error('请选择考察方向');
     return;
   }
-  generating.value = true;
   try {
     const payload: { focusType: string; adjustNote?: string } = {
       focusType: generateForm.focusType,
@@ -333,14 +366,13 @@ async function handleGenerate() {
     }
     const res = await generateQuestionOutline(props.interviewId, payload);
     if (res.success) {
-      ElMessage.success('大纲生成成功');
+      generation.value = res.data;
       generateDialogVisible.value = false;
-      await loadVersions();
+      ElMessage.info(res.data.reused ? '已有生成任务正在处理中' : '已开始后台生成大纲');
+      startGenerationPolling();
     }
   } catch {
     // 拦截器已提示
-  } finally {
-    generating.value = false;
   }
 }
 
@@ -391,7 +423,11 @@ async function saveEdit() {
 onMounted(async () => {
   await loadFocusTypeDict();
   await loadVersions();
+  await pollGeneration(false);
+  if (generating.value) startGenerationPolling();
 });
+
+onUnmounted(stopGenerationPolling);
 </script>
 
 <style scoped lang="scss">
