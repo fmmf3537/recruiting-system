@@ -12,42 +12,45 @@ export function isAdmin(role: string): boolean {
 }
 
 /**
- * 工作台职位范围：admin 不限；无部门时匹配空集；否则本部门 JSON 数组包含
+ * 工作台职位范围：管理员默认全公司，可主动切换至本人负责岗位；用人经理始终仅看本人负责岗位。
  */
 export function buildHiringJobFilter(
   role: string,
-  userId: string
+  userId: string,
+  ownedOnly = false
 ): Prisma.JobWhereInput {
-  if (isAdmin(role)) return {};
+  if (isAdmin(role) && !ownedOnly) return {};
   return {
-    OR: [
-      { hiringManagerId: userId },
-      { collaboratorIds: { array_contains: [userId] } },
-    ],
+    OR: [{ hiringManagerId: userId }, { collaboratorIds: { array_contains: [userId] } }],
   };
 }
 
 function buildHiringCandidateWhere(
   role: string,
-  jobFilter: Prisma.JobWhereInput
+  jobFilter: Prisma.JobWhereInput,
+  ownedOnly = false
 ): Prisma.CandidateWhereInput {
   const where: Prisma.CandidateWhereInput = { deletedAt: null };
-  if (!isAdmin(role)) {
+  if (!isAdmin(role) || ownedOnly) {
     where.candidateJobs = { some: { job: jobFilter } };
   }
   return where;
 }
 
 function assertOfferInDepartmentScope(
-  candidateJobs: Array<{ job: { hiringManagerId: string | null; collaboratorIds: Prisma.JsonValue } }>,
+  candidateJobs: Array<{
+    job: { hiringManagerId: string | null; collaboratorIds: Prisma.JsonValue };
+  }>,
   role: string,
   userId: string
 ): void {
   if (isAdmin(role)) return;
   const ownsJob = candidateJobs.some((cj) => {
     const collaborators = cj.job.collaboratorIds;
-    return cj.job.hiringManagerId === userId
-      || (Array.isArray(collaborators) && collaborators.includes(userId));
+    return (
+      cj.job.hiringManagerId === userId ||
+      (Array.isArray(collaborators) && collaborators.includes(userId))
+    );
   });
   if (!ownsJob) {
     throw new AppError('无权审批该 Offer', 403);
@@ -56,16 +59,22 @@ function assertOfferInDepartmentScope(
 
 const hiringGuard = [authenticate, requireRole('admin', 'hiring_manager')] as const;
 
+/** 管理员可在公司全局与本人负责岗位之间切换；用人经理固定为本人负责岗位。 */
+function useOwnedHiringScope(role: string, scope: unknown): boolean {
+  return !isAdmin(role) || scope === 'owned';
+}
+
 // 总览：本部门招聘概览
 router.get('/overview', ...hiringGuard, async (req, res, next) => {
   try {
     const role = req.user!.role;
-    const jobFilter = buildHiringJobFilter(role, req.user!.userId);
-    const candidateWhere = buildHiringCandidateWhere(role, jobFilter);
+    const ownedOnly = useOwnedHiringScope(role, req.query.scope);
+    const jobFilter = buildHiringJobFilter(role, req.user!.userId, ownedOnly);
+    const candidateWhere = buildHiringCandidateWhere(role, jobFilter, ownedOnly);
     const interviewWhere: Prisma.InterviewWhereInput = {
       status: 'scheduled',
       scheduledAt: { gte: new Date() },
-      ...(isAdmin(role) ? {} : { job: jobFilter }),
+      ...(ownedOnly ? { job: jobFilter } : {}),
     };
 
     const [openJobs, activeCandidates, pendingOffers, scheduledInterviews] = await Promise.all([
@@ -74,7 +83,7 @@ router.get('/overview', ...hiringGuard, async (req, res, next) => {
       }),
       prisma.candidateJob.count({
         where: {
-          ...(isAdmin(role) ? {} : { job: jobFilter }),
+          ...(ownedOnly ? { job: jobFilter } : {}),
           candidate: { deletedAt: null },
         },
       }),
@@ -90,7 +99,7 @@ router.get('/overview', ...hiringGuard, async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        scope: isAdmin(role) ? 'company' : 'owned_jobs',
+        scope: ownedOnly ? 'owned_jobs' : 'company',
         openJobs,
         activeCandidates,
         pendingOffers,
@@ -105,7 +114,8 @@ router.get('/overview', ...hiringGuard, async (req, res, next) => {
 // 我的岗位：按主负责人或协同负责人聚合候选人当前阶段，供用人经理快速判断招聘进度。
 router.get('/jobs', ...hiringGuard, async (req, res, next) => {
   try {
-    const jobFilter = buildHiringJobFilter(req.user!.role, req.user!.userId);
+    const ownedOnly = useOwnedHiringScope(req.user!.role, req.query.scope);
+    const jobFilter = buildHiringJobFilter(req.user!.role, req.user!.userId, ownedOnly);
     const jobs = await prisma.job.findMany({
       where: jobFilter,
       select: {
@@ -137,7 +147,13 @@ router.get('/jobs', ...hiringGuard, async (req, res, next) => {
           const stage = candidate.stageRecords[0]?.stage || '入库';
           stageCounts[stage] = (stageCounts[stage] || 0) + 1;
         });
-        return { id: job.id, title: job.title, status: job.status, candidateCount: job.candidateJobs.length, stageCounts };
+        return {
+          id: job.id,
+          title: job.title,
+          status: job.status,
+          candidateCount: job.candidateJobs.length,
+          stageCounts,
+        };
       }),
     });
   } catch (err) {
@@ -149,8 +165,9 @@ router.get('/jobs', ...hiringGuard, async (req, res, next) => {
 router.get('/approvals', ...hiringGuard, async (req, res, next) => {
   try {
     const role = req.user!.role;
-    const jobFilter = buildHiringJobFilter(role, req.user!.userId);
-    const candidateWhere = buildHiringCandidateWhere(role, jobFilter);
+    const ownedOnly = useOwnedHiringScope(role, req.query.scope);
+    const jobFilter = buildHiringJobFilter(role, req.user!.userId, ownedOnly);
+    const candidateWhere = buildHiringCandidateWhere(role, jobFilter, ownedOnly);
 
     const offers = await prisma.offer.findMany({
       where: {
@@ -226,11 +243,12 @@ router.post('/approvals/:id/approve', ...hiringGuard, async (req, res, next) => 
 router.get('/candidates', ...hiringGuard, async (req, res, next) => {
   try {
     const role = req.user!.role;
-    const jobFilter = buildHiringJobFilter(role, req.user!.userId);
+    const ownedOnly = useOwnedHiringScope(role, req.query.scope);
+    const jobFilter = buildHiringJobFilter(role, req.user!.userId, ownedOnly);
 
     const candidates = await prisma.candidateJob.findMany({
       where: {
-        ...(isAdmin(role) ? {} : { job: jobFilter }),
+        ...(ownedOnly ? { job: jobFilter } : {}),
         candidate: { deletedAt: null },
       },
       include: {
@@ -265,11 +283,12 @@ router.get('/candidates', ...hiringGuard, async (req, res, next) => {
 router.get('/interviews', ...hiringGuard, async (req, res, next) => {
   try {
     const role = req.user!.role;
-    const jobFilter = buildHiringJobFilter(role, req.user!.userId);
+    const ownedOnly = useOwnedHiringScope(role, req.query.scope);
+    const jobFilter = buildHiringJobFilter(role, req.user!.userId, ownedOnly);
     const interviewWhere: Prisma.InterviewWhereInput = {
       status: 'scheduled',
       scheduledAt: { gte: new Date() },
-      ...(isAdmin(role) ? {} : { job: jobFilter }),
+      ...(ownedOnly ? { job: jobFilter } : {}),
     };
 
     const interviews = await prisma.interview.findMany({
