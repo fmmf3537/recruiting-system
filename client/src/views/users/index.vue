@@ -289,9 +289,20 @@ const formRules = {
     { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' },
   ],
   password: [
-    { required: !isEdit.value, message: '请输入密码', trigger: 'blur' },
-    { min: 8, message: '密码长度至少8位', trigger: 'blur' },
-    { pattern: /^(?=.*[A-Za-z])(?=.*\d)/, message: '密码需同时包含字母和数字', trigger: 'blur' },
+    {
+      validator: (_rule: unknown, value: string, callback: (error?: Error) => void) => {
+        const password = value?.trim() || '';
+        // 编辑成员时留空表示不改密码；新增成员仍必须填写。
+        if (!password && isEdit.value) return callback();
+        if (!password) return callback(new Error('请输入密码'));
+        if (password.length < 8) return callback(new Error('密码长度至少8位'));
+        if (!/^(?=.*[A-Za-z])(?=.*\d)/.test(password)) {
+          return callback(new Error('密码需同时包含字母和数字'));
+        }
+        return callback();
+      },
+      trigger: 'blur',
+    },
   ],
   role: [
     { required: true, message: '请选择角色', trigger: 'change' },
@@ -419,8 +430,8 @@ async function handleSubmit() {
         role: formData.role,
         department: formData.department || null,
       };
-      if (formData.password) {
-        (updateData as any).password = formData.password;
+      if (formData.password.trim()) {
+        updateData.password = formData.password.trim();
       }
       const res = await updateUser(currentUserId.value, updateData);
       if (res.success) {

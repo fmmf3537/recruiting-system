@@ -22,6 +22,8 @@ export interface CreateUserParams {
 // 更新用户参数
 export interface UpdateUserParams {
   name?: string;
+  // 管理员编辑时省略该字段即保持原密码不变。
+  password?: string;
   role?: ManageableUserRole;
   department?: string | null;
 }
