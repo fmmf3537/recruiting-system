@@ -9,3 +9,8 @@ export const resumeParseQueue = new Queue('resume-parse', {
 export const aiMatchScoreQueue = new Queue('ai-match-score', {
   connection: getBullMQConnection(),
 });
+
+// AI 面试大纲生成队列：请求快速返回，由 worker 完成 LLM 调用与落库。
+export const interviewOutlineQueue = new Queue('interview-outline-generation', {
+  connection: getBullMQConnection(),
+});

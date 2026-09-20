@@ -18,6 +18,7 @@ import { redis } from './lib/redis';
 import { isSentryEnabled } from './lib/sentry';
 import './workers/resume-parser.worker';
 import './workers/ai-match-score.worker';
+import './workers/interview-outline.worker';
 
 const PORT = env.PORT;
 

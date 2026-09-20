@@ -6,6 +6,12 @@ import express from 'express';
 vi.mock('../../src/lib/prisma', () => ({
   default: {
     interview: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn() },
+    interviewOutlineGeneration: {
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      findUnique: vi.fn(),
+    },
     interviewQuestionOutline: {
       count: vi.fn(),
       findMany: vi.fn(),
@@ -34,6 +40,7 @@ vi.mock('../../src/lib/llm', () => ({
 vi.mock('../../src/lib/queue', () => ({
   resumeParseQueue: { add: vi.fn() },
   aiMatchScoreQueue: { add: vi.fn() },
+  interviewOutlineQueue: { add: vi.fn().mockResolvedValue({ id: 'generation-1' }) },
 }));
 
 vi.mock('../../src/lib/redis', () => ({
@@ -155,6 +162,18 @@ describe('interview-outline 接口集成测试（F3-S）', () => {
     vi.mocked(prisma.aiMatchScore.findUnique).mockResolvedValue(null);
     // 版本为 0
     vi.mocked(prisma.interviewQuestionOutline.count).mockResolvedValue(0);
+    vi.mocked(prisma.interviewOutlineGeneration.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.interviewOutlineGeneration.create).mockImplementation(async (args: any) => ({
+      id: 'generation-1',
+      ...args.data,
+      status: 'pending',
+      outlineVersionId: null,
+      errorMessage: null,
+      startedAt: null,
+      completedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
     vi.mocked(prisma.interviewQuestionOutline.findFirst).mockResolvedValue(null);
     vi.mocked(prisma.interviewQuestionOutline.findMany).mockResolvedValue([]);
     vi.mocked(prisma.interviewQuestionOutline.findUnique).mockResolvedValue(null);
@@ -211,9 +230,9 @@ describe('interview-outline 接口集成测试（F3-S）', () => {
       .post(`/api/interviews/${INT_ID}/question-outline`)
       .set('x-test-role', 'hr')
       .send({ focusType: 'hr' });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.version).toBe(1);
+    expect(res.body.data.status).toBe('pending');
   });
 
   // ============ 正常路径 ============
@@ -227,19 +246,13 @@ describe('interview-outline 接口集成测试（F3-S）', () => {
       .set('x-test-role', 'admin')
       .send({ focusType: 'hr' });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.version).toBe(1);
+    expect(res.body.data.status).toBe('pending');
     expect(res.body.data.focusType).toBe('hr');
-    expect(callLLM).toHaveBeenCalledWith(expect.any(String), expect.any(String), 'interview-outline');
-    expect(prisma.operationLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          userId: USER_ID,
-          action: 'ai_question_outline',
-          detail: expect.objectContaining({ success: true, version: 1, focusType: 'hr' }),
-        }),
-      }),
+    expect(callLLM).not.toHaveBeenCalled();
+    expect(prisma.interviewOutlineGeneration.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ interviewId: INT_ID, focusType: 'hr' }) }),
     );
   });
 

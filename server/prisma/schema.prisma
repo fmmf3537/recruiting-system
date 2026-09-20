@@ -49,6 +49,15 @@ enum InterviewStatus {
   no_show
 }
 
+// AI 面试大纲异步生成任务状态
+// pending / processing 期间，同一场面试仅允许一个任务，避免重复消耗 LLM。
+enum OutlineGenerationStatus {
+  pending
+  processing
+  succeeded
+  failed
+}
+
 // ==================== 成员表 ====================
 model User {
   id               String   @id @default(cuid())
@@ -397,6 +406,8 @@ model Interview {
   evaluations   InterviewEvaluation[]
   // 关系：一个 Interview 有多个版本化的面试问题大纲（F3-S）
   questionOutlines InterviewQuestionOutline[]
+  // 异步大纲生成任务（任务完成后关联生成版本）
+  outlineGenerations InterviewOutlineGeneration[]
 
   @@index([scheduledAt, status])
   // 冲突检测：status 等值 + scheduledAt 范围，等值列在前才能进 Index Cond
@@ -422,6 +433,27 @@ model InterviewQuestionOutline {
   @@unique([interviewId, version])
   @@index([interviewId])
   @@map("interview_question_outline")
+}
+
+// ==================== AI 面试大纲异步生成任务 ====================
+model InterviewOutlineGeneration {
+  id               String                  @id @default(cuid())
+  interviewId      String
+  interview        Interview               @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  focusType        String
+  adjustNote       String?                 @db.Text
+  requestedById    String
+  status           OutlineGenerationStatus @default(pending)
+  outlineVersionId String?
+  errorMessage     String?                 @db.Text
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@index([interviewId, status])
+  @@index([requestedById])
+  @@map("interview_outline_generation")
 }
 
 // ==================== 面试评估表（结构化评估，面试官本人填写） ====================

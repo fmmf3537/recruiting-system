@@ -4,8 +4,9 @@ import { logger } from '../lib/logger';
 import { scopeFromUser } from '../services/candidate-visibility.service';
 import {
   finalizeOutline,
-  generateOutline,
+  getActiveOutlineGeneration,
   listOutlines,
+  requestOutlineGeneration,
 } from '../services/interview-outline.service';
 
 /**
@@ -21,15 +22,37 @@ export class InterviewOutlineController {
     try {
       const { id } = req.params;
       const user = req.user!;
-      const result = await generateOutline(
+      const result = await requestOutlineGeneration(
         id,
         req.body as { focusType: string; adjustNote?: string },
         { userId: user.userId, role: user.role, department: user.department },
-        scopeFromUser(user),
+        scopeFromUser(user)
+      );
+      res
+        .status(202)
+        .json({
+          success: true,
+          data: result,
+          message: result.reused ? '大纲正在生成中' : '已开始生成大纲',
+        });
+    } catch (error) {
+      logger.error({ err: error }, '[InterviewOutline] generate 失败');
+      next(error);
+    }
+  }
+
+  /** 查询活跃生成任务，页面刷新后用于恢复轮询。 */
+  async getActiveGeneration(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id } = req.params;
+      const user = req.user!;
+      const result = await getActiveOutlineGeneration(
+        id,
+        { userId: user.userId, role: user.role, department: user.department },
+        scopeFromUser(user)
       );
       res.json({ success: true, data: result });
     } catch (error) {
-      logger.error({ err: error }, '[InterviewOutline] generate 失败');
       next(error);
     }
   }
@@ -42,7 +65,7 @@ export class InterviewOutlineController {
       const result = await listOutlines(
         id,
         { userId: user.userId, role: user.role, department: user.department },
-        scopeFromUser(user),
+        scopeFromUser(user)
       );
       res.json({ success: true, data: result });
     } catch (error) {
@@ -60,7 +83,7 @@ export class InterviewOutlineController {
         Number(version),
         (req.body as { outline: unknown }).outline,
         { userId: user.userId, role: user.role, department: user.department },
-        scopeFromUser(user),
+        scopeFromUser(user)
       );
       res.json({ success: true, data: result, message: '大纲已定稿' });
     } catch (error) {

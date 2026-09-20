@@ -83,6 +83,20 @@ export interface OutlineUser {
   department: string | null;
 }
 
+export interface OutlineGenerationRecord {
+  id: string;
+  interviewId: string;
+  focusType: string;
+  adjustNote: string | null;
+  status: 'pending' | 'processing' | 'succeeded' | 'failed';
+  outlineVersionId: string | null;
+  errorMessage: string | null;
+  createdAt: Date;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  reused: boolean;
+}
+
 // ============ 工具函数 ============
 
 /** 委托统一提取：兼容推理模型 thinking/response 前缀与 ```json 围栏 */
@@ -142,7 +156,7 @@ function validateOutline(parsed: unknown): InterviewOutlinePayload | null {
  */
 async function callLLMForOutline(
   systemPrompt: string,
-  userPrompt: string,
+  userPrompt: string
 ): Promise<InterviewOutlinePayload | null> {
   let lastErr: unknown = null;
   for (let i = 0; i <= LLM_RETRY_TIMES; i += 1) {
@@ -168,7 +182,10 @@ async function callLLMForOutline(
 function stripHtmlSnippet(html: string | null | undefined, max = 500): string {
   if (!html) return '';
   // 去掉常见 HTML 标签，保留文本
-  const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const text = html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
@@ -216,7 +233,7 @@ async function assertOutlineAccess(
     interviewers: Prisma.JsonValue;
   },
   user: OutlineUser,
-  scope?: CandidateVisibilityScope,
+  scope?: CandidateVisibilityScope
 ): Promise<void> {
   if (user.role === 'admin') return;
   if (user.role === 'hr' || user.role === 'member') {
@@ -251,14 +268,168 @@ export async function assertFocusTypeValid(focusType: string | undefined | null)
 // ============ 公开 API ============
 
 /**
- * 生成/再生成大纲（同步：前端 loading 锁防重复点击由 F3-C 负责）。
- * 已有版本数 ≥ MAX_OUTLINE_VERSIONS → 400；LLM 重试 1 次仍失败 → 500。
+ * 创建大纲生成任务。接口仅做权限、字典与版本上限校验，LLM 调用交给 BullMQ worker。
+ * 同一面试已有排队/执行任务时直接返回原任务，避免重复消耗模型额度。
+ */
+export async function requestOutlineGeneration(
+  interviewId: string,
+  input: GenerateOutlineInput,
+  user: OutlineUser,
+  scope?: CandidateVisibilityScope
+): Promise<OutlineGenerationRecord> {
+  const focusType = (input.focusType || '').trim();
+  if (!focusType) throw new AppError('focusType 必填', 400);
+  const adjustNote = input.adjustNote?.trim() || undefined;
+  await assertFocusTypeValid(focusType);
+
+  const interview = await prisma.interview.findUnique({
+    where: { id: interviewId },
+    select: { id: true, candidateId: true, interviewers: true },
+  });
+  if (!interview) throw new AppError('面试安排不存在', 404);
+  await assertOutlineAccess(interview, user, scope);
+
+  const existingCount = await prisma.interviewQuestionOutline.count({ where: { interviewId } });
+  if (existingCount >= MAX_OUTLINE_VERSIONS) {
+    throw new AppError(`版本数已达上限（${MAX_OUTLINE_VERSIONS}），无法继续生成`, 400);
+  }
+
+  const active = await prisma.interviewOutlineGeneration.findFirst({
+    where: { interviewId, status: { in: ['pending', 'processing'] } },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (active) return toGenerationRecord(active, true);
+
+  let generation;
+  try {
+    generation = await prisma.interviewOutlineGeneration.create({
+      data: { interviewId, focusType, adjustNote: adjustNote ?? null, requestedById: user.userId },
+    });
+  } catch (error) {
+    // 部分唯一索引处理并发点击：冲突时读取已创建的活跃任务。
+    const concurrent = await prisma.interviewOutlineGeneration.findFirst({
+      where: { interviewId, status: { in: ['pending', 'processing'] } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (concurrent) return toGenerationRecord(concurrent, true);
+    throw error;
+  }
+
+  try {
+    const { interviewOutlineQueue } = await import('../lib/queue');
+    await interviewOutlineQueue.add(
+      'generate',
+      { generationId: generation.id },
+      { jobId: generation.id, attempts: 1, removeOnComplete: 100, removeOnFail: 100 }
+    );
+  } catch (error) {
+    await prisma.interviewOutlineGeneration.update({
+      where: { id: generation.id },
+      data: {
+        status: 'failed',
+        errorMessage: '生成任务入队失败，请稍后重试',
+        completedAt: new Date(),
+      },
+    });
+    throw new AppError('生成任务创建失败，请稍后重试', 503);
+  }
+
+  return toGenerationRecord(generation, false);
+}
+
+/**
+ * 兼容服务层同步入口：供既有服务调用与单元测试复用。
+ * HTTP 控制器不再调用此方法，生产请求统一通过异步任务接口进入 worker。
  */
 export async function generateOutline(
   interviewId: string,
   input: GenerateOutlineInput,
   user: OutlineUser,
-  scope?: CandidateVisibilityScope,
+  scope?: CandidateVisibilityScope
+): Promise<OutlineRecord> {
+  const focusType = (input.focusType || '').trim();
+  if (!focusType) throw new AppError('focusType 必填', 400);
+  await assertFocusTypeValid(focusType);
+  const interview = await prisma.interview.findUnique({
+    where: { id: interviewId },
+    select: { id: true, candidateId: true, interviewers: true },
+  });
+  if (!interview) throw new AppError('面试安排不存在', 404);
+  await assertOutlineAccess(interview, user, scope);
+  return generateOutlineForWorker(interviewId, input, user);
+}
+
+/** worker 调用：读取持久化任务并生成新版本。 */
+export async function executeOutlineGeneration(generationId: string): Promise<OutlineRecord> {
+  const generation = await prisma.interviewOutlineGeneration.findUnique({
+    where: { id: generationId },
+  });
+  if (!generation) throw new Error('面试大纲生成任务不存在');
+  if (generation.status === 'succeeded' && generation.outlineVersionId) {
+    const existing = await prisma.interviewQuestionOutline.findUnique({
+      where: { id: generation.outlineVersionId },
+    });
+    if (existing)
+      return toOutlineRecord(existing, {
+        userId: generation.requestedById,
+        role: 'admin',
+        department: null,
+      });
+  }
+
+  await prisma.interviewOutlineGeneration.update({
+    where: { id: generationId },
+    data: { status: 'processing', startedAt: new Date(), errorMessage: null },
+  });
+
+  try {
+    const outline = await generateOutlineForWorker(
+      generation.interviewId,
+      { focusType: generation.focusType, adjustNote: generation.adjustNote ?? undefined },
+      { userId: generation.requestedById, role: 'admin', department: null }
+    );
+    await prisma.interviewOutlineGeneration.update({
+      where: { id: generationId },
+      data: { status: 'succeeded', outlineVersionId: outline.id, completedAt: new Date() },
+    });
+    return outline;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'AI 大纲生成失败，请稍后重试';
+    await prisma.interviewOutlineGeneration.update({
+      where: { id: generationId },
+      data: { status: 'failed', errorMessage: message, completedAt: new Date() },
+    });
+    throw error;
+  }
+}
+
+/** 查询最新活跃任务，供页面刷新后恢复轮询。 */
+export async function getActiveOutlineGeneration(
+  interviewId: string,
+  user: OutlineUser,
+  scope?: CandidateVisibilityScope
+): Promise<OutlineGenerationRecord | null> {
+  const interview = await prisma.interview.findUnique({
+    where: { id: interviewId },
+    select: { id: true, candidateId: true, interviewers: true },
+  });
+  if (!interview) throw new AppError('面试安排不存在', 404);
+  await assertOutlineAccess(interview, user, scope);
+  const generation = await prisma.interviewOutlineGeneration.findFirst({
+    where: { interviewId, status: { in: ['pending', 'processing'] } },
+    orderBy: { createdAt: 'desc' },
+  });
+  return generation ? toGenerationRecord(generation, false) : null;
+}
+
+/**
+ * worker 内部的生成流程。已有版本数 ≥ MAX_OUTLINE_VERSIONS 时失败；LLM 重试 1 次。
+ * 权限已在任务创建时校验，worker 不再依赖请求上下文。
+ */
+async function generateOutlineForWorker(
+  interviewId: string,
+  input: GenerateOutlineInput,
+  user: OutlineUser
 ): Promise<OutlineRecord> {
   // 1. 必填校验
   const focusType = (input.focusType || '').trim();
@@ -288,7 +459,14 @@ export async function generateOutline(
         },
       },
       job: {
-        select: { id: true, title: true, level: true, type: true, description: true, requirements: true },
+        select: {
+          id: true,
+          title: true,
+          level: true,
+          type: true,
+          description: true,
+          requirements: true,
+        },
       },
     },
   });
@@ -296,10 +474,7 @@ export async function generateOutline(
     throw new AppError('面试安排不存在', 404);
   }
 
-  // 4. 权限精细校验（PRD §3.2）
-  await assertOutlineAccess(interview, user, scope);
-
-  // 5. 版本上限校验
+  // 4. 版本上限校验（权限已在任务创建时校验）
   const existingCount = await prisma.interviewQuestionOutline.count({
     where: { interviewId },
   });
@@ -307,7 +482,7 @@ export async function generateOutline(
     throw new AppError(`版本数已达上限（${MAX_OUTLINE_VERSIONS}），无法继续生成`, 400);
   }
 
-  // 6. 输入组装
+  // 5. 输入组装
   const candidatePayload = {
     name: interview.candidate.name,
     skills: Array.isArray(interview.candidate.skills)
@@ -467,7 +642,7 @@ ${previousBlock}
   "durationAdvice": "一句话时间分配建议（可选）"
 }`;
 
-  // 7. 调 LLM（parse 失败与结构不合格各重试 1 次）
+  // 6. 调 LLM（parse 失败与结构不合格各重试 1 次）
   const validated = await callLLMForOutline(systemPrompt, userPrompt);
 
   if (!validated) {
@@ -485,7 +660,7 @@ ${previousBlock}
     throw new AppError('AI 大纲生成失败，请稍后重试', 500);
   }
 
-  // 8. 落库新版本（version = max + 1）
+  // 7. 落库新版本（version = max + 1）
   const latest = await prisma.interviewQuestionOutline.findFirst({
     where: { interviewId },
     orderBy: { version: 'desc' },
@@ -505,7 +680,7 @@ ${previousBlock}
     },
   });
 
-  // 9. 成功 OperationLog
+  // 8. 成功 OperationLog
   await writeLog({
     userId: user.userId,
     action: 'ai_question_outline',
@@ -527,7 +702,7 @@ ${previousBlock}
 export async function listOutlines(
   interviewId: string,
   user: OutlineUser,
-  scope?: CandidateVisibilityScope,
+  scope?: CandidateVisibilityScope
 ): Promise<OutlineRecord[]> {
   const interview = await prisma.interview.findUnique({
     where: { id: interviewId },
@@ -567,7 +742,7 @@ export async function listOutlines(
     outline: r.outline as unknown as InterviewOutlinePayload,
     adjustNote: r.adjustNote,
     editedById: r.editedById,
-    editedByName: r.editedById ? nameMap.get(r.editedById) ?? null : null,
+    editedByName: r.editedById ? (nameMap.get(r.editedById) ?? null) : null,
     createdById: r.createdById,
     createdByName: nameMap.get(r.createdById) ?? null,
     createdAt: r.createdAt,
@@ -582,12 +757,15 @@ export async function finalizeOutline(
   version: number,
   outline: unknown,
   user: OutlineUser,
-  scope?: CandidateVisibilityScope,
+  scope?: CandidateVisibilityScope
 ): Promise<OutlineRecord> {
   // 服务端结构校验（与生成时同一规则）
   const validated = validateOutline(outline);
   if (!validated) {
-    throw new AppError('outline 结构校验未通过：sections 非空、含 theme 与 questions；每题必须含 question/intent/referenceAnswer', 400);
+    throw new AppError(
+      'outline 结构校验未通过：sections 非空、含 theme 与 questions；每题必须含 question/intent/referenceAnswer',
+      400
+    );
   }
 
   const interview = await prisma.interview.findUnique({
@@ -629,6 +807,24 @@ export async function finalizeOutline(
   return toOutlineRecord(updated, user);
 }
 
+function toGenerationRecord(
+  row: {
+    id: string;
+    interviewId: string;
+    focusType: string;
+    adjustNote: string | null;
+    status: 'pending' | 'processing' | 'succeeded' | 'failed';
+    outlineVersionId: string | null;
+    errorMessage: string | null;
+    createdAt: Date;
+    startedAt: Date | null;
+    completedAt: Date | null;
+  },
+  reused: boolean
+): OutlineGenerationRecord {
+  return { ...row, reused };
+}
+
 // ============ 内部工具 ============
 
 /** Prisma 行 → 对外结构（含当前操作人姓名查回，避免重复 join） */
@@ -644,7 +840,7 @@ function toOutlineRecord(
     createdById: string;
     createdAt: Date;
   },
-  _user: OutlineUser,
+  _user: OutlineUser
 ): OutlineRecord {
   return {
     id: row.id,

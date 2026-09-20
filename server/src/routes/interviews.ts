@@ -138,7 +138,7 @@ router.get('/conflicts', authenticate, interviewController.getInterviewerConflic
 
 /**
  * POST /api/interviews/:id/question-outline
- * F3-S：生成/再生成面试问题大纲（同步返回新版本）
+ * 创建异步面试问题大纲生成任务（立即返回任务状态）
  * 权限：登录用户 + ai:interview-outline（service 层做精细校验：admin 直通 / hr 候选人可见 / hm&interviewer 必须是该场面试官）
  */
 router.post(
@@ -150,6 +150,18 @@ router.post(
     body: generateOutlineBodySchema,
   }),
   interviewOutlineController.generate
+);
+
+/**
+ * GET /api/interviews/:id/question-outline-generation
+ * 返回当前活跃的大纲生成任务，供刷新页面后恢复轮询。
+ */
+router.get(
+  '/:id/question-outline-generation',
+  authenticate,
+  requireMatrixPermission('ai:interview-outline'),
+  validate(interviewIdSchema, 'params'),
+  interviewOutlineController.getActiveGeneration
 );
 
 /**
