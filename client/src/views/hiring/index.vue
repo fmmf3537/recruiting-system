@@ -3,8 +3,18 @@
     <div class="page-header">
       <div class="title-section">
         <h2 class="page-title">招聘工作台</h2>
-        <span class="page-subtitle">用人经理视角：聚焦我负责岗位的招聘进展与审批事项</span>
+        <span class="page-subtitle">聚焦岗位招聘进展、候选人和审批事项</span>
       </div>
+      <el-radio-group
+        v-if="authStore.isAdmin"
+        v-model="hiringScope"
+        size="small"
+        aria-label="招聘工作台数据范围"
+        @change="handleScopeChange"
+      >
+        <el-radio-button label="company">公司全局</el-radio-button>
+        <el-radio-button label="owned">我负责的岗位</el-radio-button>
+      </el-radio-group>
     </div>
 
     <el-tabs v-model="activeTab">
@@ -33,7 +43,7 @@
         </div>
       </el-tab-pane>
 
-      <el-tab-pane label="我的岗位" name="jobs">
+      <el-tab-pane :label="hiringScope === 'company' ? '全部岗位' : '我的岗位'" name="jobs">
         <TableSkeleton v-if="jobsLoading" :row-count="5" />
         <el-table v-else :data="jobs">
           <el-table-column prop="title" label="岗位" min-width="180" />
@@ -163,6 +173,7 @@
 import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
+import { useAuthStore } from '@/stores/auth';
 import { TableSkeleton, CardSkeleton } from '@/components/Skeleton';
 import request from '@/utils/request';
 
@@ -228,7 +239,9 @@ function formatInterviewers(list?: Array<{ name?: string }>): string {
   );
 }
 
+const authStore = useAuthStore();
 const activeTab = ref('overview');
+const hiringScope = ref<'company' | 'owned'>(authStore.isAdmin ? 'company' : 'owned');
 const overviewLoading = ref(false);
 const overview = reactive<HiringOverview>({});
 const approvalsLoading = ref(false);
@@ -241,6 +254,10 @@ const jobsLoading = ref(false);
 const jobs = ref<HiringJobRow[]>([]);
 
 const router = useRouter();
+
+function getScopeParams(): { scope: 'owned' } | undefined {
+  return hiringScope.value === 'owned' ? { scope: 'owned' } : undefined;
+}
 
 const INTERVIEW_STATUS_TEXT: Record<string, string> = {
   scheduled: '待进行',
@@ -278,7 +295,9 @@ function formatDateTime(value: string): string {
 async function loadOverview() {
   overviewLoading.value = true;
   try {
-    const res = (await request.get('/hiring/overview')) as ApiSuccess<HiringOverview>;
+    const res = (await request.get('/hiring/overview', {
+      params: getScopeParams(),
+    })) as ApiSuccess<HiringOverview>;
     if (res.success) Object.assign(overview, res.data);
   } catch {
     ElMessage.error('加载总览失败');
@@ -290,7 +309,9 @@ async function loadOverview() {
 async function loadApprovals() {
   approvalsLoading.value = true;
   try {
-    const res = (await request.get('/hiring/approvals')) as ApiSuccess<HiringOfferRow[]>;
+    const res = (await request.get('/hiring/approvals', {
+      params: getScopeParams(),
+    })) as ApiSuccess<HiringOfferRow[]>;
     if (res.success) approvals.value = res.data;
   } catch {
     ElMessage.error('加载待审批失败');
@@ -302,7 +323,9 @@ async function loadApprovals() {
 async function loadCandidates() {
   candidatesLoading.value = true;
   try {
-    const res = (await request.get('/hiring/candidates')) as ApiSuccess<HiringCandidateRow[]>;
+    const res = (await request.get('/hiring/candidates', {
+      params: getScopeParams(),
+    })) as ApiSuccess<HiringCandidateRow[]>;
     if (res.success) candidates.value = res.data;
   } catch {
     ElMessage.error('加载候选人失败');
@@ -314,7 +337,9 @@ async function loadCandidates() {
 async function loadJobs() {
   jobsLoading.value = true;
   try {
-    const res = (await request.get('/hiring/jobs')) as ApiSuccess<HiringJobRow[]>;
+    const res = (await request.get('/hiring/jobs', { params: getScopeParams() })) as ApiSuccess<
+      HiringJobRow[]
+    >;
     if (res.success) jobs.value = res.data;
   } catch {
     ElMessage.error('加载我的岗位失败');
@@ -326,13 +351,25 @@ async function loadJobs() {
 async function loadInterviews() {
   interviewsLoading.value = true;
   try {
-    const res = (await request.get('/hiring/interviews')) as ApiSuccess<HiringInterviewRow[]>;
+    const res = (await request.get('/hiring/interviews', {
+      params: getScopeParams(),
+    })) as ApiSuccess<HiringInterviewRow[]>;
     if (res.success) interviews.value = res.data;
   } catch {
     ElMessage.error('加载面试失败');
   } finally {
     interviewsLoading.value = false;
   }
+}
+
+async function handleScopeChange(): Promise<void> {
+  await Promise.all([
+    loadOverview(),
+    loadApprovals(),
+    loadCandidates(),
+    loadJobs(),
+    loadInterviews(),
+  ]);
 }
 
 async function approveOffer(id: string) {
