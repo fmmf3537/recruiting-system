@@ -403,7 +403,7 @@ export async function executeOutlineGeneration(generationId: string): Promise<Ou
   }
 }
 
-/** 查询最新活跃任务，供页面刷新后恢复轮询。 */
+/** 查询最近一次任务，供页面刷新后恢复轮询或展示失败结果。 */
 export async function getActiveOutlineGeneration(
   interviewId: string,
   user: OutlineUser,
@@ -416,7 +416,7 @@ export async function getActiveOutlineGeneration(
   if (!interview) throw new AppError('面试安排不存在', 404);
   await assertOutlineAccess(interview, user, scope);
   const generation = await prisma.interviewOutlineGeneration.findFirst({
-    where: { interviewId, status: { in: ['pending', 'processing'] } },
+    where: { interviewId },
     orderBy: { createdAt: 'desc' },
   });
   return generation ? toGenerationRecord(generation, false) : null;
