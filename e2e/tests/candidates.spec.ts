@@ -60,8 +60,23 @@ test.describe('候选人详情模块', () => {
       await page.waitForTimeout(1000);
 
       await expect(page.locator('.candidate-name')).toBeVisible();
-      await expect(page.locator('text=基本信息')).toBeVisible();
-      await expect(page.locator('text=流程记录')).toBeVisible();
+      await expect(page.locator('text=招聘摘要')).toBeVisible();
+      await expect(page.locator('text=招聘进展')).toBeVisible();
+    }
+  });
+
+  test('桌面端详情页将操作和流程放在同一招聘工作区', async () => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.click('.el-menu-item:has-text("候选人管理")');
+    const firstRow = page.locator('.el-table__body tr').first();
+    if (await firstRow.isVisible()) {
+      await firstRow.click();
+      await expect(page.locator('.workflow-column')).toBeVisible();
+      await expect(page.locator('.action-card')).toBeVisible();
+      await expect(page.locator('.timeline-card')).toBeVisible();
+      await expect(page.locator('.match-score-card')).toBeVisible();
+      await expect(page.locator('.action-card')).toHaveJSProperty('offsetTop', await page.locator('.workflow-column').evaluate((el) => el.offsetTop));
+      await expect(page.locator('html')).toHaveJSProperty('scrollWidth', await page.locator('html').evaluate((el) => el.clientWidth));
     }
   });
 
