@@ -82,10 +82,10 @@ test.describe('导航模块', () => {
     // 新版布局菜单容器类名是 .sidebar-menu（旧 .sidebar-container 已废弃）
     await expect(page.locator('.sidebar-menu, .sidebar-container').first()).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("仪表盘")')).toBeVisible();
-    await expect(page.getByText('招聘作业', { exact: true })).toBeVisible();
-    await expect(page.getByText('面试', { exact: true })).toBeVisible();
-    await expect(page.getByText('数据与考核', { exact: true })).toBeVisible();
-    await expect(page.getByText('设置与管理', { exact: true })).toBeVisible();
+    await expect(page.locator('.sidebar-menu').getByText('招聘作业', { exact: true })).toBeVisible();
+    await expect(page.locator('.sidebar-menu').getByText('面试', { exact: true })).toBeVisible();
+    await expect(page.locator('.sidebar-menu').getByText('数据与考核', { exact: true })).toBeVisible();
+    await expect(page.locator('.sidebar-menu').getByText('设置与管理', { exact: true })).toBeVisible();
 
     const dataGroup = page.locator('.el-sub-menu').filter({ hasText: '数据与考核' });
     await dataGroup.locator('.el-sub-menu__title').click();
