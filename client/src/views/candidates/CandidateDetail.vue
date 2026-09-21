@@ -169,12 +169,36 @@
           </div>
         </el-card>
 
-        <!-- AI 匹配分卡片（F2-C） -->
-        <MatchScoreCard :candidate-id="candidate.id" :candidate-jobs="candidate.jobs" />
       </div>
 
-      <!-- 中间：流程记录 -->
-      <div class="middle-column">
+      <!-- 招聘工作区：将主操作和当前流程固定在同一列，避免操作栏被流程高度推到下一行 -->
+      <div class="workflow-column">
+        <!-- 操作栏 -->
+        <el-card shadow="never" class="action-card">
+          <div class="action-buttons">
+            <el-button
+              v-if="canAdvance"
+              type="primary"
+              size="large"
+              @click="handleAdvance"
+              style="width: 100%"
+            >
+              <el-icon><Promotion /></el-icon>推进流程
+            </el-button>
+            <el-button type="default" size="large" @click="handleAddFeedback" style="width: 100%">
+              <el-icon><ChatDotRound /></el-icon>补录历史反馈
+            </el-button>
+            <el-button
+              type="default"
+              size="large"
+              @click="showSendEmail"
+              style="width: 100%"
+            >
+              <el-icon><Message /></el-icon>发送邮件
+            </el-button>
+          </div>
+        </el-card>
+
         <el-card shadow="never" class="timeline-card">
           <template #header>
             <div class="card-header">
@@ -243,37 +267,10 @@
             </el-timeline-item>
           </el-timeline>
         </el-card>
-      </div>
 
-      <!-- 右侧：面试反馈 + Offer + 操作 -->
-      <div class="right-column">
-        <!-- 操作栏 -->
-        <el-card shadow="never" class="action-card">
-          <div class="action-buttons">
-            <el-button
-              v-if="canAdvance"
-              type="primary"
-              size="large"
-              @click="handleAdvance"
-              style="width: 100%"
-            >
-              <el-icon><Promotion /></el-icon>推进流程
-            </el-button>
-            <el-button type="default" size="large" @click="handleAddFeedback" style="width: 100%">
-              <el-icon><ChatDotRound /></el-icon>补录历史反馈
-            </el-button>
-            <el-button
-              type="default"
-              size="large"
-              @click="showSendEmail"
-              style="width: 100%"
-            >
-              <el-icon><Message /></el-icon>发送邮件
-            </el-button>
-          </div>
-        </el-card>
+        <!-- AI 匹配分放入招聘工作区，获得完整内容宽度 -->
+        <MatchScoreCard :candidate-id="candidate.id" :candidate-jobs="candidate.jobs" />
 
-        <el-collapse class="detail-more"><el-collapse-item title="更多招聘信息" name="more">
         <!-- Offer 信息 -->
         <el-card v-if="candidate.offer" shadow="never" class="offer-card">
           <template #header>
@@ -448,7 +445,6 @@
           </div>
           <el-empty v-else description="暂无沟通记录" :image-size="50" />
         </el-card>
-        </el-collapse-item></el-collapse>
       </div>
     </div>
 
@@ -1253,23 +1249,19 @@ onActivated(() => {
 
   .detail-container {
     display: grid;
-    grid-template-columns: 288px minmax(0, 1fr);
-    gap: 16px;
+    grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
+    align-items: start;
+    gap: 20px;
 
-    @media (min-width: 1201px) {
-      .left-column { grid-row: span 2; }
-      .right-column { grid-column: 2; }
-    }
-
-    @media (max-width: 1200px) {
+    @media (max-width: 1100px) {
       grid-template-columns: 1fr;
     }
   }
 
   .left-column,
-  .middle-column,
-  .right-column {
+  .workflow-column {
     display: flex;
+    min-width: 0;
     flex-direction: column;
     gap: 20px;
   }
@@ -1393,7 +1385,6 @@ onActivated(() => {
   }
 
   .timeline-card {
-    min-height: 520px;
     .timeline-content {
       .timeline-header {
         display: flex;
@@ -1427,19 +1418,23 @@ onActivated(() => {
     border-left: 3px solid $ui-color-primary;
     position: sticky;
     top: 0;
+    z-index: 1;
 
     .action-buttons {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
 
       .el-button {
+        width: 100% !important;
         margin: 0;
       }
     }
-  }
 
-  .detail-more { :deep(.el-collapse-item__header) { color: $ui-gray-700; font-weight: 600; } :deep(.el-collapse-item__content) { padding-bottom: 0; } }
+    @media (max-width: 640px) {
+      .action-buttons { grid-template-columns: 1fr; }
+    }
+  }
 
   .offer-card {
     :deep(.el-descriptions__label) {
