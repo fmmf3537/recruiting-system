@@ -82,14 +82,19 @@ test.describe('导航模块', () => {
     // 新版布局菜单容器类名是 .sidebar-menu（旧 .sidebar-container 已废弃）
     await expect(page.locator('.sidebar-menu, .sidebar-container').first()).toBeVisible();
     await expect(page.locator('.el-menu-item:has-text("仪表盘")')).toBeVisible();
-    await expect(page.locator('.el-menu-item:has-text("职位管理")')).toBeVisible();
-    await expect(page.locator('.el-menu-item:has-text("候选人管理")')).toBeVisible();
-    await expect(page.locator('.el-menu-item:has-text("Offer管理")')).toBeVisible();
-    await expect(page.locator('.el-menu-item:has-text("数据统计")')).toBeVisible();
-    await expect(page.locator('.el-menu-item:has-text("消息通知")')).toBeVisible();
-    await expect(page.locator('.el-menu-item:has-text("编制管理")')).toBeVisible();
-    await expect(page.locator('.el-menu-item:has-text("成员管理")')).toBeVisible();
-    await expect(page.locator('.el-menu-item:has-text("自动化邮件")')).toBeVisible();
+    await expect(page.getByText('招聘作业', { exact: true })).toBeVisible();
+    await expect(page.getByText('面试', { exact: true })).toBeVisible();
+    await expect(page.getByText('数据与考核', { exact: true })).toBeVisible();
+    await expect(page.getByText('设置与管理', { exact: true })).toBeVisible();
+
+    const dataGroup = page.locator('.el-sub-menu').filter({ hasText: '数据与考核' });
+    await dataGroup.locator('.el-sub-menu__title').click();
+    await expect(dataGroup.locator('.el-menu-item:has-text("数据统计")')).toBeVisible();
+
+    const settingsGroup = page.locator('.el-sub-menu').filter({ hasText: '设置与管理' });
+    await settingsGroup.locator('.el-sub-menu__title').click();
+    await expect(settingsGroup.locator('.el-menu-item:has-text("成员管理")')).toBeVisible();
+    await expect(settingsGroup.locator('.el-menu-item:has-text("自动化邮件")')).toBeVisible();
   });
 
   test('点击编制管理跳转正确', async ({ page }) => {
