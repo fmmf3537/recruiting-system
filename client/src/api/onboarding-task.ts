@@ -1,4 +1,4 @@
-import request from '@/utils/request';
+import request, { type RequestOptions } from '@/utils/request';
 
 export interface OnboardingTask {
   id: string;
@@ -13,8 +13,11 @@ export interface OnboardingTask {
   updatedAt: string;
 }
 
-export function getTasksByCandidate(candidateId: string): Promise<{ success: boolean; data: OnboardingTask[] }> {
-  return request.get(`/onboarding-tasks/candidates/${candidateId}`) as Promise<{ success: boolean; data: OnboardingTask[] }>;
+export function getTasksByCandidate(
+  candidateId: string,
+  options?: RequestOptions
+): Promise<{ success: boolean; data: OnboardingTask[] }> {
+  return request.get(`/onboarding-tasks/candidates/${candidateId}`, options) as Promise<{ success: boolean; data: OnboardingTask[] }>;
 }
 
 export function createTask(data: {

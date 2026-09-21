@@ -207,7 +207,12 @@
             </div>
           </template>
 
-          <el-timeline>
+          <el-alert v-if="pipelineLoadError" type="error" :closable="false" show-icon>
+            <template #title>招聘流程加载失败</template>
+            <el-button link type="primary" @click="fetchPipelineStages(candidate.id)">重新加载</el-button>
+          </el-alert>
+          <el-empty v-else-if="!pipelineProgress.length" description="暂无招聘流程" :image-size="60" />
+          <el-timeline v-else>
             <el-timeline-item
               v-for="item in pipelineProgress"
               :key="item.stage"
@@ -318,7 +323,11 @@
               </el-button>
             </div>
           </template>
-          <el-empty v-if="!onboardingTasks.length" description="暂无入职任务" :image-size="60" />
+          <el-alert v-if="onboardingLoadError" type="error" :closable="false" show-icon>
+            <template #title>入职任务加载失败</template>
+            <el-button link type="primary" @click="fetchOnboardingTasks">重新加载</el-button>
+          </el-alert>
+          <el-empty v-else-if="!onboardingTasks.length" description="暂无入职任务" :image-size="60" />
           <div v-else class="task-list">
             <div
               v-for="task in onboardingTasks"
@@ -346,7 +355,11 @@
               </el-button>
             </div>
           </template>
-          <div v-if="candidateInterviews.length" class="interview-list">
+          <el-alert v-if="interviewsLoadError" type="error" :closable="false" show-icon>
+            <template #title>面试安排加载失败</template>
+            <el-button link type="primary" @click="fetchCandidateInterviews">重新加载</el-button>
+          </el-alert>
+          <div v-else-if="candidateInterviews.length" class="interview-list">
             <div v-for="iv in candidateInterviews" :key="iv.id" class="interview-item">
               <div class="interview-header">
                 <div class="interview-tags">
@@ -429,7 +442,11 @@
               </el-button>
             </div>
           </template>
-          <div v-if="candidateCommunications.length" class="communication-list">
+          <el-alert v-if="communicationsLoadError" type="error" :closable="false" show-icon>
+            <template #title>沟通记录加载失败</template>
+            <el-button link type="primary" @click="fetchCandidateCommunications">重新加载</el-button>
+          </el-alert>
+          <div v-else-if="candidateCommunications.length" class="communication-list">
             <div v-for="log in candidateCommunications" :key="log.id" class="communication-item">
               <div class="comm-header">
                 <el-tag size="small" type="info">{{ log.type }}</el-tag>
@@ -650,6 +667,10 @@ const notFound = ref(false);
 const showResumeUpload = ref(false);
 const tagOptions = ref<Tag[]>([]);
 const onboardingTasks = ref<OnboardingTask[]>([]);
+const pipelineLoadError = ref(false);
+const onboardingLoadError = ref(false);
+const interviewsLoadError = ref(false);
+const communicationsLoadError = ref(false);
 const tagSelectValue = ref('');
 
 // 面试安排
@@ -822,9 +843,7 @@ async function fetchCandidateDetail() {
     const res = await getCandidateById(candidateId);
     if (res.success) {
       candidate.value = res.data;
-      getPipelineStages(res.data.id)
-        .then((stages) => { candidateStages.value = stages.data; })
-        .catch(() => { candidateStages.value = []; });
+      fetchPipelineStages(res.data.id);
     }
   } catch (error: any) {
     const errorMsg = error.response?.data?.error || error.message;
@@ -838,9 +857,20 @@ async function fetchCandidateDetail() {
   }
 }
 
+async function fetchPipelineStages(targetCandidateId: string) {
+  pipelineLoadError.value = false;
+  try {
+    const res = await getPipelineStages(targetCandidateId, { silentError: true });
+    candidateStages.value = res.data;
+  } catch {
+    candidateStages.value = [];
+    pipelineLoadError.value = true;
+  }
+}
+
 async function fetchTags() {
   try {
-    const res = await getTags();
+    const res = await getTags(undefined, { silentError: true });
     if (res.success) {
       tagOptions.value = res.data;
     }
@@ -962,9 +992,7 @@ function handleAdvance() {
   scheduleAfterAdvance.value = false;
   advanceDialogVisible.value = true;
   // 拉取该候选人适用的 Pipeline 模板阶段（按关联职位的模板/默认模板）
-  getPipelineStages(candidate.value.id)
-    .then((res) => { candidateStages.value = res.data; })
-    .catch(() => { candidateStages.value = []; });
+  fetchPipelineStages(candidate.value.id);
 }
 
 async function handleAdvanceSubmit() {
@@ -1090,11 +1118,12 @@ async function handleSendEmail() {
 }
 
 async function fetchOnboardingTasks() {
+  onboardingLoadError.value = false;
   try {
-    const res = await getTasksByCandidate(candidateId);
+    const res = await getTasksByCandidate(candidateId, { silentError: true });
     if (res.success) onboardingTasks.value = res.data;
   } catch {
-    // 静默失败
+    onboardingLoadError.value = true;
   }
 }
 
@@ -1125,23 +1154,29 @@ async function toggleTaskStatus(taskId: string, completed: boolean) {
 // 获取候选人的面试安排
 async function fetchCandidateInterviews() {
   if (!candidateId) return;
+  interviewsLoadError.value = false;
   try {
-    const res = await getCandidateInterviews(candidateId) as any;
+    const res = await getCandidateInterviews(candidateId, { silentError: true }) as any;
     if (res.success) {
       candidateInterviews.value = res.data || [];
     }
-  } catch { /* ignore */ }
+  } catch {
+    interviewsLoadError.value = true;
+  }
 }
 
 // 获取候选人的沟通记录
 async function fetchCandidateCommunications() {
   if (!candidateId) return;
+  communicationsLoadError.value = false;
   try {
-    const res = await getCandidateCommunications(candidateId) as any;
+    const res = await getCandidateCommunications(candidateId, { silentError: true }) as any;
     if (res.success) {
       candidateCommunications.value = res.data || [];
     }
-  } catch { /* ignore */ }
+  } catch {
+    communicationsLoadError.value = true;
+  }
 }
 
 // 添加沟通记录

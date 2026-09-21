@@ -1,4 +1,4 @@
-import request from '@/utils/request';
+import request, { type RequestOptions } from '@/utils/request';
 
 export interface Tag {
   id: string;
@@ -26,8 +26,8 @@ export interface SetTagsParams {
 /**
  * 获取所有标签
  */
-export function getTags(category?: string): Promise<TagListData> {
-  return request.get('/tags', { params: { category } });
+export function getTags(category?: string, options?: RequestOptions): Promise<TagListData> {
+  return request.get('/tags', { ...options, params: { category } });
 }
 
 /**

@@ -1,4 +1,4 @@
-import request from '@/utils/request';
+import request, { type RequestOptions } from '@/utils/request';
 
 export interface InterviewerInfo {
   id: string;
@@ -142,8 +142,8 @@ export function completeInterview(id: string) {
 }
 
 // 获取候选人的面试安排
-export function getCandidateInterviews(candidateId: string) {
-  return request.get(`/candidates/${candidateId}/interviews`);
+export function getCandidateInterviews(candidateId: string, options?: RequestOptions) {
+  return request.get(`/candidates/${candidateId}/interviews`, options);
 }
 
 // 查询面试官冲突

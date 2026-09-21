@@ -1,4 +1,9 @@
-import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios';
+import axios, {
+  type AxiosInstance,
+  type AxiosError,
+  type AxiosRequestConfig,
+  type InternalAxiosRequestConfig,
+} from 'axios';
 import { ElMessage } from 'element-plus';
 import router from '@/router';
 import {
@@ -6,6 +11,11 @@ import {
   BusinessError,
   type BackendErrorResponse,
 } from '@/types/error';
+
+/** 仅供可独立恢复的辅助区域使用，避免全局提示掩盖具体失败位置。 */
+export interface RequestOptions extends AxiosRequestConfig {
+  silentError?: boolean;
+}
 
 // 创建 axios 实例
 const request: AxiosInstance = axios.create({
@@ -29,15 +39,20 @@ function clearAuthAndRedirect(): void {
 export function handleResponseError(error: AxiosError<BackendErrorResponse>): Promise<never> {
   console.error('[HTTP] response error', error.message, error.config?.url);
   const { response } = error;
+  const silentError = (error.config as RequestOptions | undefined)?.silentError === true;
 
   if (!response) {
-    ElMessage.error('网络错误，请检查网络连接');
+    if (!silentError) ElMessage.error('网络错误，请检查网络连接');
     return Promise.reject(new BusinessError('网络错误', BackendErrorCode.INTERNAL_ERROR, 0));
   }
 
   const { status, data } = response;
   const code = data?.code ?? status;
   const message = data?.error ?? `请求失败 (${status})`;
+
+  if (silentError) {
+    return Promise.reject(new BusinessError(message, code, status));
+  }
 
   switch (code) {
     case BackendErrorCode.UNAUTHORIZED:

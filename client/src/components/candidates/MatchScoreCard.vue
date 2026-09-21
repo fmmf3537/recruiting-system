@@ -34,9 +34,15 @@
       </div>
     </template>
 
+    <!-- 独立数据区加载失败时在卡片内提示，避免全局错误信息无法定位来源。 -->
+    <el-alert v-if="loadError" type="error" :closable="false" show-icon class="load-error">
+      <template #title>AI 匹配分加载失败</template>
+      <el-button link type="primary" @click="loadScores">重新加载</el-button>
+    </el-alert>
+
     <!-- 空态：未打分 -->
     <el-empty
-      v-if="!loading && scores.length === 0"
+      v-else-if="!loading && scores.length === 0"
       :image-size="60"
       description="暂无 AI 匹配分，点击右上角选择职位后可手动补打"
     />
@@ -148,6 +154,7 @@ const canManual = computed(() => {
 
 const scores = ref<CandidateMatchScore[]>([]);
 const loading = ref(false);
+const loadError = ref(false);
 const triggering = ref(false);
 const manualTriggerJobId = ref<string | null>(null);
 const manualJobId = ref<string>('');
@@ -158,14 +165,15 @@ const loadingText = 'AI 打分中，可能需要 1 分钟，请耐心等待...';
 
 async function loadScores() {
   loading.value = true;
+  loadError.value = false;
   try {
-    const res = await getCandidateMatchScores(props.candidateId);
+    const res = await getCandidateMatchScores(props.candidateId, { silentError: true });
     if (res.success) {
       scores.value = res.data || [];
     }
   } catch {
-    // request 层已统一 ElMessage 提示
     scores.value = [];
+    loadError.value = true;
   } finally {
     loading.value = false;
   }
@@ -239,14 +247,40 @@ onMounted(loadScores);
 .match-score-card {
   .card-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 12px;
     font-weight: 500;
+
+    > span {
+      flex: 0 0 auto;
+      white-space: nowrap;
+    }
 
     .header-actions {
       display: flex;
+      min-width: 0;
+      flex: 1;
+      justify-content: flex-end;
+      flex-wrap: wrap;
       gap: 8px;
       align-items: center;
+    }
+  }
+
+  .load-error { margin: 0; }
+
+  @media (max-width: 640px) {
+    .card-header {
+      align-items: flex-start;
+      flex-direction: column;
+
+      .header-actions {
+        width: 100%;
+        justify-content: stretch;
+
+        :deep(.el-select),
+        :deep(.el-button) { width: 100% !important; }
+      }
     }
   }
 

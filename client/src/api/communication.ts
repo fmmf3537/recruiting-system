@@ -1,4 +1,4 @@
-import request from '@/utils/request';
+import request, { type RequestOptions } from '@/utils/request';
 
 export interface CommunicationParams {
   candidateId: string;
@@ -48,8 +48,8 @@ export function deleteCommunication(id: string) {
 }
 
 // 获取候选人的沟通记录
-export function getCandidateCommunications(candidateId: string) {
-  return request.get(`/candidates/${candidateId}/communications`);
+export function getCandidateCommunications(candidateId: string, options?: RequestOptions) {
+  return request.get(`/candidates/${candidateId}/communications`, options);
 }
 
 // 获取待跟进提醒

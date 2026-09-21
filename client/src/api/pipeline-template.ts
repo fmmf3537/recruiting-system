@@ -1,4 +1,4 @@
-import request from '@/utils/request';
+import request, { type RequestOptions } from '@/utils/request';
 
 // 招聘流程模板（按职位类型自定义招聘阶段）
 export interface PipelineTemplate {
@@ -46,8 +46,9 @@ export function getPipelineTemplates() {
 /**
  * 获取候选人适用的阶段数组；不传 candidateId 时返回默认模板阶段
  */
-export function getPipelineStages(candidateId?: string) {
+export function getPipelineStages(candidateId?: string, options?: RequestOptions) {
   return request.get('/pipeline-templates/stages', {
+    ...options,
     params: candidateId ? { candidateId } : {},
   }) as Promise<StagesData>;
 }

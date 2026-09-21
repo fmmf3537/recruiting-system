@@ -1,4 +1,4 @@
-import request from '@/utils/request';
+import request, { type RequestOptions } from '@/utils/request';
 
 // ============ 类型（与 server match-score.service.ts ScoreResult 对齐） ============
 
@@ -63,9 +63,10 @@ export function triggerMatchScore(
  * 获取候选人全部职位打分列表（含职位标题，按更新时间倒序）
  */
 export function getCandidateMatchScores(
-  candidateId: string
+  candidateId: string,
+  options?: RequestOptions
 ): Promise<MatchScoreResponse<CandidateMatchScore[]>> {
-  return request.get(`/candidates/${candidateId}/match-scores`) as Promise<
+  return request.get(`/candidates/${candidateId}/match-scores`, options) as Promise<
     MatchScoreResponse<CandidateMatchScore[]>
   >;
 }
