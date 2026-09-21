@@ -77,6 +77,7 @@ test.describe('候选人详情模块', () => {
       await expect(page.locator('.match-score-card')).toBeVisible();
       await expect(page.locator('.action-card')).toHaveJSProperty('offsetTop', await page.locator('.workflow-column').evaluate((el) => el.offsetTop));
       await expect(page.locator('html')).toHaveJSProperty('scrollWidth', await page.locator('html').evaluate((el) => el.clientWidth));
+      expect(await page.locator('.match-score-card .card-header > span').evaluate((el) => el.getBoundingClientRect().height)).toBeLessThanOrEqual(24);
     }
   });
 
