@@ -98,6 +98,7 @@ test.describe('导航模块', () => {
   });
 
   test('点击编制管理跳转正确', async ({ page }) => {
+    await page.locator('.el-sub-menu').filter({ hasText: '设置与管理' }).locator('.el-sub-menu__title').click();
     await page.click('.el-menu-item:has-text("编制管理")');
     await expect(page).toHaveURL(/\/hc-requests/);
     await expect(page.locator('.page-title').first()).toContainText('编制管理');
@@ -116,12 +117,14 @@ test.describe('导航模块', () => {
   });
 
   test('点击数据统计跳转正确', async ({ page }) => {
+    await page.locator('.el-sub-menu').filter({ hasText: '数据与考核' }).locator('.el-sub-menu__title').click();
     await page.click('.el-menu-item:has-text("数据统计")');
     await expect(page).toHaveURL(/\/stats/);
     await expect(page.locator('.page-title').first()).toContainText('数据统计');
   });
 
   test('点击消息通知跳转正确', async ({ page }) => {
+    await page.locator('.el-sub-menu').filter({ hasText: '设置与管理' }).locator('.el-sub-menu__title').click();
     await page.click('.el-menu-item:has-text("消息通知")');
     await expect(page).toHaveURL(/\/notifications/);
     await expect(page.locator('.page-title').first()).toContainText('消息通知');
