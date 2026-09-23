@@ -9,7 +9,8 @@ const mockPrisma = vi.hoisted(() => ({
     findUnique: vi.fn(),
     update: vi.fn(),
   },
-  interviewEvaluation: { upsert: vi.fn() },
+  interviewEvaluation: { findUnique: vi.fn(), update: vi.fn(), count: vi.fn() },
+  operationLog: { create: vi.fn() },
   candidate: { count: vi.fn() },
 }));
 
@@ -65,9 +66,11 @@ vi.mock('../../src/middleware/auth', () => ({
 import userRoutes from '../../src/routes/users';
 import interviewWorkbenchRoutes from '../../src/routes/interview';
 import interviewRoutes from '../../src/routes/interviews';
+import evaluationRoutes from '../../src/routes/evaluations';
 import { errorHandler } from '../../src/middleware/errorHandler';
 
 const INTERVIEW_ID = 'clhinterview0000000000001';
+const EVALUATION_ID = 'clhevaluation000000000001';
 const CANDIDATE_ID = 'clhcandidate0000000000001';
 
 const EVAL_BODY = {
@@ -89,6 +92,7 @@ describe('INTV-S 面试权限修正', () => {
     app.use('/api/users', userRoutes);
     app.use('/api/interview', interviewWorkbenchRoutes);
     app.use('/api/interviews', interviewRoutes);
+    app.use('/api/evaluations', evaluationRoutes);
     app.use(errorHandler);
 
     vi.clearAllMocks();
@@ -103,7 +107,10 @@ describe('INTV-S 面试权限修正', () => {
     mockPrisma.interview.findMany.mockResolvedValue([]);
     mockPrisma.interview.findUnique.mockResolvedValue(null);
     mockPrisma.interview.update.mockResolvedValue({ id: INTERVIEW_ID, status: 'completed' });
-    mockPrisma.interviewEvaluation.upsert.mockResolvedValue({
+    mockPrisma.interviewEvaluation.count.mockResolvedValue(1);
+    mockPrisma.operationLog.create.mockResolvedValue({});
+    mockPrisma.interviewEvaluation.update.mockResolvedValue({
+      id: EVALUATION_ID,
       interviewId: INTERVIEW_ID,
       interviewerId: 'user-1',
       overallScore: 4,
@@ -118,7 +125,7 @@ describe('INTV-S 面试权限修正', () => {
       await request(app).get('/api/users/interviewer-options').set('x-test-role', 'none').expect(401);
     });
 
-    it('hr 登录 → 200，仅 id/name/department，不含 email/phone', async () => {
+    it('hr 登录 → 200，仅返回面试官选项字段，不含敏感信息', async () => {
       const res = await request(app)
         .get('/api/users/interviewer-options')
         .set('x-test-role', 'hr')
@@ -137,7 +144,7 @@ describe('INTV-S 面试权限修正', () => {
       }
       expect(mockPrisma.user.findMany).toHaveBeenCalledWith({
         where: { role: { in: ['interviewer', 'hr', 'hiring_manager', 'admin'] } },
-        select: { id: true, name: true, department: true },
+        select: { id: true, name: true, department: true, role: true },
         orderBy: { createdAt: 'asc' },
       });
     });
@@ -161,46 +168,44 @@ describe('INTV-S 面试权限修正', () => {
     });
   });
 
-  describe('PUT /api/interview/:id/evaluation', () => {
+  describe('PUT /api/evaluations/:id', () => {
     it('hiring_manager 且是该场面试官 → 200', async () => {
-      mockPrisma.interview.findMany.mockImplementation(async (args: {
-        select?: { interviewers?: boolean };
-      }) => {
-        if (isVisibilityQuery(args)) {
-          return [{ id: INTERVIEW_ID, interviewers: [{ id: 'user-1', name: '丙' }] }];
-        }
-        return [];
+      mockPrisma.interviewEvaluation.findUnique.mockResolvedValue({
+        id: EVALUATION_ID,
+        interviewId: INTERVIEW_ID,
+        interviewerId: 'user-1',
       });
       mockPrisma.interview.findUnique.mockResolvedValue({
         id: INTERVIEW_ID,
         status: 'completed',
-        interviewers: [{ id: 'user-1', name: '丙' }],
+        feedbackStatus: 'pending',
       });
 
       const res = await request(app)
-        .put(`/api/interview/${INTERVIEW_ID}/evaluation`)
+        .put(`/api/evaluations/${EVALUATION_ID}`)
         .set('x-test-role', 'hiring_manager')
         .send(EVAL_BODY)
         .expect(200);
       expect(res.body.success).toBe(true);
+      expect(mockPrisma.interviewEvaluation.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: EVALUATION_ID } })
+      );
     });
 
     it('hiring_manager 但不是该场面试官 → 403', async () => {
-      mockPrisma.interview.findMany.mockImplementation(async (args: {
-        select?: { interviewers?: boolean };
-      }) => {
-        if (isVisibilityQuery(args)) {
-          return [{ id: INTERVIEW_ID, interviewers: [{ id: 'other-user', name: '乙' }] }];
-        }
-        return [];
+      mockPrisma.interviewEvaluation.findUnique.mockResolvedValue({
+        id: EVALUATION_ID,
+        interviewId: INTERVIEW_ID,
+        interviewerId: 'other-user',
       });
 
       const res = await request(app)
-        .put(`/api/interview/${INTERVIEW_ID}/evaluation`)
+        .put(`/api/evaluations/${EVALUATION_ID}`)
         .set('x-test-role', 'hiring_manager')
         .send(EVAL_BODY)
         .expect(403);
-      expect(res.body.error).toContain('无权评估');
+      expect(res.body.error).toContain('只能提交本人的面试评估');
+      expect(mockPrisma.interviewEvaluation.update).not.toHaveBeenCalled();
     });
   });
 

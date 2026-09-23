@@ -78,7 +78,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 - **仓库结构**：Monorepo，使用 `pnpm workspaces` 管理
 - **主要包**：`client`（前端）、`server`（后端）、`e2e`（端到端测试）
-- **Node 版本要求**：`>= 18.0.0`
+- **Node 版本要求**：`^20.19.0 || ^22.13.0 || >=24.0.0`（jsdom 29 要求）
 - **主要文档语言**：中文（代码注释、README、提交信息均以中文为主）
 
 ---

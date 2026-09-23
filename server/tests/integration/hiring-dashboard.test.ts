@@ -42,8 +42,9 @@ const HIRING_PATHS = [
   '/api/hiring/interviews',
 ];
 
-const deptJobFilter = { departments: { array_contains: ['技术部'] } };
-const emptyJobFilter = { id: { in: [] } };
+const ownedJobFilter = {
+  OR: [{ hiringManagerId: 'user-1' }, { collaboratorIds: { array_contains: ['user-1'] } }],
+};
 
 describe('hiring 工作台', () => {
   let app: express.Application;
@@ -67,7 +68,7 @@ describe('hiring 工作台', () => {
       status: 'pending_approval',
       candidateId: 'cand-1',
       candidate: {
-        candidateJobs: [{ job: { departments: ['技术部'] } }],
+        candidateJobs: [{ job: { hiringManagerId: 'user-1', collaboratorIds: [] } }],
       },
     });
     mockPrisma.offer.update.mockResolvedValue({
@@ -88,18 +89,18 @@ describe('hiring 工作台', () => {
     expect(approveRes.body.success).toBe(true);
   });
 
-  it('hiring_manager 有 department 时只看到本部门数据', async () => {
+  it('hiring_manager 只统计本人负责或协作的职位数据', async () => {
     await request(app)
       .get('/api/hiring/overview')
       .set('x-test-role', 'hiring_manager')
       .expect(200);
 
     expect(mockPrisma.job.count).toHaveBeenCalledWith({
-      where: { ...deptJobFilter, status: 'open' },
+      where: { ...ownedJobFilter, status: 'open' },
     });
     expect(mockPrisma.candidateJob.count).toHaveBeenCalledWith({
       where: {
-        job: deptJobFilter,
+        job: ownedJobFilter,
         candidate: { deletedAt: null },
       },
     });
@@ -108,19 +109,19 @@ describe('hiring 工作台', () => {
         status: 'pending_approval',
         candidate: {
           deletedAt: null,
-          candidateJobs: { some: { job: deptJobFilter } },
+          candidateJobs: { some: { job: ownedJobFilter } },
         },
       },
     });
     expect(mockPrisma.interview.count).toHaveBeenCalledWith({
       where: expect.objectContaining({
         status: 'scheduled',
-        job: deptJobFilter,
+        job: ownedJobFilter,
       }),
     });
   });
 
-  it('hiring_manager 无 department（null）时返回空数据', async () => {
+  it('hiring_manager 无 department 时仍按本人负责或协作的职位查询', async () => {
     mockPrisma.job.count.mockResolvedValue(0);
     mockPrisma.candidateJob.count.mockResolvedValue(0);
     mockPrisma.offer.count.mockResolvedValue(0);
@@ -137,14 +138,14 @@ describe('hiring 工作台', () => {
     expect(res.body.data.pendingOffers).toBe(0);
     expect(res.body.data.scheduledInterviews).toBe(0);
     expect(mockPrisma.job.count).toHaveBeenCalledWith({
-      where: { ...emptyJobFilter, status: 'open' },
+      where: { ...ownedJobFilter, status: 'open' },
     });
     expect(mockPrisma.offer.count).toHaveBeenCalledWith({
       where: {
         status: 'pending_approval',
         candidate: {
           deletedAt: null,
-          candidateJobs: { some: { job: emptyJobFilter } },
+          candidateJobs: { some: { job: ownedJobFilter } },
         },
       },
     });

@@ -6,6 +6,7 @@ import { errorHandler } from '../../src/middleware/errorHandler';
 
 // Mock prisma（使用真实 service 层，仅替换数据库访问）
 const mockPrisma = vi.hoisted(() => ({
+  interview: { findUnique: vi.fn(), update: vi.fn() },
   interviewEvaluation: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -58,6 +59,13 @@ describe('面试评估接口（越权防护）', () => {
     mockPrisma.interviewEvaluation.findUnique.mockResolvedValue({
       id: EVALUATION_ID,
       interviewerId: 'user-1',
+      interviewId: 'clhinterview0000000000001',
+    });
+    mockPrisma.interviewEvaluation.count.mockResolvedValue(1);
+    mockPrisma.interview.findUnique.mockResolvedValue({
+      id: 'clhinterview0000000000001',
+      status: 'completed',
+      feedbackStatus: 'pending',
     });
     mockPrisma.interviewEvaluation.update.mockResolvedValue({
       id: EVALUATION_ID,

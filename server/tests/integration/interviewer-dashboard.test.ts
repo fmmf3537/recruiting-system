@@ -2,15 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import interviewWorkbenchRoutes from '../../src/routes/interview';
+import evaluationRoutes from '../../src/routes/evaluations';
 import { errorHandler } from '../../src/middleware/errorHandler';
 
 const mockPrisma = vi.hoisted(() => ({
   interview: {
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    update: vi.fn(),
   },
   interviewEvaluation: {
-    upsert: vi.fn(),
+    findUnique: vi.fn(),
+    update: vi.fn(),
+    count: vi.fn(),
   },
 }));
 
@@ -34,6 +38,8 @@ vi.mock('../../src/middleware/auth', () => ({
 
 const ASSIGNED_ID = 'clhinterview0000000000001';
 const OTHER_ID = 'clhinterview0000000000002';
+const ASSIGNED_EVALUATION_ID = 'clhevaluation000000000001';
+const OTHER_EVALUATION_ID = 'clhevaluation000000000002';
 const EVAL_BODY = {
   dimensions: [{ name: '技术能力', score: 4, comment: '' }],
   overallScore: 4,
@@ -58,6 +64,7 @@ describe('interviewer 工作台', () => {
     app = express();
     app.use(express.json());
     app.use('/api/interview', interviewWorkbenchRoutes);
+    app.use('/api/evaluations', evaluationRoutes);
     app.use(errorHandler);
 
     vi.clearAllMocks();
@@ -92,13 +99,21 @@ describe('interviewer 工作台', () => {
     mockPrisma.interview.findUnique.mockResolvedValue({
       id: ASSIGNED_ID,
       status: 'completed',
+      feedbackStatus: 'pending',
     });
-    mockPrisma.interviewEvaluation.upsert.mockImplementation(async () => {
+    mockPrisma.interviewEvaluation.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({
+      id: where.id,
+      interviewId: where.id === ASSIGNED_EVALUATION_ID ? ASSIGNED_ID : OTHER_ID,
+      interviewerId: where.id === ASSIGNED_EVALUATION_ID ? 'user-1' : 'user-2',
+    }));
+    mockPrisma.interviewEvaluation.count.mockResolvedValue(1);
+    mockPrisma.interviewEvaluation.update.mockImplementation(async ({ data }: { data: { overallScore: number } }) => {
       submitted = true;
       return {
+        id: ASSIGNED_EVALUATION_ID,
         interviewId: ASSIGNED_ID,
         interviewerId: 'user-1',
-        overallScore: 4,
+        overallScore: data.overallScore,
         conclusion: 'pass',
         submittedAt: new Date(),
       };
@@ -111,7 +126,7 @@ describe('interviewer 工作台', () => {
       expect(res.body.success).toBe(true);
     }
     const putRes = await request(app)
-      .put(`/api/interview/${ASSIGNED_ID}/evaluation`)
+      .put(`/api/evaluations/${ASSIGNED_EVALUATION_ID}`)
       .set('x-test-role', 'interviewer')
       .send(EVAL_BODY)
       .expect(200);
@@ -145,40 +160,32 @@ describe('interviewer 工作台', () => {
     expect(emptyRes.body.data).toEqual([]);
   });
 
-  it('hr 访问 /api/interview/* 返回 403；hiring_manager（作为该场面试官）可访问', async () => {
-    const paths = [
-      ...WORKBENCH_GETS,
-      `/api/interview/${ASSIGNED_ID}/evaluation`,
-    ];
-    // INTV-S：hiring_manager 兼具面试官身份，工作台开放（/today 等 GET 放行）；
-    // 评估 PUT 走「该场面试官」精确校验——mock 的 authenticate 固定 userId=user-1，
-    // 且 ASSIGNED_ID 的 interviewers 含 user-1（见上方 findMany mock），
-    // 故 HM 作为该场面试官 PUT 应 200；hr 不在工作台角色 → 全部 403
+  it('hr 不能访问面试工作台，但评估归属本人时可提交；hiring_manager 可访问工作台', async () => {
+    // 工作台按角色控制，评估提交按预生成的评估记录归属控制。
     for (const path of WORKBENCH_GETS) {
       await request(app).get(path).set('x-test-role', 'hr').expect(403);
       await request(app).get(path).set('x-test-role', 'hiring_manager').expect(200);
     }
     await request(app)
-      .put(`/api/interview/${ASSIGNED_ID}/evaluation`)
+      .put(`/api/evaluations/${ASSIGNED_EVALUATION_ID}`)
       .set('x-test-role', 'hr')
       .send(EVAL_BODY)
-      .expect(403);
+      .expect(200);
     await request(app)
-      .put(`/api/interview/${ASSIGNED_ID}/evaluation`)
+      .put(`/api/evaluations/${ASSIGNED_EVALUATION_ID}`)
       .set('x-test-role', 'hiring_manager')
       .send(EVAL_BODY)
       .expect(200);
-    expect(paths.length).toBeGreaterThan(0);
   });
 
   it('interviewer 试图评估不被指派的面试返回 403', async () => {
     const res = await request(app)
-      .put(`/api/interview/${OTHER_ID}/evaluation`)
+      .put(`/api/evaluations/${OTHER_EVALUATION_ID}`)
       .set('x-test-role', 'interviewer')
       .send(EVAL_BODY)
       .expect(403);
-    expect(res.body.error).toBe('无权评估此面试');
-    expect(mockPrisma.interviewEvaluation.upsert).not.toHaveBeenCalled();
+    expect(res.body.error).toBe('只能提交本人的面试评估');
+    expect(mockPrisma.interviewEvaluation.update).not.toHaveBeenCalled();
   });
 
   it('interviewer 评估后，pending 列表少一条、history 多一条', async () => {
@@ -195,7 +202,7 @@ describe('interviewer 工作台', () => {
     expect(historyBefore.body.data).toHaveLength(0);
 
     await request(app)
-      .put(`/api/interview/${ASSIGNED_ID}/evaluation`)
+      .put(`/api/evaluations/${ASSIGNED_EVALUATION_ID}`)
       .set('x-test-role', 'interviewer')
       .send(EVAL_BODY)
       .expect(200);
@@ -215,23 +222,17 @@ describe('interviewer 工作台', () => {
 
   it('interviewer 改自己已填的评估，overallScore 更新', async () => {
     submitted = true;
-    mockPrisma.interviewEvaluation.upsert.mockResolvedValue({
-      interviewId: ASSIGNED_ID,
-      interviewerId: 'user-1',
-      overallScore: 5,
-      conclusion: 'pass',
-    });
-
     const res = await request(app)
-      .put(`/api/interview/${ASSIGNED_ID}/evaluation`)
+      .put(`/api/evaluations/${ASSIGNED_EVALUATION_ID}`)
       .set('x-test-role', 'interviewer')
       .send({ ...EVAL_BODY, overallScore: 5 })
       .expect(200);
 
     expect(res.body.data.overallScore).toBe(5);
-    expect(mockPrisma.interviewEvaluation.upsert).toHaveBeenCalledWith(
+    expect(mockPrisma.interviewEvaluation.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        update: expect.objectContaining({ overallScore: 5 }),
+        where: { id: ASSIGNED_EVALUATION_ID },
+        data: expect.objectContaining({ overallScore: 5 }),
       })
     );
   });

@@ -36,7 +36,7 @@ A full-featured **Applicant Tracking System (ATS)** built with modern web techno
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20.19.x、22.13+（22.x）或 24+
 - pnpm (recommended) or npm
 - PostgreSQL 14+
 
@@ -364,7 +364,7 @@ P-5 之前用 `member` 角色的用户，**自动迁移到 `hr`**。
 
 ### 环境要求
 
-- Node.js 18+
+- Node.js 20.19.x、22.13+（22.x）或 24+
 - pnpm（推荐）或 npm
 - PostgreSQL 14+
 
