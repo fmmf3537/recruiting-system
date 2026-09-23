@@ -25,6 +25,12 @@ const mockPrisma = vi.hoisted(() => ({
   candidateTag: {
     findMany: vi.fn(),
   },
+  offer: {
+    findMany: vi.fn(), // 列表「下一步」引导的 Offer 摘要
+  },
+  interview: {
+    findMany: vi.fn(), // 列表「下一步」引导的待进行面试
+  },
 }));
 
 vi.mock('../../src/lib/prisma', () => ({
@@ -62,6 +68,9 @@ describe('候选人软删除 + 回收站', () => {
     mockPrisma.stageRecord.findMany.mockResolvedValue([]);
     mockPrisma.candidateJob.findMany.mockResolvedValue([]);
     mockPrisma.candidateTag.findMany.mockResolvedValue([]);
+    // 列表「下一步」引导数据默认空（clearAllMocks 会清掉实现，须每次重设）
+    mockPrisma.offer.findMany.mockResolvedValue([]);
+    mockPrisma.interview.findMany.mockResolvedValue([]);
   });
 
   it('deleteCandidate 后 deletedAt 被设置，记录被软删除（DB 中仍存在）', async () => {

@@ -1,121 +1,60 @@
 <template>
   <div class="candidate-detail-page">
-    <PageHeader v-if="candidate" title="候选人详情" :description="`${candidate.name} · ${candidate.currentStage}`">
-      <template #actions>
-        <el-button @click="$router.back()"><el-icon><ArrowLeft /></el-icon>返回列表</el-button>
-        <el-button @click="handleEdit"><el-icon><Edit /></el-icon>编辑资料</el-button>
-        <el-button type="primary" :disabled="!canAdvance" @click="handleAdvance"><el-icon><Promotion /></el-icon>推进到下一阶段</el-button>
-      </template>
-    </PageHeader>
+    <template v-if="candidate">
+      <!-- A. 候选人头部带 -->
+      <CandidateHeaderBand
+        :candidate="candidate"
+        :can-advance="canAdvance"
+        :can-delete="canDelete"
+        @back="goToList"
+        @edit="handleEdit"
+        @advance="handleAdvance"
+        @email="showSendEmail"
+        @delete="handleDelete"
+      />
 
-    <div v-if="candidate" class="detail-container">
-      <!-- 左侧：基本信息 -->
-      <div class="left-column">
-        <el-card shadow="never" class="info-card">
-          <template #header>
-            <div class="card-header">
-              <span>招聘摘要</span>
-              <div class="header-actions">
-                <el-button type="warning" link @click="showResumeUpload = true">
-                  <el-icon><Upload /></el-icon>重新解析
-                </el-button>
-                <el-button v-if="canDelete" type="danger" link @click="handleDelete">
-                  <el-icon><Delete /></el-icon>删除
-                </el-button>
+      <!-- B. 下一步行动条（状态机驱动） -->
+      <NextActionBanner :action="nextAction" @primary="handleNextAction" />
+
+      <!-- C. Pipeline 横向步骤条 -->
+      <PipelineStepper
+        :steps="stepperSteps"
+        :current-index="currentStageIndex"
+        @select="handleStepSelect"
+      />
+
+      <div class="main-grid">
+        <!-- 左轨：联系与归属 / 标签与技能 / 简历（内嵌预览） -->
+        <aside class="left-rail">
+          <el-card shadow="never" class="rail-card">
+            <template #header>
+              <div class="rail-card-header">
+                <span>联系与归属</span>
+                <el-button type="primary" link size="small" @click="handleEdit">编辑</el-button>
+              </div>
+            </template>
+            <div class="rail-item">
+              <div class="k">手机号</div>
+              <div class="v">{{ candidate.phone || '未填写' }}</div>
+            </div>
+            <div class="rail-item">
+              <div class="k">邮箱</div>
+              <div class="v">{{ candidate.email || '未填写' }}</div>
+            </div>
+            <div class="rail-item">
+              <div class="k">授权状态</div>
+              <div class="v" :class="candidate.consentAt ? 'is-authorized' : 'is-unauthorized'">
+                {{ candidate.consentAt ? `已授权（${formatDate(candidate.consentAt)}）` : '未授权' }}
               </div>
             </div>
-          </template>
+            <div v-if="candidate.consentNote" class="rail-item">
+              <div class="k">授权备注</div>
+              <div class="v consent-note">{{ candidate.consentNote }}</div>
+            </div>
+          </el-card>
 
-          <div class="profile-section">
-            <el-avatar :size="80" :icon="UserFilled" />
-            <h3 class="candidate-name">{{ candidate.name }}</h3>
-            <el-tag :type="getStatusType(candidate.stageStatus)">
-              {{ candidate.currentStage }} · {{ getStatusText(candidate.stageStatus) }}
-            </el-tag>
-          </div>
-
-          <div class="profile-summary">
-            <div><span>应聘职位</span><b>{{ candidate.jobs.map((job) => job.title).join('、') || '人才库候选人' }}</b></div>
-            <div><span>负责人</span><b>{{ candidate.currentAssignee?.name || '未指派' }}</b></div>
-            <div><span>手机号</span><b>{{ candidate.phone || '未填写' }}</b></div>
-            <div><span>授权状态</span><b :class="candidate.consentAt ? 'is-authorized' : 'is-unauthorized'">{{ candidate.consentAt ? '已授权' : '未授权' }}</b></div>
-          </div>
-
-          <!-- 个保法合规：未记录授权同意的候选人给出醒目标识 -->
-          <el-alert
-            v-if="!candidate.consentAt"
-            type="warning"
-            :closable="false"
-            show-icon
-            class="consent-alert"
-            title="尚未记录候选人授权同意，请在编辑页补充授权信息"
-          />
-
-          <el-descriptions :column="1" border class="info-desc">
-            <el-descriptions-item label="授权状态">
-              <el-tag v-if="candidate.consentAt" type="success" size="small">
-                已授权（{{ formatDateTime(candidate.consentAt) }}）
-              </el-tag>
-              <el-tag v-else type="danger" size="small">未授权</el-tag>
-              <div v-if="candidate.consentNote" class="consent-note">{{ candidate.consentNote }}</div>
-            </el-descriptions-item>
-            <!-- UI-S0：空值展示语义化（数据未改动） -->
-            <el-descriptions-item label="性别">
-              <span v-if="!candidate.gender" class="ui-placeholder">未填写</span>
-              <span v-else>{{ candidate.gender }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="年龄">
-              <span v-if="!candidate.age" class="ui-placeholder">未填写</span>
-              <span v-else>{{ candidate.age }}岁</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="手机号">{{ candidate.phone }}</el-descriptions-item>
-            <el-descriptions-item label="邮箱">{{ candidate.email }}</el-descriptions-item>
-            <el-descriptions-item label="学历">
-              <span v-if="!candidate.education" class="ui-placeholder">未填写</span>
-              <span v-else>{{ candidate.education }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="院校">
-              <span v-if="!candidate.school" class="ui-placeholder">未填写</span>
-              <span v-else>{{ candidate.school }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="工作年限">
-              <span v-if="!candidate.workYears" class="ui-placeholder">未填写</span>
-              <span v-else>{{ candidate.workYears }}年</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="当前公司">
-              <span v-if="!candidate.currentCompany" class="ui-placeholder">未填写</span>
-              <span v-else>{{ candidate.currentCompany }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="当前职位">
-              <span v-if="!candidate.currentPosition" class="ui-placeholder">未填写</span>
-              <span v-else>{{ candidate.currentPosition }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="期望薪资">
-              <span v-if="!candidate.expectedSalary" class="ui-placeholder">未填写</span>
-              <span v-else>{{ candidate.expectedSalary }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="来源渠道">{{ candidate.source }}</el-descriptions-item>
-            <el-descriptions-item label="推荐人">
-              <span v-if="!candidate.referrer" class="ui-placeholder">未填写</span>
-              <span v-else>{{ candidate.referrer }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="简历附件">
-              <el-link
-                v-if="candidate.resumeUrl"
-                :href="resumeDownloadUrl"
-                target="_blank"
-                type="primary"
-                @click="handleResumeView"
-              >
-                下载简历
-              </el-link>
-              <!-- UI-S0：空值展示语义化（数据未改动） -->
-              <span v-else class="ui-placeholder">未填写</span>
-            </el-descriptions-item>
-          </el-descriptions>
-
-          <div class="tags-section">
-            <h4>标签</h4>
+          <el-card shadow="never" class="rail-card">
+            <template #header><span>标签与技能</span></template>
             <div class="tag-editor">
               <el-tag
                 v-for="tag in candidate.tags || []"
@@ -123,8 +62,8 @@
                 size="small"
                 :color="tag.color"
                 effect="light"
-                class="detail-tag"
                 closable
+                class="detail-tag"
                 @close="handleRemoveTag(tag.id)"
               >
                 {{ tag.name }}
@@ -134,7 +73,7 @@
                 placeholder="+ 添加标签"
                 size="small"
                 clearable
-                style="width: 120px"
+                class="tag-select"
                 @change="handleAddTag"
               >
                 <el-option
@@ -145,83 +84,146 @@
                 />
               </el-select>
             </div>
+            <div v-if="candidate.skills?.length" class="skills-block">
+              <div class="k">技能</div>
+              <div class="skills-wrapper">
+                <el-tag
+                  v-for="skill in candidate.skills"
+                  :key="skill"
+                  size="small"
+                  type="primary"
+                  effect="light"
+                  class="skill-tag"
+                >
+                  {{ skill }}
+                </el-tag>
+              </div>
+            </div>
+          </el-card>
+
+          <el-card shadow="never" class="rail-card">
+            <template #header><span>简历</span></template>
+            <div v-if="candidate.resumeUrl" class="resume-block">
+              <button type="button" class="resume-inline" @click="showResumePreview = !showResumePreview">
+                <el-icon><Document /></el-icon>
+                <span class="resume-name">候选人简历</span>
+                <span class="resume-toggle">{{ showResumePreview ? '收起 ▴' : '内嵌预览 ▾' }}</span>
+              </button>
+              <!-- 内嵌预览：resolveFileUrl 附带 ?token=，iframe 可直接加载 -->
+              <iframe
+                v-if="showResumePreview"
+                :src="resumeDownloadUrl"
+                class="resume-frame"
+                title="简历预览"
+              ></iframe>
+              <div class="resume-links">
+                <el-link
+                  :href="resumeDownloadUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  type="primary"
+                  @click="handleResumeView"
+                >
+                  下载
+                </el-link>
+                <el-button type="primary" link size="small" @click="showResumeUpload = true">
+                  重新解析
+                </el-button>
+              </div>
+            </div>
+            <el-empty v-else description="暂无简历附件" :image-size="50" />
+          </el-card>
+        </aside>
+
+        <!-- 主区：Tab 化内容 -->
+        <section class="center-card">
+          <div class="tabs">
+            <button
+              v-for="t in tabDefs"
+              :key="t.key"
+              type="button"
+              class="tab"
+              :class="{ active: activeTab === t.key }"
+              @click="activeTab = t.key"
+            >
+              {{ t.label }}
+              <span v-if="t.dot" class="tab-dot"></span>
+            </button>
           </div>
 
-          <div v-if="candidate.skills?.length" class="skills-section">
-            <h4>技能标签</h4>
-            <div class="skills-wrapper">
-              <el-tag
-                v-for="skill in candidate.skills"
-                :key="skill"
-                size="small"
-                type="primary"
-                effect="light"
-                class="skill-tag"
+          <div class="tab-body">
+            <!-- 人才档案 -->
+            <div v-show="activeTab === 'profile'" class="tab-pane">
+              <CandidateProfilePanel :candidate="candidate" />
+            </div>
+            <!-- 面试评估 -->
+            <div v-show="activeTab === 'interview'" class="tab-pane">
+              <CandidateInterviewsPanel
+                :interviews="candidateInterviews"
+                :feedbacks="candidate.interviewFeedbacks || []"
+                :evaluations-map="evaluationsMap"
+                :can-manage="canManageInterview"
+                :load-error="interviewsLoadError"
+                @schedule="handleScheduleInterview"
+                @view="handleViewInterview"
+                @edit="handleEditInterview"
+                @cancel="handleCancelInterview"
+                @add-feedback="handleAddFeedback"
+                @retry="fetchCandidateInterviews"
+              />
+            </div>
+            <!-- 沟通记录 -->
+            <div v-show="activeTab === 'comm'" class="tab-pane">
+              <CandidateCommunicationsPanel
+                :communications="candidateCommunications"
+                :load-error="communicationsLoadError"
+                @add="handleAddCommunication"
+                @retry="fetchCandidateCommunications"
+              />
+            </div>
+            <!-- Offer · 入职 -->
+            <div v-show="activeTab === 'offer'" class="tab-pane">
+              <CandidateOfferPanel
+                :offer="candidate.offer"
+                :candidate-name="candidate.name"
+                :can-create-offer="canCreateOffer"
+                :onboarding-tasks="onboardingTasks"
+                :tasks-load-error="onboardingLoadError"
+                @create-offer="handleCreateOffer"
+                @view-offer="handleViewOffer"
+                @generate-tasks="generateOnboardingTasks"
+                @toggle-task="toggleTaskStatus"
+                @retry-tasks="fetchOnboardingTasks"
+              />
+            </div>
+          </div>
+        </section>
+
+        <!-- 右轨：招聘进展 + AI 匹配 -->
+        <aside class="right-rail">
+          <el-card shadow="never" class="rail-card">
+            <template #header>
+              <div class="rail-card-header">
+                <span>招聘进展</span>
+                <span class="stage-count">共 {{ pipelineProgress.length }} 个阶段</span>
+              </div>
+            </template>
+            <el-alert v-if="pipelineLoadError" type="error" :closable="false" show-icon>
+              <template #title>
+                招聘流程加载失败
+                <el-button link type="primary" @click="fetchPipelineStages(candidate.id)">重新加载</el-button>
+              </template>
+            </el-alert>
+            <el-empty v-else-if="!pipelineProgress.length" description="暂无招聘流程" :image-size="60" />
+            <el-timeline v-else>
+              <el-timeline-item
+                v-for="item in pipelineProgress"
+                :key="item.stage"
+                :type="item.record ? getTimelineType(item.record.status) : 'info'"
+                :color="item.record ? getTimelineColor(item.record.status) : '#cbd7e6'"
+                :timestamp="item.record ? formatDate(item.record.enteredAt) : '完成上一阶段后开放'"
+                placement="top"
               >
-                {{ skill }}
-              </el-tag>
-            </div>
-          </div>
-
-          <div v-if="candidate.intro" class="intro-section">
-            <h4>候选人说明</h4>
-            <p>{{ candidate.intro }}</p>
-          </div>
-        </el-card>
-
-      </div>
-
-      <!-- 招聘工作区：将主操作和当前流程固定在同一列，避免操作栏被流程高度推到下一行 -->
-      <div class="workflow-column">
-        <!-- 操作栏 -->
-        <el-card shadow="never" class="action-card">
-          <div class="action-buttons">
-            <el-button
-              v-if="canAdvance"
-              type="primary"
-              size="large"
-              @click="handleAdvance"
-              style="width: 100%"
-            >
-              <el-icon><Promotion /></el-icon>推进流程
-            </el-button>
-            <el-button type="default" size="large" @click="handleAddFeedback" style="width: 100%">
-              <el-icon><ChatDotRound /></el-icon>补录历史反馈
-            </el-button>
-            <el-button
-              type="default"
-              size="large"
-              @click="showSendEmail"
-              style="width: 100%"
-            >
-              <el-icon><Message /></el-icon>发送邮件
-            </el-button>
-          </div>
-        </el-card>
-
-        <el-card shadow="never" class="timeline-card">
-          <template #header>
-            <div class="card-header">
-              <span>招聘进展</span>
-              <span class="stage-count">共 {{ pipelineProgress.length }} 个阶段</span>
-            </div>
-          </template>
-
-          <el-alert v-if="pipelineLoadError" type="error" :closable="false" show-icon>
-            <template #title>招聘流程加载失败</template>
-            <el-button link type="primary" @click="fetchPipelineStages(candidate.id)">重新加载</el-button>
-          </el-alert>
-          <el-empty v-else-if="!pipelineProgress.length" description="暂无招聘流程" :image-size="60" />
-          <el-timeline v-else>
-            <el-timeline-item
-              v-for="item in pipelineProgress"
-              :key="item.stage"
-              :type="item.record ? getTimelineType(item.record.status) : 'info'"
-              :color="item.record ? getTimelineColor(item.record.status) : '#cbd7e6'"
-              :timestamp="item.record ? formatDate(item.record.enteredAt) : '完成上一阶段后开放'"
-              placement="top"
-            >
-              <div class="timeline-content">
                 <div class="timeline-header">
                   <span class="stage-name" :class="{ 'future-stage': !item.record }">{{ item.stage }}</span>
                   <el-tag v-if="item.record" :type="getStatusType(item.record.status)" size="small">
@@ -229,241 +231,19 @@
                   </el-tag>
                   <el-tag v-else size="small" type="info">未开放</el-tag>
                 </div>
-                <div v-if="item.record?.assignee" class="assignee">
-                  负责人：{{ item.record.assignee.name }}
-                </div>
-                <div v-if="item.record?.rejectReason" class="reject-reason">
+                <div v-if="item.record?.assignee" class="timeline-sub">负责人：{{ item.record.assignee.name }}</div>
+                <div v-if="item.record?.rejectReason" class="timeline-reject">
                   淘汰原因：{{ item.record.rejectReason }}
                 </div>
-                <div v-if="item.record?.note" class="note">
-                  {{ item.record.note }}
-                </div>
-                <div v-if="item.isCurrent" class="current-stage-actions">
-                  <el-button
-                    v-if="item.stage.includes('面') && currentInterview"
-                    type="primary"
-                    @click="handleViewInterview(currentInterview)"
-                  >
-                    查看面试与评估
-                  </el-button>
-                  <el-button
-                    v-else-if="item.stage.includes('面') && canManageInterview"
-                    type="primary"
-                    @click="handleScheduleInterview"
-                  >
-                    安排面试
-                  </el-button>
-                  <el-button v-if="candidate.resumeUrl" @click="openResume">查看简历</el-button>
-                  <el-button
-                    v-if="item.stage.includes('Offer') && !candidate.offer"
-                    type="primary"
-                    @click="handleCreateOffer"
-                  >
-                    创建 Offer
-                  </el-button>
-                  <el-button
-                    v-else-if="item.stage.includes('Offer') && candidate.offer"
-                    @click="handleViewOffer"
-                  >
-                    查看 Offer（{{ getOfferStatusText(candidate.offer.status) }}）
-                  </el-button>
-                </div>
-              </div>
-            </el-timeline-item>
-          </el-timeline>
-        </el-card>
+                <div v-if="item.record?.note" class="timeline-sub">{{ item.record.note }}</div>
+              </el-timeline-item>
+            </el-timeline>
+          </el-card>
 
-        <!-- AI 匹配分放入招聘工作区，获得完整内容宽度 -->
-        <MatchScoreCard :candidate-id="candidate.id" :candidate-jobs="candidate.jobs" />
-
-        <!-- Offer 信息 -->
-        <el-card v-if="candidate.offer" shadow="never" class="offer-card">
-          <template #header>
-            <div class="card-header">
-              <span>Offer 信息</span>
-              <div class="offer-status">
-                <el-tag :type="getOfferStatusType(candidate.offer.status)">
-                  {{ getOfferStatusText(candidate.offer.status) }}
-                </el-tag>
-                <el-tag :type="getOfferResultType(candidate.offer.result)">
-                  {{ getOfferResultText(candidate.offer.result) }}
-                </el-tag>
-              </div>
-            </div>
-          </template>
-          <el-descriptions :column="1">
-            <el-descriptions-item v-if="candidate.offer.approveNote" label="审批意见">
-              {{ candidate.offer.approveNote }}
-            </el-descriptions-item>
-            <!-- UI-S0：空值展示语义化（数据未改动） -->
-            <el-descriptions-item label="薪资">
-              <span v-if="!candidate.offer.salary" class="ui-placeholder">未填写</span>
-              <span v-else>{{ candidate.offer.salary }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="Offer日期">{{ formatDate(candidate.offer.offerDate) }}</el-descriptions-item>
-            <el-descriptions-item label="预计入职">
-              <span v-if="!candidate.offer.expectedJoinDate" class="ui-placeholder">未填写</span>
-              <span v-else>{{ formatDate(candidate.offer.expectedJoinDate) }}</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="入职状态">
-              <el-tag :type="candidate.offer.joined ? 'success' : 'info'">
-                {{ candidate.offer.joined ? '已入职' : '未入职' }}
-              </el-tag>
-            </el-descriptions-item>
-          </el-descriptions>
-        </el-card>
-
-        <!-- 入职任务清单 -->
-        <el-card v-if="candidate.offer?.result === 'accepted' || candidate.offer?.joined" shadow="never" class="onboarding-card">
-          <template #header>
-            <div class="card-header">
-              <span>入职任务清单</span>
-              <el-button v-if="!onboardingTasks.length" type="primary" link size="small" @click="generateOnboardingTasks">
-                生成标准任务
-              </el-button>
-            </div>
-          </template>
-          <el-alert v-if="onboardingLoadError" type="error" :closable="false" show-icon>
-            <template #title>入职任务加载失败</template>
-            <el-button link type="primary" @click="fetchOnboardingTasks">重新加载</el-button>
-          </el-alert>
-          <el-empty v-else-if="!onboardingTasks.length" description="暂无入职任务" :image-size="60" />
-          <div v-else class="task-list">
-            <div
-              v-for="task in onboardingTasks"
-              :key="task.id"
-              class="task-item"
-            >
-              <el-checkbox
-                :model-value="task.status === 'completed'"
-                @change="(val: boolean) => toggleTaskStatus(task.id, val)"
-              >
-                <span :class="{ 'task-completed': task.status === 'completed' }">{{ task.title }}</span>
-              </el-checkbox>
-              <el-tag size="small" type="info">{{ task.category }}</el-tag>
-            </div>
-          </div>
-        </el-card>
-
-        <!-- 面试安排 -->
-        <el-card shadow="never" class="interview-card">
-          <template #header>
-            <div class="card-header">
-              <span>面试安排</span>
-              <el-button type="primary" link size="small" @click="handleScheduleInterview">
-                + 安排面试
-              </el-button>
-            </div>
-          </template>
-          <el-alert v-if="interviewsLoadError" type="error" :closable="false" show-icon>
-            <template #title>面试安排加载失败</template>
-            <el-button link type="primary" @click="fetchCandidateInterviews">重新加载</el-button>
-          </el-alert>
-          <div v-else-if="candidateInterviews.length" class="interview-list">
-            <div v-for="iv in candidateInterviews" :key="iv.id" class="interview-item">
-              <div class="interview-header">
-                <div class="interview-tags">
-                  <el-tag size="small">{{ iv.round }}</el-tag>
-                  <el-tag size="small" :type="getInterviewStatusType(iv.status)">
-                    {{ getInterviewStatusText(iv.status) }}
-                  </el-tag>
-                </div>
-                <div class="interview-actions">
-                  <el-button type="primary" link size="small" @click="handleViewInterview(iv)">
-                    面试与评估
-                  </el-button>
-                  <el-button v-if="canManageInterview && iv.status === 'scheduled'" type="primary" link size="small" @click="handleEditInterview(iv)">
-                    编辑
-                  </el-button>
-                  <el-button type="warning" link size="small" @click="handleCancelInterview(iv)">
-                    取消
-                  </el-button>
-                </div>
-              </div>
-              <div class="interview-detail">
-                <div class="detail-row">
-                  <el-icon><Clock /></el-icon>
-                  <span>{{ formatDateTime(iv.scheduledAt) }}（{{ iv.duration }}分钟）</span>
-                </div>
-                <div class="detail-row">
-                  <el-icon><User /></el-icon>
-                  <span>{{ iv.interviewers?.map((i: any) => i.name).join('、') }}</span>
-                </div>
-                <div v-if="iv.location" class="detail-row">
-                  <el-icon><Location /></el-icon>
-                  <span>{{ iv.location }}</span>
-                </div>
-              </div>
-              <div v-if="iv.notes" class="interview-notes">{{ iv.notes }}</div>
-            </div>
-          </div>
-          <el-empty v-else description="暂无面试安排" :image-size="50" />
-        </el-card>
-
-        <!-- 面试反馈 -->
-        <el-card shadow="never" class="feedback-card">
-          <template #header>
-            <div class="card-header">
-              <span>面试反馈</span>
-            </div>
-          </template>
-          <div v-if="candidate.interviewFeedbacks?.length" class="feedback-list">
-            <div
-              v-for="feedback in candidate.interviewFeedbacks"
-              :key="feedback.id"
-              class="feedback-item"
-            >
-              <div class="feedback-header">
-                <span class="round">{{ feedback.round }}</span>
-                <el-tag :type="getFeedbackConclusionType(feedback.conclusion)" size="small">
-                  {{ getFeedbackConclusionText(feedback.conclusion) }}
-                </el-tag>
-              </div>
-              <div class="feedback-info">
-                <span>面试官：{{ feedback.interviewerName }}</span>
-                <span>{{ formatDate(feedback.interviewTime) }}</span>
-              </div>
-              <div class="feedback-content">{{ feedback.feedbackContent }}</div>
-              <div v-if="feedback.rejectReason" class="reject-reason">
-                淘汰原因：{{ feedback.rejectReason }}
-              </div>
-            </div>
-          </div>
-          <el-empty v-else description="暂无面试反馈" />
-        </el-card>
-
-        <!-- 沟通记录 -->
-        <el-card shadow="never" class="communication-card">
-          <template #header>
-            <div class="card-header">
-              <span>沟通记录</span>
-              <el-button type="primary" link size="small" @click="handleAddCommunication">
-                + 添加记录
-              </el-button>
-            </div>
-          </template>
-          <el-alert v-if="communicationsLoadError" type="error" :closable="false" show-icon>
-            <template #title>沟通记录加载失败</template>
-            <el-button link type="primary" @click="fetchCandidateCommunications">重新加载</el-button>
-          </el-alert>
-          <div v-else-if="candidateCommunications.length" class="communication-list">
-            <div v-for="log in candidateCommunications" :key="log.id" class="communication-item">
-              <div class="comm-header">
-                <el-tag size="small" type="info">{{ log.type }}</el-tag>
-                <span class="comm-time">{{ formatDateTime(log.createdAt) }}</span>
-                <span class="comm-author">{{ log.createdBy?.name || '—' }}</span>
-              </div>
-              <div class="comm-content">{{ log.content }}</div>
-              <div v-if="log.result" class="comm-result">结果：{{ log.result }}</div>
-              <div v-if="log.followUpAt" class="comm-followup">
-                <el-icon><Clock /></el-icon> 跟进提醒：{{ formatDateTime(log.followUpAt) }}
-              </div>
-            </div>
-          </div>
-          <el-empty v-else description="暂无沟通记录" :image-size="50" />
-        </el-card>
+          <MatchScoreCard :candidate-id="candidate.id" :candidate-jobs="candidate.jobs" />
+        </aside>
       </div>
-    </div>
+    </template>
 
     <el-empty v-else-if="notFound" description="候选人不存在或已被删除">
       <el-button type="primary" @click="goToList">返回列表</el-button>
@@ -476,7 +256,13 @@
           <el-input :model-value="candidate?.email" disabled />
         </el-form-item>
         <el-form-item label="选择模板">
-          <el-select v-model="selectedTemplateId" placeholder="可选" clearable style="width: 100%" @change="handleTemplateChange">
+          <el-select
+            v-model="selectedTemplateId"
+            placeholder="可选"
+            clearable
+            style="width: 100%"
+            @change="handleTemplateChange"
+          >
             <el-option
               v-for="tpl in emailTemplates"
               :key="tpl.id"
@@ -499,7 +285,7 @@
       </el-form>
       <template #footer>
         <el-button @click="emailDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSendEmail" :loading="emailSubmitting">发送</el-button>
+        <el-button type="primary" :loading="emailSubmitting" @click="handleSendEmail">发送</el-button>
       </template>
     </el-dialog>
 
@@ -524,11 +310,14 @@
             <el-radio-button label="rejected">淘汰</el-radio-button>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="isInterviewStage(advanceForm.stage) && advanceForm.status !== 'rejected'" label="下一步">
+        <el-form-item
+          v-if="isInterviewStage(advanceForm.stage) && advanceForm.status !== 'rejected'"
+          label="下一步"
+        >
           <el-checkbox v-model="scheduleAfterAdvance">推进后立即安排面试</el-checkbox>
           <div class="form-tip">阶段保存成功后会打开已预填候选人的面试安排表单。</div>
         </el-form-item>
-        <el-form-item label="淘汰原因" prop="rejectReason" v-if="advanceForm.status === 'rejected'">
+        <el-form-item v-if="advanceForm.status === 'rejected'" label="淘汰原因" prop="rejectReason">
           <el-input v-model="advanceForm.rejectReason" type="textarea" :rows="3" placeholder="请填写淘汰原因" />
         </el-form-item>
         <el-form-item label="备注" prop="note">
@@ -537,7 +326,7 @@
       </el-form>
       <template #footer>
         <el-button @click="advanceDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleAdvanceSubmit" :loading="advanceSubmitting">确认推进</el-button>
+        <el-button type="primary" :loading="advanceSubmitting" @click="handleAdvanceSubmit">确认推进</el-button>
       </template>
     </el-dialog>
 
@@ -555,7 +344,12 @@
           <el-input v-model="feedbackForm.interviewerName" placeholder="请输入面试官姓名" />
         </el-form-item>
         <el-form-item label="面试时间" prop="interviewTime">
-          <el-date-picker v-model="feedbackForm.interviewTime" type="datetime" placeholder="选择面试时间" style="width: 100%" />
+          <el-date-picker
+            v-model="feedbackForm.interviewTime"
+            type="datetime"
+            placeholder="选择面试时间"
+            style="width: 100%"
+          />
         </el-form-item>
         <el-form-item label="面试结论" prop="conclusion">
           <el-radio-group v-model="feedbackForm.conclusion">
@@ -567,13 +361,13 @@
         <el-form-item label="反馈内容" prop="feedbackContent">
           <el-input v-model="feedbackForm.feedbackContent" type="textarea" :rows="4" placeholder="请填写面试反馈内容" />
         </el-form-item>
-        <el-form-item label="淘汰原因" prop="rejectReason" v-if="feedbackForm.conclusion === 'reject'">
+        <el-form-item v-if="feedbackForm.conclusion === 'reject'" label="淘汰原因" prop="rejectReason">
           <el-input v-model="feedbackForm.rejectReason" type="textarea" :rows="2" placeholder="请填写淘汰原因" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="feedbackDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleFeedbackSubmit" :loading="feedbackSubmitting">确认添加</el-button>
+        <el-button type="primary" :loading="feedbackSubmitting" @click="handleFeedbackSubmit">确认添加</el-button>
       </template>
     </el-dialog>
 
@@ -607,7 +401,7 @@
       </el-form>
       <template #footer>
         <el-button @click="commDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleCommSubmit" :loading="commSubmitting">确认添加</el-button>
+        <el-button type="primary" :loading="commSubmitting" @click="handleCommSubmit">确认添加</el-button>
       </template>
     </el-dialog>
 
@@ -623,10 +417,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onActivated } from 'vue';
+import { ref, reactive, computed, watch, onMounted, onActivated } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus';
-import { ArrowLeft, Edit, Delete, UserFilled, Promotion, ChatDotRound, Upload, Message, Clock, User, Location } from '@element-plus/icons-vue';
+import { Document } from '@element-plus/icons-vue';
 import {
   getCandidateById,
   advanceStage,
@@ -644,12 +438,20 @@ import { getEmailTemplates, sendEmail, type EmailTemplate } from '@/api/email';
 import { getTasksByCandidate, updateTask, generateDefaultTasks, type OnboardingTask } from '@/api/onboarding-task';
 import { getCandidateInterviews, cancelInterview, type InterviewItem } from '@/api/interview';
 import { getCandidateCommunications, createCommunication, type CommunicationItem } from '@/api/communication';
+import { getInterviewEvaluations, type InterviewEvaluationItem } from '@/api/evaluation';
 import { useAuthStore } from '@/stores/auth';
 import { resolveFileUrl } from '@/utils/file';
 import { useResumeParserStore } from '@/stores/resumeParser';
 import MatchScoreCard from '@/components/candidates/MatchScoreCard.vue';
-import PageHeader from '@/components/common/PageHeader.vue';
 import ScheduleInterviewDialog from '@/components/interviews/ScheduleInterviewDialog.vue';
+import CandidateHeaderBand from '@/components/candidates/detail/CandidateHeaderBand.vue';
+import NextActionBanner from '@/components/candidates/detail/NextActionBanner.vue';
+import PipelineStepper from '@/components/candidates/detail/PipelineStepper.vue';
+import CandidateProfilePanel from '@/components/candidates/detail/CandidateProfilePanel.vue';
+import CandidateInterviewsPanel from '@/components/candidates/detail/CandidateInterviewsPanel.vue';
+import CandidateCommunicationsPanel from '@/components/candidates/detail/CandidateCommunicationsPanel.vue';
+import CandidateOfferPanel from '@/components/candidates/detail/CandidateOfferPanel.vue';
+import { useCandidateNextAction } from '@/components/candidates/detail/useCandidateNextAction';
 import ResumeUpload from './ResumeUpload.vue';
 
 const route = useRoute();
@@ -665,6 +467,7 @@ const resumeDownloadUrl = computed(() =>
 const loading = ref(false);
 const notFound = ref(false);
 const showResumeUpload = ref(false);
+const showResumePreview = ref(false);
 const tagOptions = ref<Tag[]>([]);
 const onboardingTasks = ref<OnboardingTask[]>([]);
 const pipelineLoadError = ref(false);
@@ -675,10 +478,8 @@ const tagSelectValue = ref('');
 
 // 面试安排
 const candidateInterviews = ref<InterviewItem[]>([]);
-const currentInterview = computed(() =>
-  candidateInterviews.value.find((interview) => interview.status === 'scheduled')
-  || candidateInterviews.value[0]
-);
+// 面试 ID → 该场所有面试官结构化评估（详情页聚合展示用）
+const evaluationsMap = ref<Map<string, InterviewEvaluationItem[]>>(new Map());
 const scheduleDialogVisible = ref(false);
 const editingInterview = ref<InterviewItem | null>(null);
 
@@ -720,16 +521,16 @@ function handleResumeView() {
   logResumeView(candidateId).catch((e) => console.error('简历查看日志记录失败:', e));
 }
 
-function openResume() {
-  if (!resumeDownloadUrl.value) return;
-  handleResumeView();
-  window.open(resumeDownloadUrl.value, '_blank', 'noopener');
-}
-
 // 计算是否可推进
 const canAdvance = computed(() => {
   if (!candidate.value) return false;
   return candidate.value.stageStatus !== 'rejected' && candidate.value.currentStage !== '入职';
+});
+
+// 当前阶段为 Offer 且尚无 Offer 记录时可创建
+const canCreateOffer = computed(() => {
+  if (!candidate.value) return false;
+  return candidate.value.currentStage.includes('Offer') && !candidate.value.offer;
 });
 
 // 计算是否可删除
@@ -760,6 +561,52 @@ async function handleDelete() {
   }
 }
 
+// 通用格式化与状态映射（纯函数，提前定义供下方计算属性使用）
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit' });
+}
+
+function getStatusType(status: string): string {
+  return { in_progress: 'warning', passed: 'success', rejected: 'danger' }[status] || 'info';
+}
+
+function getStatusText(status: string): string {
+  return { in_progress: '进行中', passed: '已通过', rejected: '已淘汰' }[status] || status;
+}
+
+function getTimelineType(status: string): any {
+  return { passed: 'success', rejected: 'danger', in_progress: 'primary' }[status] || '';
+}
+
+function getTimelineColor(status: string): string {
+  return { passed: '#67c23a', rejected: '#f56c6c', in_progress: '#409eff' }[status] || '';
+}
+
+function handleEdit() {
+  router.push(`/candidates/${candidateId}/edit`);
+}
+
+function goToList() {
+  router.push('/candidates');
+}
+
+// ============ 「下一步行动」状态机 与 Tab 聚焦 ============
+const { nextAction, defaultTab } = useCandidateNextAction(candidate, candidateInterviews, evaluationsMap);
+
+const activeTab = ref('profile');
+const tabInitialized = ref(false);
+// Tab 定义：红点 = 与该候选人当前最紧迫事项相关
+const tabDefs = computed(() => [
+  { key: 'profile', label: '人才档案', dot: false },
+  {
+    key: 'interview',
+    label: '面试评估',
+    dot: ['schedule-interview', 'pending-evaluations'].includes(nextAction.value.kind),
+  },
+  { key: 'comm', label: '沟通记录', dot: false },
+  { key: 'offer', label: 'Offer · 入职', dot: nextAction.value.kind.startsWith('offer') },
+]);
+
 // 推进流程
 const advanceDialogVisible = ref(false);
 const advanceSubmitting = ref(false);
@@ -779,6 +626,33 @@ const pipelineProgress = computed(() => {
     isCurrent: candidate.value?.currentStage === stage,
   }));
 });
+
+// 步骤条数据：阶段名 + 进入日期
+const stepperSteps = computed(() =>
+  pipelineProgress.value.map((item) => ({
+    stage: item.stage,
+    date: item.record ? formatDate(item.record.enteredAt) : '',
+  }))
+);
+
+const currentStageIndex = computed(() => {
+  const idx = candidateStages.value.indexOf(candidate.value?.currentStage || '');
+  if (idx !== -1) return idx;
+  const fallback = pipelineProgress.value.findIndex((item) => item.isCurrent);
+  return fallback === -1 ? 0 : fallback;
+});
+
+// 点击步骤条跳转对应内容 Tab
+function handleStepSelect(index: number) {
+  const stage = stepperSteps.value[index]?.stage || '';
+  if (stage.includes('面')) {
+    activeTab.value = 'interview';
+  } else if (stage.includes('Offer') || stage.includes('入职')) {
+    activeTab.value = 'offer';
+  } else {
+    activeTab.value = 'profile';
+  }
+}
 
 const availableStages = computed(() => {
   if (!candidate.value) return [];
@@ -812,30 +686,34 @@ function isInterviewStage(stage: string): boolean {
   return stage.includes('面');
 }
 
-// 面试反馈
-const feedbackDialogVisible = ref(false);
-const feedbackSubmitting = ref(false);
-const feedbackFormRef = ref<FormInstance>();
+// ============ 数据获取 ============
+async function fetchPipelineStages(targetCandidateId: string) {
+  pipelineLoadError.value = false;
+  try {
+    const res = await getPipelineStages(targetCandidateId, { silentError: true });
+    candidateStages.value = res.data;
+  } catch {
+    candidateStages.value = [];
+    pipelineLoadError.value = true;
+  }
+}
 
-const feedbackForm = reactive<InterviewFeedbackParams>({
-  round: '初试',
-  interviewerName: '',
-  interviewTime: new Date().toISOString(),
-  conclusion: 'pass',
-  feedbackContent: '',
-  rejectReason: '',
-});
+// 并行拉取每场的结构化评估（单场失败不阻塞整体）
+async function fetchInterviewEvaluations(interviews: InterviewItem[]) {
+  const map = new Map<string, InterviewEvaluationItem[]>();
+  await Promise.all(
+    interviews.map(async (iv) => {
+      try {
+        const res = await getInterviewEvaluations(iv.id);
+        map.set(iv.id, res.data || []);
+      } catch {
+        // 单场评估加载失败不阻塞整体
+      }
+    })
+  );
+  evaluationsMap.value = map;
+}
 
-const feedbackRules: FormRules = {
-  round: [{ required: true, message: '请选择面试轮次', trigger: 'change' }],
-  interviewerName: [{ required: true, message: '请输入面试官姓名', trigger: 'blur' }],
-  interviewTime: [{ required: true, message: '请选择面试时间', trigger: 'change' }],
-  conclusion: [{ required: true, message: '请选择面试结论', trigger: 'change' }],
-  feedbackContent: [{ required: true, message: '请填写反馈内容', trigger: 'blur' }],
-  rejectReason: [{ required: true, message: '请填写淘汰原因', trigger: 'blur' }],
-};
-
-// 获取候选人详情
 async function fetchCandidateDetail() {
   loading.value = true;
   notFound.value = false;
@@ -857,14 +735,42 @@ async function fetchCandidateDetail() {
   }
 }
 
-async function fetchPipelineStages(targetCandidateId: string) {
-  pipelineLoadError.value = false;
+// 获取候选人的面试安排，并拉取每场的结构化评估
+async function fetchCandidateInterviews() {
+  if (!candidateId) return;
+  interviewsLoadError.value = false;
   try {
-    const res = await getPipelineStages(targetCandidateId, { silentError: true });
-    candidateStages.value = res.data;
+    const res = await getCandidateInterviews(candidateId, { silentError: true }) as any;
+    if (res.success) {
+      candidateInterviews.value = res.data || [];
+      fetchInterviewEvaluations(candidateInterviews.value);
+    }
   } catch {
-    candidateStages.value = [];
-    pipelineLoadError.value = true;
+    interviewsLoadError.value = true;
+  }
+}
+
+async function fetchOnboardingTasks() {
+  onboardingLoadError.value = false;
+  try {
+    const res = await getTasksByCandidate(candidateId, { silentError: true });
+    if (res.success) onboardingTasks.value = res.data;
+  } catch {
+    onboardingLoadError.value = true;
+  }
+}
+
+// 获取候选人的沟通记录
+async function fetchCandidateCommunications() {
+  if (!candidateId) return;
+  communicationsLoadError.value = false;
+  try {
+    const res = await getCandidateCommunications(candidateId, { silentError: true }) as any;
+    if (res.success) {
+      candidateCommunications.value = res.data || [];
+    }
+  } catch {
+    communicationsLoadError.value = true;
   }
 }
 
@@ -913,74 +819,34 @@ async function handleRemoveTag(tagId: string) {
   }
 }
 
-// 方法
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+// 安排面试：打开本页内嵌弹窗（预填当前候选人）
+function handleScheduleInterview() {
+  editingInterview.value = null;
+  scheduleDialogVisible.value = true;
 }
 
-function formatDateTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+function handleViewInterview(iv: InterviewItem) {
+  router.push(`/interviews/${iv.id}`);
 }
 
-function getStatusType(status: string): string {
-  return { 'in_progress': 'warning', 'passed': 'success', 'rejected': 'danger' }[status] || 'info';
+function handleEditInterview(iv: InterviewItem) {
+  editingInterview.value = iv;
+  scheduleDialogVisible.value = true;
 }
 
-function getStatusText(status: string): string {
-  return { 'in_progress': '进行中', 'passed': '已通过', 'rejected': '已淘汰' }[status] || status;
-}
-
-function getTimelineType(status: string): any {
-  return { 'passed': 'success', 'rejected': 'danger', 'in_progress': 'primary' }[status] || '';
-}
-
-function getTimelineColor(status: string): string {
-  return { 'passed': '#67c23a', 'rejected': '#f56c6c', 'in_progress': '#409eff' }[status] || '';
-}
-
-function getOfferStatusType(status: string): string {
-  return {
-    draft: 'info',
-    pending_approval: 'warning',
-    approved: 'success',
-    rejected: 'danger',
-    sent: 'primary',
-  }[status] || 'info';
-}
-
-function getOfferStatusText(status: string): string {
-  return {
-    draft: '草稿待提交',
-    pending_approval: '待审批',
-    approved: '已审批',
-    rejected: '已驳回',
-    sent: '已发送',
-  }[status] || status;
-}
-
-function getOfferResultType(result: string): string {
-  return { 'pending': 'warning', 'accepted': 'success', 'rejected': 'danger' }[result] || 'info';
-}
-
-function getOfferResultText(result: string): string {
-  return { 'pending': '待确认', 'accepted': '已接受', 'rejected': '已拒绝' }[result] || result;
-}
-
-function getFeedbackConclusionType(conclusion: string): string {
-  return { 'pass': 'success', 'reject': 'danger', 'pending': 'warning' }[conclusion] || 'info';
-}
-
-function getFeedbackConclusionText(conclusion: string): string {
-  return { 'pass': '通过', 'reject': '淘汰', 'pending': '待定' }[conclusion] || conclusion;
-}
-
-function handleEdit() {
-  router.push(`/candidates/${candidateId}/edit`);
-}
-
-function goToList() {
-  router.push('/candidates');
+async function handleCancelInterview(iv: InterviewItem) {
+  try {
+    const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消面试', {
+      type: 'warning',
+      inputPlaceholder: '取消原因（可选）',
+      inputType: 'text',
+    }) as { value: string };
+    await cancelInterview(iv.id, reason || undefined);
+    ElMessage.success('面试已取消');
+    fetchCandidateInterviews();
+  } catch {
+    /* 用户关闭确认框 */
+  }
 }
 
 function handleAdvance() {
@@ -1016,6 +882,29 @@ async function handleAdvanceSubmit() {
   }
 }
 
+// ============ 面试反馈（补录历史） ============
+const feedbackDialogVisible = ref(false);
+const feedbackSubmitting = ref(false);
+const feedbackFormRef = ref<FormInstance>();
+
+const feedbackForm = reactive<InterviewFeedbackParams>({
+  round: '初试',
+  interviewerName: '',
+  interviewTime: new Date().toISOString(),
+  conclusion: 'pass',
+  feedbackContent: '',
+  rejectReason: '',
+});
+
+const feedbackRules: FormRules = {
+  round: [{ required: true, message: '请选择面试轮次', trigger: 'change' }],
+  interviewerName: [{ required: true, message: '请输入面试官姓名', trigger: 'blur' }],
+  interviewTime: [{ required: true, message: '请选择面试时间', trigger: 'change' }],
+  conclusion: [{ required: true, message: '请选择面试结论', trigger: 'change' }],
+  feedbackContent: [{ required: true, message: '请填写反馈内容', trigger: 'blur' }],
+  rejectReason: [{ required: true, message: '请填写淘汰原因', trigger: 'blur' }],
+};
+
 function handleAddFeedback() {
   feedbackForm.round = '初试';
   feedbackForm.interviewerName = '';
@@ -1044,6 +933,7 @@ async function handleFeedbackSubmit() {
   }
 }
 
+// ============ Offer ============
 function handleCreateOffer() {
   router.push(`/offers/create?candidateId=${candidateId}`);
 }
@@ -1051,6 +941,30 @@ function handleCreateOffer() {
 function handleViewOffer() {
   if (candidate.value?.offer) {
     router.push(`/offers/${candidateId}`);
+  }
+}
+
+async function generateOnboardingTasks() {
+  try {
+    const res = await generateDefaultTasks(candidateId);
+    if (res.success) {
+      ElMessage.success('标准任务已生成');
+      onboardingTasks.value = res.data;
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '生成失败');
+  }
+}
+
+async function toggleTaskStatus(taskId: string, completed: boolean) {
+  try {
+    const res = await updateTask(taskId, { status: completed ? 'completed' : 'pending' });
+    if (res.success) {
+      const idx = onboardingTasks.value.findIndex((t) => t.id === taskId);
+      if (idx !== -1) onboardingTasks.value[idx] = res.data;
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '更新失败');
   }
 }
 
@@ -1062,14 +976,6 @@ const emailSubject = ref('');
 const emailBody = ref('');
 const emailSubmitting = ref(false);
 
-function showSendEmail() {
-  selectedTemplateId.value = '';
-  emailSubject.value = '';
-  emailBody.value = '';
-  fetchEmailTemplates();
-  emailDialogVisible.value = true;
-}
-
 async function fetchEmailTemplates() {
   try {
     const res = await getEmailTemplates();
@@ -1077,6 +983,14 @@ async function fetchEmailTemplates() {
   } catch {
     // 静默失败
   }
+}
+
+function showSendEmail() {
+  selectedTemplateId.value = '';
+  emailSubject.value = '';
+  emailBody.value = '';
+  fetchEmailTemplates();
+  emailDialogVisible.value = true;
 }
 
 function handleTemplateChange(id: string) {
@@ -1117,69 +1031,7 @@ async function handleSendEmail() {
   }
 }
 
-async function fetchOnboardingTasks() {
-  onboardingLoadError.value = false;
-  try {
-    const res = await getTasksByCandidate(candidateId, { silentError: true });
-    if (res.success) onboardingTasks.value = res.data;
-  } catch {
-    onboardingLoadError.value = true;
-  }
-}
-
-async function generateOnboardingTasks() {
-  try {
-    const res = await generateDefaultTasks(candidateId);
-    if (res.success) {
-      ElMessage.success('标准任务已生成');
-      onboardingTasks.value = res.data;
-    }
-  } catch (error: any) {
-    ElMessage.error(error.message || '生成失败');
-  }
-}
-
-async function toggleTaskStatus(taskId: string, completed: boolean) {
-  try {
-    const res = await updateTask(taskId, { status: completed ? 'completed' : 'pending' });
-    if (res.success) {
-      const idx = onboardingTasks.value.findIndex((t) => t.id === taskId);
-      if (idx !== -1) onboardingTasks.value[idx] = res.data;
-    }
-  } catch (error: any) {
-    ElMessage.error(error.message || '更新失败');
-  }
-}
-
-// 获取候选人的面试安排
-async function fetchCandidateInterviews() {
-  if (!candidateId) return;
-  interviewsLoadError.value = false;
-  try {
-    const res = await getCandidateInterviews(candidateId, { silentError: true }) as any;
-    if (res.success) {
-      candidateInterviews.value = res.data || [];
-    }
-  } catch {
-    interviewsLoadError.value = true;
-  }
-}
-
-// 获取候选人的沟通记录
-async function fetchCandidateCommunications() {
-  if (!candidateId) return;
-  communicationsLoadError.value = false;
-  try {
-    const res = await getCandidateCommunications(candidateId, { silentError: true }) as any;
-    if (res.success) {
-      candidateCommunications.value = res.data || [];
-    }
-  } catch {
-    communicationsLoadError.value = true;
-  }
-}
-
-// 添加沟通记录
+// ============ 沟通记录 ============
 function handleAddCommunication() {
   commForm.type = '电话';
   commForm.content = '';
@@ -1211,43 +1063,38 @@ async function handleCommSubmit() {
   }
 }
 
-// 安排面试：打开本页内嵌弹窗（预填当前候选人）
-function handleScheduleInterview() {
-  editingInterview.value = null;
-  scheduleDialogVisible.value = true;
-}
-
-function handleViewInterview(iv: InterviewItem) {
-  router.push(`/interviews/${iv.id}`);
-}
-
-function handleEditInterview(iv: InterviewItem) {
-  editingInterview.value = iv;
-  scheduleDialogVisible.value = true;
-}
-
-async function handleCancelInterview(iv: InterviewItem) {
-  try {
-    const { value: reason } = await ElMessageBox.prompt('请输入取消原因', '取消面试', {
-      type: 'warning',
-      inputPlaceholder: '取消原因（可选）',
-      inputType: 'text',
-    }) as { value: string };
-    await cancelInterview(iv.id, reason || undefined);
-    ElMessage.success('面试已取消');
-    fetchCandidateInterviews();
-  } catch {
-    /* 用户关闭确认框 */
+// 下一步行动条主按钮 → 对应动作
+function handleNextAction() {
+  switch (nextAction.value.kind) {
+    case 'schedule-interview':
+      handleScheduleInterview();
+      break;
+    case 'pending-evaluations':
+      activeTab.value = 'interview';
+      break;
+    case 'offer-draft':
+    case 'offer-approve':
+      handleViewOffer();
+      break;
+    case 'stage-overdue':
+      handleAdvance();
+      break;
+    default:
+      break;
   }
 }
 
-function getInterviewStatusType(status: string): string {
-  return { 'scheduled': 'primary', 'completed': 'success', 'cancelled': 'info', 'no_show': 'danger' }[status] || 'info';
-}
-
-function getInterviewStatusText(status: string): string {
-  return { 'scheduled': '待进行', 'completed': '已完成', 'cancelled': '已取消', 'no_show': '未到' }[status] || status;
-}
+// 首次加载后按状态机结果聚焦 Tab（后续刷新不打扰用户手动切换）
+watch(
+  defaultTab,
+  (tab) => {
+    if (!tabInitialized.value && candidate.value) {
+      activeTab.value = tab;
+      tabInitialized.value = true;
+    }
+  },
+  { immediate: true }
+);
 
 onMounted(() => {
   fetchTags();
@@ -1266,358 +1113,289 @@ onActivated(() => {
 </script>
 
 <style scoped lang="scss">
-// 未授权提示样式
-.consent-alert {
-  margin-bottom: 16px;
+.candidate-detail-page {
+  padding: 4px 0 20px;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr) 300px;
+  gap: $ui-space-md;
+  margin-top: $ui-space-md;
+  align-items: start;
+
+  @media (max-width: 1200px) {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.left-rail,
+.right-rail {
+  display: flex;
+  flex-direction: column;
+  gap: $ui-space-md;
+  min-width: 0;
+}
+
+@media (max-width: 1200px) {
+  .right-rail {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+@media (max-width: 900px) {
+  .right-rail {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rail-card {
+  :deep(.el-card__header) {
+    padding: $ui-space-sm $ui-space-lg;
+    font-weight: 600;
+  }
+
+  :deep(.el-card__body) {
+    padding: $ui-space-md $ui-space-lg;
+  }
+}
+
+.rail-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+}
+
+.rail-item {
+  margin-bottom: $ui-space-md;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  .k {
+    font-size: $ui-font-sm;
+    color: $ui-gray-500;
+  }
+
+  .v {
+    font-size: $ui-font-base;
+    margin-top: 1px;
+    word-break: break-all;
+  }
+
+  .is-authorized {
+    color: $ui-color-success;
+  }
+
+  .is-unauthorized {
+    color: $ui-color-danger;
+  }
 }
 
 .consent-note {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
+  color: $ui-gray-500;
+  font-size: $ui-font-sm;
 }
 
-.candidate-detail-page {
-  padding: 4px 0 20px;
-  max-width: 1360px;
-  margin: 0 auto;
+.stage-count {
+  color: $ui-gray-500;
+  font-size: $ui-font-sm;
+  font-weight: 400;
+}
 
-  .detail-container {
-    display: grid;
-    grid-template-columns: minmax(320px, 360px) minmax(0, 1fr);
-    align-items: start;
-    gap: 20px;
+.tag-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $ui-space-sm;
+  align-items: center;
+}
 
-    @media (max-width: 1100px) {
-      grid-template-columns: 1fr;
-    }
+.detail-tag {
+  color: #fff;
+  border: none;
+}
+
+.tag-select {
+  width: 110px;
+}
+
+.skills-block {
+  margin-top: $ui-space-md;
+
+  .k {
+    font-size: $ui-font-sm;
+    color: $ui-gray-500;
+    margin-bottom: $ui-space-xs;
   }
+}
 
-  .left-column,
-  .workflow-column {
-    display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 20px;
-  }
+.skills-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $ui-space-sm;
+}
 
-  .card-header {
+.resume-block {
+  .resume-inline {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: $ui-space-sm;
+    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    font-size: $ui-font-sm;
+    background: #fff;
+    border: $ui-border-width solid $ui-border-color;
+    border-radius: $ui-radius-sm;
+    padding: $ui-space-sm $ui-space-md;
+    cursor: pointer;
+
+    &:hover {
+      border-color: $ui-color-primary;
+    }
+  }
+
+  .resume-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .resume-toggle {
+    color: $ui-color-primary;
+    flex-shrink: 0;
+  }
+
+  .resume-frame {
+    margin-top: $ui-space-sm;
+    width: 100%;
+    height: 320px;
+    border: $ui-border-width solid $ui-border-color-light;
+    border-radius: $ui-radius-sm;
+    background: $ui-gray-50;
+  }
+
+  .resume-links {
+    margin-top: $ui-space-sm;
+    display: flex;
+    gap: $ui-space-md;
+    align-items: center;
+  }
+}
+
+.center-card {
+  background: #fff;
+  border-radius: $ui-radius-md;
+  border: $ui-border-width solid $ui-border-color-light;
+  padding: 0 $ui-space-xl $ui-space-lg;
+  min-width: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: $ui-border-width solid $ui-border-color-light;
+}
+
+.tab {
+  padding: $ui-space-md 18px;
+  font-family: inherit;
+  font-size: $ui-font-md;
+  color: $ui-gray-700;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  position: relative;
+  cursor: pointer;
+
+  &:hover {
+    color: $ui-color-primary;
+  }
+
+  &.active {
+    color: $ui-color-primary;
+    font-weight: 600;
+    border-bottom-color: $ui-color-primary;
+  }
+}
+
+.tab-dot {
+  position: absolute;
+  top: 10px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: $ui-color-danger;
+}
+
+.tab-body {
+  padding-top: $ui-space-lg;
+}
+
+.tab-pane {
+  animation: fade-in 0.2s;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: $ui-space-sm;
+
+  .stage-name {
     font-weight: 500;
-
-    .header-actions {
-      display: flex;
-      gap: 8px;
-    }
+    font-size: $ui-font-md;
   }
 
-  .profile-summary {
-    margin: 18px 0 0;
-    padding-top: 10px;
-    border-top: 1px solid #ebeef5;
-
-    > div {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 8px 0;
-      font-size: 13px;
-    }
-
-    span { color: $ui-gray-500; }
-    b { text-align: right; word-break: break-word; }
-    .is-authorized { color: $ui-color-success; }
-    .is-unauthorized { color: $ui-color-danger; }
+  .future-stage {
+    color: $ui-gray-500;
   }
+}
 
-  .stage-count { color: $ui-gray-500; font-size: 13px; font-weight: 400; }
-  .future-stage { color: $ui-gray-500; }
-  .current-stage-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-  .offer-status { display: flex; gap: 8px; }
-  .form-tip { margin-top: 6px; color: $ui-gray-500; font-size: 12px; line-height: 1.5; }
+.timeline-sub {
+  margin-top: 6px;
+  font-size: $ui-font-sm;
+  color: $ui-gray-700;
+  word-break: break-all;
+}
 
-  .info-card {
-    .profile-section {
-      text-align: center;
-      padding: 4px 0 18px;
+.timeline-reject {
+  margin-top: 6px;
+  font-size: $ui-font-sm;
+  color: $ui-color-danger;
+  word-break: break-all;
+}
 
-      .candidate-name {
-        margin: 12px 0;
-        font-size: 18px;
-        font-weight: 600;
-      }
-    }
-
-    .info-desc {
-      margin-top: 20px;
-    }
-
-    .tags-section {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid #ebeef5;
-
-      h4 {
-        margin: 0 0 10px;
-        font-size: 14px;
-        color: #606266;
-      }
-
-      .tag-editor {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        align-items: center;
-      }
-
-      .detail-tag {
-        color: #fff;
-        border: none;
-      }
-    }
-
-    .skills-section {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid #ebeef5;
-
-      h4 {
-        margin: 0 0 10px;
-        font-size: 14px;
-        color: #606266;
-      }
-
-      .skills-wrapper {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .skill-tag {
-        margin: 0;
-      }
-    }
-
-    .intro-section {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 1px solid #ebeef5;
-
-      h4 {
-        margin: 0 0 10px;
-        font-size: 14px;
-        color: #606266;
-      }
-
-      p {
-        margin: 0;
-        color: #909399;
-        line-height: 1.6;
-      }
-    }
-  }
-
-  .timeline-card {
-    .timeline-content {
-      .timeline-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-
-        .stage-name {
-          font-weight: 500;
-          font-size: 16px;
-        }
-      }
-
-      .assignee,
-      .reject-reason,
-      .note {
-        margin-top: 8px;
-        font-size: 13px;
-        color: #606266;
-        word-break: break-all;
-        overflow-wrap: break-word;
-      }
-
-      .reject-reason {
-        color: #f56c6c;
-      }
-    }
-  }
-
-  .action-card {
-    border-left: 3px solid $ui-color-primary;
-    position: sticky;
-    top: 0;
-    z-index: 1;
-
-    .action-buttons {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-
-      .el-button {
-        width: 100% !important;
-        margin: 0;
-      }
-    }
-
-    @media (max-width: 640px) {
-      .action-buttons { grid-template-columns: 1fr; }
-    }
-  }
-
-  .offer-card {
-    :deep(.el-descriptions__label) {
-      width: 100px;
-    }
-  }
-
-  .onboarding-card {
-    .task-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-
-      .task-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 12px;
-        background-color: #f5f7fa;
-        border-radius: 6px;
-
-        .task-completed {
-          text-decoration: line-through;
-          color: #909399;
-        }
-      }
-    }
-  }
-
-  .feedback-card {
-    .feedback-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-
-      .feedback-item {
-        padding: 16px;
-        background-color: #f5f7fa;
-        border-radius: 8px;
-
-        .feedback-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 8px;
-
-          .round {
-            font-weight: 500;
-            font-size: 15px;
-          }
-        }
-
-        .feedback-info {
-          display: flex;
-          gap: 16px;
-          font-size: 13px;
-          color: #909399;
-          margin-bottom: 8px;
-        }
-
-        .feedback-content {
-          color: #606266;
-          line-height: 1.6;
-        }
-
-        .reject-reason {
-          margin-top: 8px;
-          color: #f56c6c;
-          font-size: 13px;
-        }
-      }
-    }
-  }
-
-  .interview-card {
-    margin-top: 16px;
-    .interview-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      .interview-item {
-        padding: 12px;
-        background: #f5f7fa;
-        border-radius: 8px;
-        .interview-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 8px;
-          .interview-tags {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-          }
-        }
-        .interview-detail {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-          font-size: 13px;
-          color: #606266;
-          .detail-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-          }
-        }
-        .interview-notes {
-          margin-top: 8px;
-          font-size: 13px;
-          color: #909399;
-          border-top: 1px dashed #dcdfe6;
-          padding-top: 8px;
-        }
-      }
-    }
-  }
-
-  .communication-card {
-    margin-top: 16px;
-    .communication-list {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      .communication-item {
-        padding: 12px;
-        background: #f5f7fa;
-        border-radius: 8px;
-        .comm-header {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 6px;
-          .comm-time { font-size: 12px; color: #909399; }
-          .comm-author { font-size: 12px; color: #909399; margin-left: auto; }
-        }
-        .comm-content { color: #303133; line-height: 1.6; }
-        .comm-result { margin-top: 4px; font-size: 13px; color: #67c23a; }
-        .comm-followup {
-          margin-top: 4px;
-          font-size: 13px;
-          color: #e6a23c;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-      }
-    }
-  }
+.form-tip {
+  margin-top: 6px;
+  color: $ui-gray-500;
+  font-size: $ui-font-sm;
+  line-height: 1.5;
 }
 </style>

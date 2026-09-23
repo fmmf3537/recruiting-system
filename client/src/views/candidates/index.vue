@@ -219,6 +219,14 @@
           </template>
         </el-table-column>
 
+        <el-table-column label="下一步" width="132" align="center">
+          <template #default="{ row }">
+            <span class="next-step" :class="`is-${nextStepMap.get(row.id)?.tone || 'info'}`">
+              {{ nextStepMap.get(row.id)?.text || '—' }}
+            </span>
+          </template>
+        </el-table-column>
+
         <el-table-column v-if="!uiNewListLayout" prop="stageStatus" label="状态" width="100" align="center">
           <template #default="{ row }">
             <!-- UI-S2：in_progress 视为正常留空；passed/rejected 显示弱化小标 -->
@@ -528,6 +536,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useAppStore } from '@/stores/app';
 import { useDictionaryStore } from '@/stores/dictionary';
 import { useResumeParserStore } from '@/stores/resumeParser';
+import { getListNextStep } from '@/utils/candidate-next-step';
 // F5-C：猎头渠道来源筛选（仅 admin / hr 加载）
 import { getAgencyList } from '@/api/agency';
 import ResumeUpload from './ResumeUpload.vue';
@@ -552,6 +561,8 @@ const visibleCandidateList = computed(() => {
   if (activeView.value === 'week') { const start = Date.now() - 7 * 24 * 60 * 60 * 1000; return candidateList.value.filter((item) => new Date(item.createdAt).getTime() >= start); }
   return candidateList.value;
 });
+// 「下一步」引导徽标：与详情页同一套状态机逻辑的轻量版，按行预算避免模板重复计算
+const nextStepMap = computed(() => new Map(candidateList.value.map((r) => [r.id, getListNextStep(r)])));
 const tagOptions = ref<Tag[]>([]);
 
 // 表格引用与多选
@@ -923,6 +934,37 @@ onActivated(() => { fetchCandidateList(); });
 
 <style scoped lang="scss">
 .candidates-page { padding: 4px 0 20px; }
+
+// 「下一步」引导徽标：与详情页下一步行动条同一套语义色
+.next-step {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: $ui-radius-pill;
+  font-size: $ui-font-sm;
+  line-height: 20px;
+  white-space: nowrap;
+
+  &.is-info {
+    background: $ui-gray-200;
+    color: $ui-gray-700;
+  }
+
+  &.is-todo {
+    background: #fdf6ec;
+    color: $ui-color-warning;
+  }
+
+  &.is-overdue {
+    background: #fef0f0;
+    color: $ui-color-danger;
+  }
+
+  &.is-success {
+    background: #f0f9eb;
+    color: $ui-color-success;
+  }
+}
+
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
   .title-section { .page-title { margin: 0; font-size: 24px; font-weight: 500; color: $ui-gray-900; }
     .page-subtitle { margin-top: 8px; font-size: 14px; color: $ui-gray-500; }

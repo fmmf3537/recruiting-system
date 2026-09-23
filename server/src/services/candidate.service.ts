@@ -145,7 +145,18 @@ export interface CreateCandidateResult {
 
 // 候选人列表返回类型
 export interface CandidateListResult {
-  candidates: Array<Candidate & { currentStage?: string; stageStatus?: string }>;
+  candidates: Array<
+    Candidate & {
+      currentStage?: string;
+      stageStatus?: string;
+      /** 当前阶段进入时间（列表「下一步」引导的超期计算用） */
+      currentStageEnteredAt?: Date | null;
+      /** 列表「下一步」引导：Offer 摘要（无 Offer 为 null） */
+      offer?: { status: string; result: string; joined: boolean; approverId: string | null } | null;
+      /** 列表「下一步」引导：最近一场待进行面试时间（无则为 null） */
+      nextInterviewAt?: Date | null;
+    }
+  >;
   total: number;
   page: number;
   pageSize: number;
@@ -526,12 +537,19 @@ export class CandidateService {
 
     const candidateIds = candidates.map((c) => c.id);
 
-    // 批量查询最新阶段记录、关联职位和标签（避免 Prisma 嵌套 JOIN 性能问题）
-    const [stageRecords, candidateJobs, candidateTags] = await Promise.all([
+    // 批量查询最新阶段记录、关联职位、标签、Offer 与待进行面试（避免 Prisma 嵌套 JOIN 性能问题）
+    // 后两类用于列表「下一步」引导列的状态机计算
+    const [stageRecords, candidateJobs, candidateTags, offers, scheduledInterviews] = await Promise.all([
       prisma.stageRecord.findMany({
         where: { candidateId: { in: candidateIds } },
         orderBy: { enteredAt: 'desc' },
-        select: { candidateId: true, stage: true, status: true, assignee: { select: { id: true, name: true } } },
+        select: {
+          candidateId: true,
+          stage: true,
+          status: true,
+          enteredAt: true,
+          assignee: { select: { id: true, name: true } },
+        },
       }),
       prisma.candidateJob.findMany({
         where: { candidateId: { in: candidateIds } },
@@ -545,9 +563,18 @@ export class CandidateService {
         where: { candidateId: { in: candidateIds } },
         include: { tag: true },
       }),
+      prisma.offer.findMany({
+        where: { candidateId: { in: candidateIds } },
+        select: { candidateId: true, status: true, result: true, joined: true, approverId: true },
+      }),
+      prisma.interview.findMany({
+        where: { candidateId: { in: candidateIds }, status: 'scheduled' },
+        select: { candidateId: true, scheduledAt: true },
+        orderBy: { scheduledAt: 'asc' },
+      }),
     ]);
 
-    const stageMap = new Map<string, { stage: string; status: string; assignee: { id: string; name: string } | null }>();
+    const stageMap = new Map<string, { stage: string; status: string; enteredAt: Date; assignee: { id: string; name: string } | null }>();
     for (const sr of stageRecords) {
       if (!stageMap.has(sr.candidateId)) {
         stageMap.set(sr.candidateId, sr);
@@ -570,12 +597,28 @@ export class CandidateService {
       tagsMap.get(ct.candidateId)!.push(ct);
     }
 
+    // 「下一步」引导数据：每候选人至多一条 Offer、最近一场待进行面试
+    const offerMap = new Map<string, (typeof offers)[number]>();
+    for (const o of offers) {
+      offerMap.set(o.candidateId, o);
+    }
+    const nextInterviewMap = new Map<string, Date>();
+    for (const iv of scheduledInterviews) {
+      if (!nextInterviewMap.has(iv.candidateId)) {
+        nextInterviewMap.set(iv.candidateId, iv.scheduledAt);
+      }
+    }
+
     // 格式化返回数据
     const formattedCandidates = candidates.map((candidate) => ({
       ...candidate,
       currentStage: stageMap.get(candidate.id)?.stage || '入库',
       stageStatus: stageMap.get(candidate.id)?.status || StageStatus.in_progress,
       currentAssignee: stageMap.get(candidate.id)?.assignee || null,
+      // 当前阶段进入时间（列表「下一步」引导的超期计算用）
+      currentStageEnteredAt: stageMap.get(candidate.id)?.enteredAt || null,
+      offer: offerMap.get(candidate.id) || null,
+      nextInterviewAt: nextInterviewMap.get(candidate.id) || null,
       candidateJobs: jobsMap.get(candidate.id) || [],
       tags: tagsMap.get(candidate.id)?.map((ct) => ct.tag) || [],
     }));

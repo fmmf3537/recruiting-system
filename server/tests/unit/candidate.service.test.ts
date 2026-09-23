@@ -32,8 +32,12 @@ vi.mock('../../src/lib/prisma', () => {
     },
     offer: {
       findUnique: vi.fn(),
+      findMany: vi.fn(), // 列表「下一步」引导的 Offer 摘要
       create: vi.fn(),
       update: vi.fn(),
+    },
+    interview: {
+      findMany: vi.fn(), // 列表「下一步」引导的待进行面试
     },
     user: {
       findUnique: vi.fn(),
@@ -71,6 +75,9 @@ describe('CandidateService - 候选人服务单元测试', () => {
     service = new CandidateService();
     vi.clearAllMocks();
     vi.mocked(prisma.candidateTag.findMany).mockResolvedValue([]);
+    // 列表「下一步」引导数据默认空（无 Offer / 无待进行面试）
+    vi.mocked(prisma.offer.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.interview.findMany).mockResolvedValue([]);
     // afterEach 的 resetAllMocks 会清掉实现，需每次重新注册 $transaction
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.mocked((prisma as any).$transaction).mockImplementation(async (cb: any) => cb(prisma));
@@ -181,6 +188,59 @@ describe('CandidateService - 候选人服务单元测试', () => {
 
       expect(result.candidates).toHaveLength(1);
       expect(result.total).toBe(1);
+    });
+
+    it('应附带「下一步」引导数据（Offer 摘要、待进行面试、阶段进入时间）', async () => {
+      vi.mocked(prisma.candidate.findMany).mockResolvedValue([
+        { id: 'candidate-1', name: '张三' } as any,
+      ]);
+      vi.mocked(prisma.candidate.count).mockResolvedValue(1);
+      vi.mocked(prisma.stageRecord.findMany).mockResolvedValue([
+        {
+          candidateId: 'candidate-1',
+          stage: '复试',
+          status: 'in_progress',
+          enteredAt: new Date('2026-09-20T08:00:00Z'),
+        },
+      ] as any);
+      vi.mocked(prisma.candidateJob.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.offer.findMany).mockResolvedValue([
+        {
+          candidateId: 'candidate-1',
+          status: 'draft',
+          result: 'pending',
+          joined: false,
+          approverId: null,
+        },
+      ] as any);
+      vi.mocked(prisma.interview.findMany).mockResolvedValue([
+        { candidateId: 'candidate-1', scheduledAt: new Date('2026-09-25T02:00:00Z') },
+      ] as any);
+
+      // pageSize 与相邻用例错开，避开列表查询缓存（cacheKey 含查询参数）
+      const result = await service.getCandidates({ page: 1, pageSize: 11 });
+      const row = result.candidates[0] as any;
+
+      expect(row.offer).toMatchObject({ status: 'draft', result: 'pending' });
+      expect(row.nextInterviewAt).toBeInstanceOf(Date);
+      expect(row.currentStageEnteredAt).toBeInstanceOf(Date);
+    });
+
+    it('无 Offer 且无待进行面试时引导字段为 null', async () => {
+      vi.mocked(prisma.candidate.findMany).mockResolvedValue([
+        { id: 'candidate-1', name: '张三' } as any,
+      ]);
+      vi.mocked(prisma.candidate.count).mockResolvedValue(1);
+      vi.mocked(prisma.stageRecord.findMany).mockResolvedValue([] as any);
+      vi.mocked(prisma.candidateJob.findMany).mockResolvedValue([] as any);
+
+      // pageSize 与相邻用例错开，避开列表查询缓存（cacheKey 含查询参数）
+      const result = await service.getCandidates({ page: 1, pageSize: 12 });
+      const row = result.candidates[0] as any;
+
+      expect(row.offer).toBeNull();
+      expect(row.nextInterviewAt).toBeNull();
+      expect(row.currentStageEnteredAt).toBeNull();
     });
   });
 

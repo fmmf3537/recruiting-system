@@ -199,6 +199,12 @@ export interface CandidateItem {
   currentAssignee?: { id: string; name: string } | null;
   tags?: Tag[];
   skills?: string[];
+  /** 列表「下一步」引导：当前阶段进入时间 */
+  currentStageEnteredAt?: string | null;
+  /** 列表「下一步」引导：Offer 摘要（无 Offer 为 null） */
+  offer?: { status: string; result: string; joined: boolean; approverId: string | null } | null;
+  /** 列表「下一步」引导：最近一场待进行面试时间 */
+  nextInterviewAt?: string | null;
 }
 
 // 候选人详情
