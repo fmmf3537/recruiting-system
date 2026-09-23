@@ -10,6 +10,10 @@ vi.mock('../../src/lib/prisma', () => ({
       update: vi.fn(),
       count: vi.fn(),
     },
+    interview: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
   },
 }));
 
@@ -29,6 +33,8 @@ describe('InterviewEvaluationService - 面试评估服务单元测试', () => {
   beforeEach(() => {
     service = new InterviewEvaluationService();
     vi.clearAllMocks();
+    vi.mocked(prisma.interviewEvaluation.count).mockResolvedValue(1);
+    vi.mocked(prisma.interview.findUnique).mockResolvedValue(null);
   });
 
   describe('createPendingEvaluations - 生成待填评估', () => {
@@ -60,6 +66,7 @@ describe('InterviewEvaluationService - 面试评估服务单元测试', () => {
       vi.mocked(prisma.interviewEvaluation.findUnique).mockResolvedValue({
         id: 'eval-1',
         interviewerId: 'user-1',
+        interviewId: 'interview-1',
       } as any);
       vi.mocked(prisma.interviewEvaluation.update).mockResolvedValue({
         id: 'eval-1',
@@ -80,6 +87,43 @@ describe('InterviewEvaluationService - 面试评估服务单元测试', () => {
           submittedAt: expect.any(Date),
         }),
       });
+    });
+
+    it('最后一位面试官提交后应标记全员反馈已齐并通知候选人负责人', async () => {
+      vi.mocked(prisma.interviewEvaluation.findUnique).mockResolvedValue({
+        id: 'eval-1',
+        interviewerId: 'user-1',
+        interviewId: 'interview-1',
+      } as any);
+      vi.mocked(prisma.interviewEvaluation.update).mockResolvedValue({
+        id: 'eval-1',
+        ...submitData,
+        submittedAt: new Date(),
+      } as any);
+      vi.mocked(prisma.interviewEvaluation.count).mockResolvedValue(0);
+      vi.mocked(prisma.interview.findUnique).mockResolvedValue({
+        id: 'interview-1',
+        round: '初试',
+        status: 'completed',
+        feedbackStatus: 'pending',
+        candidate: { name: '张三', createdById: 'hr-1' },
+      } as any);
+      vi.mocked(prisma.interview.update).mockResolvedValue({} as any);
+
+      await service.submitEvaluation('eval-1', 'user-1', submitData);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(prisma.interview.update).toHaveBeenCalledWith({
+        where: { id: 'interview-1' },
+        data: { feedbackStatus: 'all_submitted' },
+      });
+      expect(notificationService.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipientId: 'hr-1',
+          type: 'interview_feedback_completed',
+          businessId: 'interview-1',
+        })
+      );
     });
 
     it('评估记录不存在时应抛出 404', async () => {

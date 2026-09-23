@@ -1,5 +1,5 @@
 import type { InterviewEvaluation, Prisma } from '@prisma/client';
-import { InterviewStatus } from '@prisma/client';
+import { InterviewFeedbackStatus, InterviewStatus } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { AppError } from '../middleware/errorHandler';
 import * as notificationService from './notification.service';
@@ -65,7 +65,7 @@ export class InterviewEvaluationService {
       throw new AppError('只能提交本人的面试评估', 403);
     }
 
-    return prisma.interviewEvaluation.update({
+    const submitted = await prisma.interviewEvaluation.update({
       where: { id },
       data: {
         // Prisma Json 字段需要 InputJsonValue 类型，此处 dimensions 结构已受 zod 校验
@@ -75,6 +75,50 @@ export class InterviewEvaluationService {
         submittedAt: new Date(),
       },
     });
+    await this.refreshFeedbackStatus(evaluation.interviewId);
+    return submitted;
+  }
+
+  /**
+   * 评估提交后检查是否仍有待填项。最后一份评估提交时，通知候选人负责人进入招聘决策。
+   */
+  async refreshFeedbackStatus(interviewId: string): Promise<void> {
+    const [pendingCount, interview] = await Promise.all([
+      prisma.interviewEvaluation.count({
+        where: { interviewId, submittedAt: null },
+      }),
+      prisma.interview.findUnique({
+        where: { id: interviewId },
+        include: {
+          candidate: { select: { name: true, createdById: true } },
+        },
+      }),
+    ]);
+
+    if (!interview || interview.status !== InterviewStatus.completed) return;
+    const feedbackStatus =
+      pendingCount === 0
+        ? InterviewFeedbackStatus.all_submitted
+        : InterviewFeedbackStatus.pending;
+
+    if (interview.feedbackStatus === feedbackStatus) return;
+    await prisma.interview.update({
+      where: { id: interviewId },
+      data: { feedbackStatus },
+    });
+
+    if (feedbackStatus === InterviewFeedbackStatus.all_submitted) {
+      void notificationService
+        .createNotification({
+          recipientId: interview.candidate.createdById,
+          title: `面试反馈已齐：${interview.candidate.name}`,
+          content: `「${interview.candidate.name}」的${interview.round}面试官均已提交评估，请进行招聘决策。`,
+          type: 'interview_feedback_completed',
+          businessId: interviewId,
+          businessType: 'interview',
+        })
+        .catch(() => {});
+    }
   }
 
   /**

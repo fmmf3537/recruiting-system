@@ -33,6 +33,13 @@
         <el-descriptions-item label="状态">
           <el-tag :type="getStatusType(interview.status)">{{ getStatusText(interview.status) }}</el-tag>
         </el-descriptions-item>
+        <el-descriptions-item label="反馈进度">
+          <el-tag v-if="interview.status !== 'completed'" type="info">未开始</el-tag>
+          <el-tag v-else-if="interview.feedbackStatus === 'all_submitted'" type="success">
+            全员已提交，待决策
+          </el-tag>
+          <el-tag v-else type="warning">等待面试官反馈</el-tag>
+        </el-descriptions-item>
         <el-descriptions-item label="面试官">
           {{ interview.interviewers?.map((i) => i.name).join('、') || '—' }}
         </el-descriptions-item>
@@ -46,6 +53,82 @@
       :interview-id="interview.id"
       :interview-focus-type="interview.focusType"
     />
+
+    <el-card v-if="canFinalizeDecision || interview?.finalDecision" shadow="never" class="decision-card">
+      <template #header><span class="card-title">HR 最终决策</span></template>
+      <template v-if="interview?.finalDecision">
+        <el-tag type="success">{{ recommendationText(interview.finalDecision) }}</el-tag>
+        <p v-if="interview.finalDecisionStage">目标阶段：{{ interview.finalDecisionStage }}</p>
+        <p v-if="interview.finalDecisionNote" class="recommendation-note">{{ interview.finalDecisionNote }}</p>
+      </template>
+      <template v-else>
+        <el-radio-group v-model="decisionForm.decision">
+          <el-radio-button label="advance">推进下一轮</el-radio-button>
+          <el-radio-button label="reject">淘汰</el-radio-button>
+          <el-radio-button label="hold">暂缓</el-radio-button>
+          <el-radio-button label="offer">发起 Offer</el-radio-button>
+        </el-radio-group>
+        <el-select v-if="decisionForm.decision === 'advance'" v-model="decisionForm.targetStage" class="recommendation-input" placeholder="选择目标流程阶段">
+          <el-option v-for="stage in pipelineStages" :key="stage" :label="stage" :value="stage" />
+        </el-select>
+        <el-input v-model="decisionForm.note" class="recommendation-input" type="textarea" :rows="2" maxlength="1000" show-word-limit placeholder="决策说明；淘汰时必填" />
+        <el-button type="primary" :loading="decisionSubmitting" @click="handleFinalizeDecision">确认决策</el-button>
+      </template>
+    </el-card>
+
+    <el-card v-if="canRecordCandidateResponse || interview?.candidateResponse !== 'pending'" shadow="never" class="response-card">
+      <template #header><span class="card-title">候选人回应</span></template>
+      <template v-if="canRecordCandidateResponse">
+        <el-radio-group v-model="candidateResponseForm.response">
+          <el-radio-button label="confirmed">已确认</el-radio-button>
+          <el-radio-button label="reschedule_requested">申请改期</el-radio-button>
+          <el-radio-button label="declined">拒绝面试</el-radio-button>
+          <el-radio-button label="no_show">未到场</el-radio-button>
+        </el-radio-group>
+        <el-input v-model="candidateResponseForm.note" class="response-input" type="textarea" :rows="2" maxlength="1000" show-word-limit placeholder="沟通备注（可选）" />
+        <el-button type="primary" :loading="candidateResponseSubmitting" @click="handleRecordCandidateResponse">保存回应</el-button>
+      </template>
+      <template v-else>
+        <el-tag :type="candidateResponseTagType(interview?.candidateResponse)">{{ candidateResponseText(interview?.candidateResponse) }}</el-tag>
+        <p v-if="interview?.candidateResponseNote" class="response-note">{{ interview.candidateResponseNote }}</p>
+      </template>
+    </el-card>
+
+    <el-card v-if="canRecommend || interview?.recommendation" shadow="never" class="recommendation-card">
+      <template #header>
+        <span class="card-title">用人经理建议</span>
+      </template>
+      <template v-if="interview?.recommendation">
+        <el-tag :type="recommendationTagType(interview.recommendation)">
+          {{ recommendationText(interview.recommendation) }}
+        </el-tag>
+        <p v-if="interview.recommendationNote" class="recommendation-note">
+          {{ interview.recommendationNote }}
+        </p>
+        <p class="recommendation-tip">该建议仅供 HR 参考，候选人流程尚未自动变更。</p>
+      </template>
+      <template v-else>
+        <p class="recommendation-tip">全员反馈已齐。请提交建议，HR 将据此完成最终招聘决策。</p>
+        <el-radio-group v-model="recommendationForm.recommendation">
+          <el-radio-button label="advance">推进下一轮</el-radio-button>
+          <el-radio-button label="reject">建议淘汰</el-radio-button>
+          <el-radio-button label="hold">暂缓</el-radio-button>
+          <el-radio-button label="offer">建议发起 Offer</el-radio-button>
+        </el-radio-group>
+        <el-input
+          v-model="recommendationForm.note"
+          class="recommendation-input"
+          type="textarea"
+          :rows="3"
+          maxlength="1000"
+          show-word-limit
+          placeholder="请说明建议依据（可选）"
+        />
+        <el-button type="primary" :loading="recommendationSubmitting" @click="handleSubmitRecommendation">
+          提交给 HR
+        </el-button>
+      </template>
+    </el-card>
 
     <!-- 面试官评估 -->
     <el-card shadow="never" class="evaluation-card">
@@ -130,7 +213,14 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { RadarChart } from 'echarts/charts';
 import { RadarComponent, TooltipComponent, LegendComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { getInterviewById, cancelInterview, type InterviewItem } from '@/api/interview';
+import {
+  getInterviewById,
+  cancelInterview,
+  submitHiringRecommendation,
+  recordCandidateResponse,
+  finalizeInterviewDecision,
+  type InterviewItem,
+} from '@/api/interview';
 import {
   getInterviewEvaluations,
   type InterviewEvaluationItem,
@@ -138,6 +228,7 @@ import {
 } from '@/api/evaluation';
 import { getDictionaries, type DictionaryItem } from '@/api/dictionary';
 import { useAuthStore } from '@/stores/auth';
+import { getPipelineStages } from '@/api/pipeline-template';
 import QuestionOutlineCard from '@/components/interviews/QuestionOutlineCard.vue';
 import ScheduleInterviewDialog from '@/components/interviews/ScheduleInterviewDialog.vue';
 
@@ -152,11 +243,36 @@ const loading = ref(false);
 const interview = ref<InterviewItem | null>(null);
 const evaluations = ref<InterviewEvaluationItem[]>([]);
 const scheduleDialogVisible = ref(false);
+const recommendationSubmitting = ref(false);
+const recommendationForm = ref({ recommendation: 'advance' as const, note: '' });
+const candidateResponseSubmitting = ref(false);
+const candidateResponseForm = ref({ response: 'confirmed' as const, note: '' });
+const decisionSubmitting = ref(false);
+const decisionForm = ref({ decision: 'advance' as 'advance' | 'reject' | 'hold' | 'offer', targetStage: '', note: '' });
+const pipelineStages = ref<string[]>([]);
 
 const canManageInterview = computed(() => {
   const raw = authStore.userInfo?.role;
   const role = raw === 'member' ? 'hr' : raw;
   return role === 'admin' || role === 'hr';
+});
+const canRecommend = computed(() => {
+  const raw = authStore.userInfo?.role;
+  return raw === 'hiring_manager'
+    && interview.value?.status === 'completed'
+    && interview.value.feedbackStatus === 'all_submitted'
+    && !interview.value.recommendation;
+});
+const canRecordCandidateResponse = computed(() => {
+  const role = authStore.userInfo?.role;
+  return (role === 'admin' || role === 'hr' || role === 'member') && interview.value?.status === 'scheduled';
+});
+const canFinalizeDecision = computed(() => {
+  const role = authStore.userInfo?.role;
+  return (role === 'admin' || role === 'hr' || role === 'member')
+    && interview.value?.status === 'completed'
+    && interview.value.feedbackStatus === 'all_submitted'
+    && !interview.value.finalDecision;
 });
 
 // F3-C 考察方向字典（code → name）
@@ -281,6 +397,58 @@ async function handleCancel() {
   }
 }
 
+async function handleSubmitRecommendation() {
+  if (!interview.value) return;
+  recommendationSubmitting.value = true;
+  try {
+    await submitHiringRecommendation(interview.value.id, recommendationForm.value);
+    ElMessage.success('建议已提交给 HR');
+    await fetchDetail();
+  } finally {
+    recommendationSubmitting.value = false;
+  }
+}
+
+async function handleRecordCandidateResponse() {
+  if (!interview.value) return;
+  candidateResponseSubmitting.value = true;
+  try {
+    await recordCandidateResponse(interview.value.id, candidateResponseForm.value);
+    ElMessage.success('候选人回应已记录');
+    await fetchDetail();
+  } finally {
+    candidateResponseSubmitting.value = false;
+  }
+}
+
+async function handleFinalizeDecision() {
+  if (!interview.value) return;
+  if (decisionForm.value.decision === 'advance' && !decisionForm.value.targetStage) {
+    ElMessage.error('请选择目标流程阶段');
+    return;
+  }
+  if (decisionForm.value.decision === 'reject' && !decisionForm.value.note) {
+    ElMessage.error('请填写淘汰原因');
+    return;
+  }
+  decisionSubmitting.value = true;
+  try {
+    await finalizeInterviewDecision(interview.value.id, decisionForm.value);
+    ElMessage.success('最终决策已保存');
+    if (decisionForm.value.decision === 'offer') {
+      router.push({ path: `/candidates/${interview.value.candidateId}`, query: { tab: 'offer' } });
+      return;
+    }
+    if (interview.value?.candidateId) {
+      const stagesRes = await getPipelineStages(interview.value.candidateId, { silentError: true });
+      if (stagesRes.success) pipelineStages.value = stagesRes.data || [];
+    }
+    await fetchDetail();
+  } finally {
+    decisionSubmitting.value = false;
+  }
+}
+
 // ============ 格式化 ============
 function formatDateTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -301,6 +469,22 @@ function getConclusionType(c: EvaluationConclusion): string {
 
 function getConclusionText(c: EvaluationConclusion): string {
   return { pass: '通过', reject: '不通过', pending: '待定' }[c] || c;
+}
+
+function recommendationText(value: NonNullable<InterviewItem['recommendation']>): string {
+  return { advance: '推进下一轮', reject: '建议淘汰', hold: '暂缓', offer: '建议发起 Offer' }[value];
+}
+
+function recommendationTagType(value: NonNullable<InterviewItem['recommendation']>): string {
+  return { advance: 'success', reject: 'danger', hold: 'warning', offer: 'primary' }[value];
+}
+
+function candidateResponseText(value?: InterviewItem['candidateResponse']): string {
+  return { pending: '待确认', confirmed: '已确认', reschedule_requested: '申请改期', declined: '拒绝面试', no_show: '未到场' }[value || 'pending'];
+}
+
+function candidateResponseTagType(value?: InterviewItem['candidateResponse']): string {
+  return { pending: 'info', confirmed: 'success', reschedule_requested: 'warning', declined: 'danger', no_show: 'danger' }[value || 'pending'];
 }
 
 onMounted(() => {
@@ -334,13 +518,22 @@ onMounted(() => {
 
   .info-card,
   .evaluation-card,
-  .radar-card {
+  .radar-card,
+  .recommendation-card,
+  .decision-card,
+  .response-card {
     margin-bottom: 20px;
 
     .card-title {
       font-weight: 500;
     }
   }
+
+  .recommendation-note { line-height: 1.6; white-space: pre-wrap; }
+  .recommendation-tip { color: #909399; font-size: 13px; }
+  .recommendation-input { display: block; margin: 14px 0; }
+  .response-input { display: block; margin: 14px 0; }
+  .response-note { line-height: 1.6; white-space: pre-wrap; }
 
   .dimension-detail {
     padding: 12px 40px;

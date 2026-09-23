@@ -11,7 +11,7 @@
           <el-radio-button label="list">列表视图</el-radio-button>
           <el-radio-button label="calendar">日历视图</el-radio-button>
         </el-radio-group>
-        <el-button type="primary" @click="handleSchedule">
+        <el-button v-if="canManageInterview" type="primary" @click="handleSchedule">
           <el-icon><Plus /></el-icon>安排面试
         </el-button>
       </div>
@@ -153,16 +153,20 @@
             </template>
           </el-table-column>
           <!-- 评估结论：列表接口暂未 include evaluations 时一律「未评估」 -->
-          <el-table-column label="评估" width="110" align="center">
+          <el-table-column label="反馈进度" width="110" align="center">
             <template #default="{ row }">
-              <el-tooltip
-                v-if="getEvalConclusion(row)"
-                :content="getEvalConclusion(row)"
-                placement="top"
-              >
-                <el-tag type="success" size="small">已评估</el-tag>
-              </el-tooltip>
-              <el-tag v-else type="info" size="small">未评估</el-tag>
+              <el-tag v-if="row.status !== 'completed'" type="info" size="small">未开始</el-tag>
+              <el-tag v-else-if="row.feedbackStatus === 'all_submitted'" type="success" size="small">
+                待决策
+              </el-tag>
+              <el-tag v-else type="warning" size="small">待反馈</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="候选人回应" width="110" align="center">
+            <template #default="{ row }">
+              <el-tag :type="getCandidateResponseType(row.candidateResponse)" size="small">
+                {{ getCandidateResponseText(row.candidateResponse) }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="260" fixed="right">
@@ -173,7 +177,7 @@
                 @click="handleEdit(row)"
               >编辑</el-button>
               <el-button
-                v-if="row.status === 'scheduled'"
+                v-if="canCompleteInterview(row)"
                 type="success" link size="small"
                 @click="handleComplete(row)"
               >完成</el-button>
@@ -292,6 +296,13 @@ const canManageInterview = computed(() => {
   const role = raw === 'member' ? 'hr' : raw;
   return role === 'admin' || role === 'hr';
 });
+
+/** 完成面试仅限管理员或该场面试官，避免列表页给无权限角色展示无效操作。 */
+function canCompleteInterview(row: InterviewItem): boolean {
+  if (row.status !== 'scheduled') return false;
+  if (authStore.userInfo?.role === 'admin') return true;
+  return Boolean(authStore.userInfo?.id && row.interviewers.some((item) => item.id === authStore.userInfo?.id));
+}
 
 // ============ 视图和数据 ============
 const viewMode = ref<'list' | 'calendar'>('list');
@@ -478,19 +489,15 @@ function getStatusText(status: string): string {
   return { 'scheduled': '待进行', 'completed': '已完成', 'cancelled': '已取消', 'no_show': '未到' }[status] || status;
 }
 
-const EVAL_CONCLUSION_LABEL: Record<string, string> = {
-  pass: '通过',
-  reject: '淘汰',
-  pending: '待定',
-};
+function getCandidateResponseText(response?: string): string {
+  return {
+    pending: '待确认', confirmed: '已确认', reschedule_requested: '申请改期',
+    declined: '拒绝面试', no_show: '未到场',
+  }[response || 'pending'] || '待确认';
+}
 
-function getEvalConclusion(row: InterviewItem): string {
-  // 列表接口当前未 include evaluations，有则展示中文结论，无则空串
-  const raw = (row as InterviewItem & {
-    evaluations?: Array<{ conclusion?: string | null }>;
-  }).evaluations?.[0]?.conclusion;
-  if (!raw) return '';
-  return EVAL_CONCLUSION_LABEL[raw] || raw;
+function getCandidateResponseType(response?: string): string {
+  return { pending: 'info', confirmed: 'success', reschedule_requested: 'warning', declined: 'danger', no_show: 'danger' }[response || 'pending'] || 'info';
 }
 
 onMounted(() => {

@@ -49,6 +49,33 @@ enum InterviewStatus {
   no_show
 }
 
+enum InterviewFeedbackStatus {
+  pending
+  all_submitted
+}
+
+enum InterviewRecommendation {
+  advance
+  reject
+  hold
+  offer
+}
+
+enum CandidateInterviewResponse {
+  pending
+  confirmed
+  reschedule_requested
+  declined
+  no_show
+}
+
+enum InterviewFinalDecision {
+  advance
+  reject
+  hold
+  offer
+}
+
 // AI 面试大纲异步生成任务状态
 // pending / processing 期间，同一场面试仅允许一个任务，避免重复消耗 LLM。
 enum OutlineGenerationStatus {
@@ -390,6 +417,21 @@ model Interview {
   // 考察方向：字典 interview_focus_type，可空兼容存量（F3-S 一键生成面试问题大纲用）
   focusType     String?
   status        InterviewStatus @default(scheduled) // scheduled, completed, cancelled, no_show
+  // 面试结束后的反馈收集状态；与面试是否结束分离，便于明确后续由谁处理
+  feedbackStatus InterviewFeedbackStatus @default(pending)
+  // 用人经理的建议只供 HR 最终决策参考，不直接推进候选人流程
+  recommendation   InterviewRecommendation?
+  recommendationNote String? @db.Text
+  recommendedById  String?
+  recommendedAt    DateTime?
+  candidateResponse CandidateInterviewResponse @default(pending)
+  candidateResponseNote String? @db.Text
+  candidateRespondedAt DateTime?
+  finalDecision   InterviewFinalDecision?
+  finalDecisionNote String? @db.Text
+  finalDecisionStage String?
+  decidedById     String?
+  decidedAt       DateTime?
 
   createdById   String
   createdBy     User      @relation("CreatedInterviews", fields: [createdById], references: [id])

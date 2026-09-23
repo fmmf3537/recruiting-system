@@ -64,6 +64,16 @@ const updateInterviewSchema = z.object({
   focusType: z.string().max(50).optional(),
 });
 
+const candidateResponseSchema = z.object({
+  response: z.enum(['pending', 'confirmed', 'reschedule_requested', 'declined', 'no_show']),
+  note: z.string().max(1000).optional(),
+});
+const finalDecisionSchema = z.object({
+  decision: z.enum(['advance', 'reject', 'hold', 'offer']),
+  note: z.string().max(1000).optional(),
+  targetStage: z.string().max(50).optional(),
+});
+
 // 面试ID参数验证
 const interviewIdSchema = z.object({
   id: z.string().max(50).cuid('无效的面试ID'),
@@ -189,6 +199,23 @@ router.patch(
     body: finalizeOutlineBodySchema,
   }),
   interviewOutlineController.finalize
+);
+
+router.post(
+  '/:id/final-decision',
+  authenticate,
+  requireMatrixPermission('interview:update'),
+  validateAll({ params: interviewIdSchema, body: finalDecisionSchema }),
+  interviewController.finalizeInterviewDecision
+);
+
+/** HR 手工记录候选人回应；未到场会同步更新本场面试状态。 */
+router.patch(
+  '/:id/candidate-response',
+  authenticate,
+  requireMatrixPermission('interview:update'),
+  validateAll({ params: interviewIdSchema, body: candidateResponseSchema }),
+  interviewController.recordCandidateResponse
 );
 
 /**

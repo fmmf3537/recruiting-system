@@ -1,5 +1,10 @@
 import type { Interview, Prisma } from '@prisma/client';
-import { InterviewStatus } from '@prisma/client';
+import {
+  CandidateInterviewResponse,
+  InterviewFinalDecision,
+  InterviewRecommendation,
+  InterviewStatus,
+} from '@prisma/client';
 import { RULE_CODE } from '../constants/hr-score-rules';
 import prisma from '../lib/prisma';
 import { getFromCache, setCache, clearListCache } from '../lib/redis';
@@ -55,6 +60,22 @@ export interface UpdateInterviewInput {
   focusType?: string;
 }
 
+export interface SubmitInterviewRecommendationInput {
+  recommendation: InterviewRecommendation;
+  note?: string;
+}
+
+export interface RecordCandidateResponseInput {
+  response: CandidateInterviewResponse;
+  note?: string;
+}
+
+export interface FinalizeInterviewDecisionInput {
+  decision: InterviewFinalDecision;
+  note?: string;
+  targetStage?: string;
+}
+
 // 面试列表返回类型
 export interface InterviewListResult {
   interviews: InterviewListItem[];
@@ -75,6 +96,8 @@ export interface InterviewListItem {
   location: string | null;
   notes: string | null;
   status: string;
+  feedbackStatus: string;
+  candidateResponse: string;
   candidateId: string;
   candidateName: string;
   jobId: string | null;
@@ -358,6 +381,8 @@ export class InterviewSchedulerService {
         location: it.location,
         notes: it.notes,
         status: it.status,
+        feedbackStatus: it.feedbackStatus,
+        candidateResponse: it.candidateResponse,
         candidateId: it.candidateId,
         candidateName: it.candidate.name,
         jobId: it.jobId,
@@ -474,7 +499,8 @@ export class InterviewSchedulerService {
       notesChanged: data.notes !== undefined && data.notes !== existing.notes,
     });
 
-    // 通知候选人负责人 + 新增面试官（失败不阻断）
+    // 通知候选人负责人、所有当前面试官及被移除面试官（失败不阻断）。
+    // 改期不能只通知新增面试官，否则原面试官仍会按旧时间参加。
     const candidateName = existing.candidate?.name || '候选人';
     const interviewTime = formatInterviewTime(nextScheduledAt);
     const nextRound = data.round !== undefined ? data.round : existing.round;
@@ -490,15 +516,27 @@ export class InterviewSchedulerService {
         })
         .catch((e) => console.error('[Notification] 面试更新通知发送失败:', e));
     }
-    const prevIdSet = new Set(prevInterviewers.map((i) => i.id));
-    nextInterviewers
-      .filter((i) => !prevIdSet.has(i.id))
+    const nextIdSet = new Set(nextInterviewers.map((i) => i.id));
+    nextInterviewers.forEach((interviewer) => {
+        void notificationService
+          .createNotification({
+            recipientId: interviewer.id,
+            title: `面试变更：${candidateName}`,
+            content: `「${candidateName}」的${nextRound}安排已更新，时间：${interviewTime}，时长${nextDuration}分钟`,
+            type: 'interview_updated',
+            businessId: id,
+            businessType: 'interview',
+          })
+          .catch(() => {});
+    });
+    prevInterviewers
+      .filter((interviewer) => !nextIdSet.has(interviewer.id))
       .forEach((interviewer) => {
         void notificationService
           .createNotification({
             recipientId: interviewer.id,
-            title: `面试邀请：${candidateName}`,
-            content: `您被指定为「${candidateName}」的${nextRound}面试官，时间：${interviewTime}，时长${nextDuration}分钟`,
+            title: `面试安排变更：${candidateName}`,
+            content: `您已不再担任「${candidateName}」${nextRound}的面试官，无需参加原定面试。`,
             type: 'interview_updated',
             businessId: id,
             businessType: 'interview',
@@ -608,7 +646,10 @@ export class InterviewSchedulerService {
    * 标记面试完成（状态联动到反馈录入）
    */
   async completeInterview(id: string): Promise<Interview> {
-    const existing = await prisma.interview.findUnique({ where: { id } });
+    const existing = await prisma.interview.findUnique({
+      where: { id },
+      include: { candidate: { select: { name: true, createdById: true } } },
+    });
     if (!existing) {
       throw new AppError('面试安排不存在', 404);
     }
@@ -635,6 +676,176 @@ export class InterviewSchedulerService {
       // F4-S1 发射失败不阻塞主流程
     }
 
+    await clearListCache('interviews:list:*');
+    return interview;
+  }
+
+  /**
+   * 用人经理提交建议。建议不会变更候选人阶段，最终决策仍由 HR 在候选人流程中执行。
+   */
+  async submitHiringRecommendation(
+    id: string,
+    userId: string,
+    data: SubmitInterviewRecommendationInput
+  ): Promise<Interview> {
+    const interview = await prisma.interview.findUnique({
+      where: { id },
+      include: {
+        candidate: { select: { name: true, createdById: true } },
+        job: { select: { hiringManagerId: true, collaboratorIds: true } },
+      },
+    });
+    if (!interview) throw new AppError('面试安排不存在', 404);
+    if (interview.status !== InterviewStatus.completed || interview.feedbackStatus !== 'all_submitted') {
+      throw new AppError('请在全员面试反馈提交后再给出建议', 400);
+    }
+    const collaborators = interview.job?.collaboratorIds;
+    const isResponsible =
+      interview.job?.hiringManagerId === userId ||
+      (Array.isArray(collaborators) && collaborators.includes(userId));
+    if (!isResponsible) throw new AppError('仅负责该职位的用人经理可提交建议', 403);
+
+    const updated = await prisma.interview.update({
+      where: { id },
+      data: {
+        recommendation: data.recommendation,
+        recommendationNote: data.note || null,
+        recommendedById: userId,
+        recommendedAt: new Date(),
+      },
+    });
+    await this.writeInterviewOperationLog(userId, id, 'interview_recommended', {
+      recommendation: data.recommendation,
+      note: data.note || '',
+    });
+    void notificationService
+      .createNotification({
+        recipientId: interview.candidate.createdById,
+        title: `用人经理建议：${interview.candidate.name}`,
+        content: `「${interview.candidate.name}」的${interview.round}面试已收到用人经理建议，请完成最终招聘决策。`,
+        type: 'interview_recommendation',
+        businessId: id,
+        businessType: 'interview',
+      })
+      .catch(() => {});
+    return updated;
+  }
+
+  /** HR 手工记录候选人回应；只有未到场会同步结束本场面试。 */
+  async recordCandidateResponse(
+    id: string,
+    userId: string,
+    data: RecordCandidateResponseInput,
+  scope?: CandidateVisibilityScope
+  ): Promise<Interview> {
+    const existing = await prisma.interview.findUnique({
+      where: { id },
+      include: { candidate: { select: { name: true, createdById: true } } },
+    });
+    if (!existing) throw new AppError('面试安排不存在', 404);
+    await assertCandidateVisible(existing.candidateId, scope);
+    if (existing.status !== InterviewStatus.scheduled) {
+      throw new AppError('只能记录待进行面试的候选人回应', 400);
+    }
+    const interview = await prisma.interview.update({
+      where: { id },
+      data: {
+        candidateResponse: data.response,
+        candidateResponseNote: data.note || null,
+        candidateRespondedAt: new Date(),
+        ...(data.response === CandidateInterviewResponse.no_show
+          ? { status: InterviewStatus.no_show }
+          : {}),
+      },
+    });
+    await this.writeInterviewOperationLog(userId, id, 'candidate_interview_response', {
+      response: data.response,
+      note: data.note || '',
+    });
+    const actionText: Partial<Record<CandidateInterviewResponse, string>> = {
+      reschedule_requested: '请重新安排面试时间',
+      declined: '请取消面试或结束候选人流程',
+      no_show: '请联系候选人或结束本轮流程',
+    };
+    const action = actionText[data.response];
+    if (action) {
+      void notificationService
+        .createNotification({
+          recipientId: existing.candidate.createdById,
+          title: `面试待处理：${existing.candidate.name}`,
+          content: `候选人回应为「${data.response}」，${action}。`,
+          type: 'candidate_interview_response',
+          businessId: id,
+          businessType: 'interview',
+        })
+        .catch(() => {});
+    }
+    await clearListCache('interviews:list:*');
+    return interview;
+  }
+
+  /**
+   * HR 最终决策。推进/淘汰复用既有候选人流程；Offer 仅记录决策，由 HR 继续填写 Offer 表单。
+   */
+  async finalizeInterviewDecision(
+    id: string,
+    userId: string,
+    data: FinalizeInterviewDecisionInput,
+    scope?: CandidateVisibilityScope
+  ): Promise<Interview> {
+    const existing = await prisma.interview.findUnique({ where: { id } });
+    if (!existing) throw new AppError('面试安排不存在', 404);
+    await assertCandidateVisible(existing.candidateId, scope);
+    if (existing.status !== InterviewStatus.completed || existing.feedbackStatus !== 'all_submitted') {
+      throw new AppError('请在全员面试反馈提交后再完成最终决策', 400);
+    }
+    if (data.decision === InterviewFinalDecision.advance && !data.targetStage) {
+      throw new AppError('请选择推进的目标流程阶段', 400);
+    }
+    if (data.decision === InterviewFinalDecision.reject && !data.note) {
+      throw new AppError('淘汰决策请填写原因', 400);
+    }
+
+    if (data.decision === InterviewFinalDecision.advance) {
+      const { candidateService } = await import('./candidate.service');
+      await candidateService.advanceStage(
+        existing.candidateId,
+        { stage: data.targetStage!, status: 'in_progress', note: data.note },
+        userId,
+        true
+      );
+    }
+    if (data.decision === InterviewFinalDecision.reject) {
+      const { candidateService } = await import('./candidate.service');
+      const candidate = await prisma.candidate.findUnique({
+        where: { id: existing.candidateId },
+        include: { stageRecords: { orderBy: { enteredAt: 'desc' }, take: 1 } },
+      });
+      if (!candidate?.stageRecords[0]) throw new AppError('候选人当前阶段不存在', 400);
+      await candidateService.advanceStage(
+        existing.candidateId,
+        {
+          stage: candidate.stageRecords[0].stage,
+          status: 'rejected',
+          rejectReason: data.note,
+          note: data.note,
+        },
+        userId,
+        true
+      );
+    }
+
+    const interview = await prisma.interview.update({
+      where: { id },
+      data: {
+        finalDecision: data.decision,
+        finalDecisionNote: data.note || null,
+        finalDecisionStage: data.targetStage || null,
+        decidedById: userId,
+        decidedAt: new Date(),
+      },
+    });
+    await this.writeInterviewOperationLog(userId, id, 'interview_final_decision', { ...data });
     await clearListCache('interviews:list:*');
     return interview;
   }

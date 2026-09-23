@@ -173,6 +173,42 @@ describe('InterviewSchedulerService - 面试修改/取消', () => {
       ]);
     });
 
+    it('改期应通知所有当前面试官，被移除面试官也应收到变更通知', async () => {
+      vi.mocked(prisma.interview.findUnique).mockResolvedValue(
+        scheduledInterview() as never
+      );
+      vi.mocked(prisma.interviewEvaluation.findMany).mockResolvedValue([
+        { id: 'e-a', interviewerId: 'u-a', submittedAt: null },
+        { id: 'e-b', interviewerId: 'u-b', submittedAt: null },
+      ] as never);
+      vi.mocked(prisma.interview.update).mockResolvedValue(
+        scheduledInterview({
+          interviewers: [{ id: 'u-a', name: '甲' }, { id: 'u-c', name: '丙' }],
+          scheduledAt: new Date('2026-09-21T02:00:00.000Z'),
+        }) as never
+      );
+
+      await service.updateInterview(
+        INTERVIEW_ID,
+        {
+          interviewers: [{ id: 'u-a', name: '甲' }, { id: 'u-c', name: '丙' }],
+          scheduledAt: '2026-09-21T02:00:00.000Z',
+        },
+        ADMIN_SCOPE
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(notificationService.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ recipientId: 'u-a', title: '面试变更：张三' })
+      );
+      expect(notificationService.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ recipientId: 'u-c', title: '面试变更：张三' })
+      );
+      expect(notificationService.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({ recipientId: 'u-b', title: '面试安排变更：张三' })
+      );
+    });
+
     it('已提交评估的面试官不可移除', async () => {
       vi.mocked(prisma.interview.findUnique).mockResolvedValue(
         scheduledInterview() as never
@@ -292,6 +328,68 @@ describe('InterviewSchedulerService - 面试修改/取消', () => {
       ).resolves.toMatchObject({ status: 'cancelled' });
       expect(errSpy).toHaveBeenCalled();
       errSpy.mockRestore();
+    });
+  });
+
+  describe('submitHiringRecommendation', () => {
+    it('负责职位的用人经理只能在全员反馈已齐后提交建议，且不推进候选人流程', async () => {
+      vi.mocked(prisma.interview.findUnique).mockResolvedValue({
+        ...scheduledInterview({ status: 'completed', feedbackStatus: 'all_submitted' }),
+        job: { hiringManagerId: 'manager-1', collaboratorIds: [] },
+      } as never);
+      vi.mocked(prisma.interview.update).mockResolvedValue(
+        scheduledInterview({ recommendation: 'advance' }) as never
+      );
+
+      await service.submitHiringRecommendation(INTERVIEW_ID, 'manager-1', {
+        recommendation: 'advance',
+        note: '建议进入复试',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(prisma.interview.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            recommendation: 'advance',
+            recommendationNote: '建议进入复试',
+            recommendedById: 'manager-1',
+          }),
+        })
+      );
+      expect(notificationService.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipientId: 'user-hr',
+          type: 'interview_recommendation',
+        })
+      );
+    });
+  });
+
+  describe('recordCandidateResponse', () => {
+    it('记录未到场时应同步将面试标记为 no_show', async () => {
+      vi.mocked(prisma.interview.findUnique).mockResolvedValue(
+        scheduledInterview() as never
+      );
+      vi.mocked(prisma.interview.update).mockResolvedValue(
+        scheduledInterview({ status: 'no_show', candidateResponse: 'no_show' }) as never
+      );
+
+      await service.recordCandidateResponse(
+        INTERVIEW_ID,
+        'user-admin',
+        { response: 'no_show', note: '候选人未到' },
+        ADMIN_SCOPE
+      );
+
+      expect(prisma.interview.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            candidateResponse: 'no_show',
+            candidateResponseNote: '候选人未到',
+            status: 'no_show',
+          }),
+        })
+      );
     });
   });
 });

@@ -189,6 +189,10 @@ import {
   type QuestionOutlineVersion,
 } from '@/api/interview';
 import { getDictionaries, type DictionaryItem } from '@/api/dictionary';
+import {
+  submitEvaluation as submitInterviewEvaluation,
+  type EvaluationConclusion,
+} from '@/api/evaluation';
 
 interface EvalDimension {
   name: string;
@@ -197,6 +201,7 @@ interface EvalDimension {
 }
 
 interface InterviewEval {
+  id?: string;
   dimensions?: EvalDimension[];
   overallScore?: number | null;
   conclusion?: string | null;
@@ -274,18 +279,23 @@ async function loadToday() {
   }
 }
 
-async function loadPending() {
+async function loadPending(): Promise<InterviewerInterview[]> {
+  let items: InterviewerInterview[] = [];
   pendingLoading.value = true;
   try {
     const res = (await request.get('/interview/pending-evaluations')) as ApiSuccess<
       InterviewerInterview[]
     >;
-    if (res.success) pendingEvaluations.value = res.data;
+    if (res.success) {
+      items = res.data;
+      pendingEvaluations.value = items;
+    }
   } catch {
     ElMessage.error('加载待填评估失败');
   } finally {
     pendingLoading.value = false;
   }
+  return items;
 }
 
 async function loadHistory() {
@@ -335,6 +345,7 @@ function goToInterviewDetail(row: InterviewerInterview) {
 }
 
 async function openEvaluationDialog(interview: InterviewerInterview, isReadonly = false) {
+  let targetInterview = interview;
   // 一键二连：未完成时先确认再 complete，取消则不开评估弹窗
   if (!isReadonly && interview.status !== 'completed') {
     try {
@@ -345,7 +356,9 @@ async function openEvaluationDialog(interview: InterviewerInterview, isReadonly 
       ElMessage.success('面试已标记完成');
       interview.status = 'completed';
       await loadToday();
-      await loadPending();
+      const pending = await loadPending();
+      // 标记完成后使用待评列表中的评估记录，统一由 /api/evaluations/:id 提交。
+      targetInterview = pending.find((item) => item.id === interview.id) || interview;
     } catch (e) {
       if (e !== 'cancel' && e !== 'close') {
         // complete 失败：拦截器已提示
@@ -354,10 +367,10 @@ async function openEvaluationDialog(interview: InterviewerInterview, isReadonly 
     }
   }
 
-  currentInterview.value = interview;
+  currentInterview.value = targetInterview;
   readonly.value = isReadonly;
-  generateFocusType.value = interview.focusType || '';
-  const existing = interview.evaluations?.[0];
+  generateFocusType.value = targetInterview.focusType || '';
+  const existing = targetInterview.evaluations?.[0];
   if (existing) {
     evalForm.dimensions = (existing.dimensions || DEFAULT_DIMENSIONS).map((d) => ({
       name: d.name,
@@ -374,7 +387,7 @@ async function openEvaluationDialog(interview: InterviewerInterview, isReadonly 
   evalDialogVisible.value = true;
   loadFocusTypeDict();
   // F3-C 按需拉取大纲最新版，并恢复可能仍在运行的生成任务。
-  loadLatestOutline(interview.id);
+  loadLatestOutline(targetInterview.id);
   void pollOutlineGeneration(false);
   if (generating.value) startOutlinePolling();
 }
@@ -437,18 +450,21 @@ async function handleGenerateOutline() {
 
 async function submitEvaluation() {
   if (!currentInterview.value) return;
+  const evaluationId = currentInterview.value.evaluations?.[0]?.id;
+  if (!evaluationId) {
+    ElMessage.error('未找到待填写的评估记录，请刷新后重试');
+    return;
+  }
   try {
-    const res = (await request.put(
-      `/interview/${currentInterview.value.id}/evaluation`,
-      evalForm
-    )) as ApiSuccess<unknown>;
-    if (res.success) {
-      ElMessage.success('评估已提交');
-      evalDialogVisible.value = false;
-      await loadToday();
-      await loadPending();
-      await loadHistory();
-    }
+    await submitInterviewEvaluation(evaluationId, {
+      ...evalForm,
+      conclusion: evalForm.conclusion as EvaluationConclusion,
+    });
+    ElMessage.success('评估已提交');
+    evalDialogVisible.value = false;
+    await loadToday();
+    await loadPending();
+    await loadHistory();
   } catch {
     ElMessage.error('提交失败');
   }

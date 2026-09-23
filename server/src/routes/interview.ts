@@ -150,55 +150,10 @@ router.get('/history', ...interviewerGuard, async (req, res, next) => {
   }
 });
 
-// 填 / 改评估
-router.put('/:id/evaluation', ...interviewerGuard, async (req, res, next) => {
+// 兼容旧客户端：新流程统一使用 PUT /api/evaluations/:id，不再允许按面试 ID upsert 评估。
+router.put('/:id/evaluation', ...interviewerGuard, async (_req, _res, next) => {
   try {
-    const interviewId = req.params.id;
-    const userId = req.user!.userId;
-    const isAdminUser = req.user!.role === 'admin';
-
-    if (!isAdminUser) {
-      const visibleIds = await loadVisibleInterviewIds(userId);
-      if (!visibleIds.includes(interviewId)) {
-        throw new AppError('无权评估此面试', 403);
-      }
-    }
-
-    const interview = await prisma.interview.findUnique({ where: { id: interviewId } });
-    if (!interview) throw new AppError('面试不存在', 404);
-    if (interview.status !== 'completed') {
-      throw new AppError('面试未完成，无法评估', 400);
-    }
-
-    const { dimensions, overallScore, conclusion } = req.body as {
-      dimensions?: unknown;
-      overallScore?: number;
-      conclusion?: string;
-    };
-    // overallScore 允许 0，不能用 !overallScore
-    if (!Array.isArray(dimensions) || overallScore == null || !conclusion) {
-      throw new AppError('缺少必填字段', 400);
-    }
-
-    const evaluation = await prisma.interviewEvaluation.upsert({
-      where: { interviewId_interviewerId: { interviewId, interviewerId: userId } },
-      create: {
-        interviewId,
-        interviewerId: userId,
-        dimensions,
-        overallScore,
-        conclusion,
-        submittedAt: new Date(),
-      },
-      update: {
-        dimensions,
-        overallScore,
-        conclusion,
-        submittedAt: new Date(),
-      },
-    });
-
-    res.json({ success: true, data: evaluation, message: '评估已提交' });
+    throw new AppError('该评估接口已废弃，请使用 /api/evaluations/:id', 410);
   } catch (err) {
     next(err);
   }

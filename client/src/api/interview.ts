@@ -28,6 +28,18 @@ export interface InterviewItem {
   location: string | null;
   notes: string | null;
   status: string;
+  /** completed 后：pending=仍有面试官待反馈，all_submitted=可进入招聘决策 */
+  feedbackStatus?: 'pending' | 'all_submitted';
+  recommendation?: 'advance' | 'reject' | 'hold' | 'offer' | null;
+  recommendationNote?: string | null;
+  recommendedById?: string | null;
+  recommendedAt?: string | null;
+  candidateResponse?: 'pending' | 'confirmed' | 'reschedule_requested' | 'declined' | 'no_show';
+  candidateResponseNote?: string | null;
+  candidateRespondedAt?: string | null;
+  finalDecision?: 'advance' | 'reject' | 'hold' | 'offer' | null;
+  finalDecisionNote?: string | null;
+  finalDecisionStage?: string | null;
   candidateId: string;
   candidateName: string;
   jobId: string | null;
@@ -37,6 +49,8 @@ export interface InterviewItem {
   createdAt: string;
   // F3-C 考察方向（字典 code：hr/tech/comprehensive/manager/cross）
   focusType?: string | null;
+  // INTV-S2：已提交评估摘要（服务端最多返回最近 1 条）
+  evaluations?: Array<{ conclusion: string | null; submittedAt: string }>;
 }
 
 // ============ 面试问题大纲（F3-C） ============
@@ -139,6 +153,31 @@ export function cancelInterview(id: string, reason?: string) {
 // 标记面试完成
 export function completeInterview(id: string) {
   return request.post(`/interviews/${id}/complete`);
+}
+
+/** 用人经理提交建议；不直接改变候选人阶段，最终动作由 HR 执行。 */
+export function submitHiringRecommendation(
+  interviewId: string,
+  data: { recommendation: 'advance' | 'reject' | 'hold' | 'offer'; note?: string }
+) {
+  return request.post(`/hiring/interviews/${interviewId}/recommendation`, data);
+}
+
+export function recordCandidateResponse(
+  interviewId: string,
+  data: {
+    response: 'pending' | 'confirmed' | 'reschedule_requested' | 'declined' | 'no_show';
+    note?: string;
+  }
+) {
+  return request.patch(`/interviews/${interviewId}/candidate-response`, data);
+}
+
+export function finalizeInterviewDecision(
+  interviewId: string,
+  data: { decision: 'advance' | 'reject' | 'hold' | 'offer'; note?: string; targetStage?: string }
+) {
+  return request.post(`/interviews/${interviewId}/final-decision`, data);
 }
 
 // 获取候选人的面试安排

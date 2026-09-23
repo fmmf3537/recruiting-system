@@ -152,6 +152,35 @@ export class InterviewController {
     }
   }
 
+  /** HR 手工登记候选人的确认、改期、拒绝或未到场回应。 */
+  async recordCandidateResponse(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const interview = await interviewSchedulerService.recordCandidateResponse(
+        req.params.id,
+        req.user!.userId,
+        req.body,
+        scopeFromUser(req.user!)
+      );
+      res.json({ success: true, data: interview, message: '候选人回应已记录' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async finalizeInterviewDecision(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const interview = await interviewSchedulerService.finalizeInterviewDecision(
+        req.params.id,
+        req.user!.userId,
+        req.body,
+        scopeFromUser(req.user!)
+      );
+      res.json({ success: true, data: interview, message: 'HR 最终决策已完成' });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /**
    * GET /api/candidates/:id/interviews
    * 获取候选人的面试安排列表

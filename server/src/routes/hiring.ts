@@ -1,9 +1,12 @@
 import { Router, type Router as RouterType } from 'express';
 import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { authenticate } from '../middleware/auth';
 import { requireRole } from '../middleware/role';
 import { AppError } from '../middleware/errorHandler';
+import { validate } from '../middleware/validate';
 import prisma from '../lib/prisma';
+import { interviewSchedulerService } from '../services/interview-scheduler.service';
 
 const router: RouterType = Router();
 
@@ -58,6 +61,30 @@ function assertOfferInDepartmentScope(
 }
 
 const hiringGuard = [authenticate, requireRole('admin', 'hiring_manager')] as const;
+
+const interviewRecommendationSchema = z.object({
+  recommendation: z.enum(['advance', 'reject', 'hold', 'offer']),
+  note: z.string().max(1000).optional(),
+});
+
+// 用人经理仅提交建议；HR 在候选人流程中执行最终动作。
+router.post(
+  '/interviews/:id/recommendation',
+  ...hiringGuard,
+  validate(interviewRecommendationSchema),
+  async (req, res, next) => {
+    try {
+      const interview = await interviewSchedulerService.submitHiringRecommendation(
+        req.params.id,
+        req.user!.userId,
+        req.body
+      );
+      res.json({ success: true, data: interview, message: '建议已提交，等待 HR 最终决策' });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 /** 管理员可在公司全局与本人负责岗位之间切换；用人经理固定为本人负责岗位。 */
 function useOwnedHiringScope(role: string, scope: unknown): boolean {
